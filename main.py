@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from pydantic import BaseModel
@@ -33,7 +34,7 @@ class PrevisaoRequest(BaseModel):
     dados: List[Dict[str, Any]]
 
 # Rota para treinar o classificador
-@app.post("/classificador/treinamento")
+@app.post("/classificador/treinamento/knn")
 def processar_dataset(request: DatasetRequest):
     global modelo_treinado, atributos_usados
 
@@ -57,7 +58,7 @@ def processar_dataset(request: DatasetRequest):
         X_test = df_teste[request.atributos]
         y_test = df_teste[request.target]
 
-        model = RandomForestClassifier()
+        model = KNeighborsClassifier()
         model.fit(X_train, y_train)
 
         acc_train = accuracy_score(y_train, model.predict(X_train))
@@ -81,7 +82,7 @@ def processar_dataset(request: DatasetRequest):
         return {"erro": str(e)}
 
 # Rota para fazer previsões
-@app.post("/classificador/prever")
+@app.post("/classificador/prever/knn")
 def fazer_previsoes(request: PrevisaoRequest):
     global modelo_treinado, atributos_usados
 
