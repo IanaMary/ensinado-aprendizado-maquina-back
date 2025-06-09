@@ -7,6 +7,7 @@ from sklearn.model_selection import train_test_split
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import pandas as pd
+import logging
 
 app = FastAPI()
 
@@ -60,6 +61,7 @@ def processar_dataset(request: DatasetRequest):
         y_test = df_teste[request.target]
 
         model = KNeighborsClassifier(**request.hiperparametros)
+    
         model.fit(X_train, y_train)
 
         acc_train = accuracy_score(y_train, model.predict(X_train))
@@ -74,6 +76,7 @@ def processar_dataset(request: DatasetRequest):
             "total_amostras_teste": len(X_test),
             "atributos": request.atributos,
             "target": request.target,
+            "hiperparametros": model.get_params(),
             "classes": list(model.classes_),
             "acuracia_treino": acc_train,
             "acuracia_teste": acc_test,
