@@ -29,6 +29,7 @@ class DatasetRequest(BaseModel):
     dados_teste: Optional[List[Dict[str, Any]]] = []
     atributos: List[str]
     target: str
+    hiperparametros: Optional[Dict[str, Any]] = {}
 
 class PrevisaoRequest(BaseModel):
     dados: List[Dict[str, Any]]
@@ -58,7 +59,7 @@ def processar_dataset(request: DatasetRequest):
         X_test = df_teste[request.atributos]
         y_test = df_teste[request.target]
 
-        model = KNeighborsClassifier()
+        model = KNeighborsClassifier(**request.hiperparametros)
         model.fit(X_train, y_train)
 
         acc_train = accuracy_score(y_train, model.predict(X_train))
