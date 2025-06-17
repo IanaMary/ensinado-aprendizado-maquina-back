@@ -32,6 +32,12 @@ metricas_disponiveis = [
     'roc_auc_score'
 ]
 
+class AvaliacaoCompactaRequest(BaseModel):
+    dados_teste: List[Dict[str, Any]]
+    target: str
+    atributos: List[str]
+    avaliacoes: List[Dict[str, Any]]
+
 # Modelos Pydantic
 class DatasetRequest(BaseModel):
     dados_treino: List[Dict[str, Any]]
@@ -100,6 +106,57 @@ def treinar_knn(request: DatasetRequest):
     except Exception as e:
         return {"erro": str(e)}
 
+
+# Rota para treinar o classificador SVM
+@app.post("/classificador/treinamento/svm")
+def treinar_svm(request: DatasetRequest):
+    try:
+        df_treino = pd.DataFrame(request.dados_treino)
+
+        # Divide dados se dados_teste não for fornecido
+        if request.dados_teste and len(request.dados_teste) > 0:
+            df_teste = pd.DataFrame(request.dados_teste)
+        else:
+            df_treino, df_teste = train_test_split(df_treino, test_size=0.2, random_state=42)
+
+        # Verifica se colunas existem
+        for col in request.atributos + [request.target]:
+            if col not in df_treino.columns:
+                raise ValueError(f"Coluna '{col}' não encontrada nos dados de treino.")
+
+        X_train = df_treino[request.atributos]
+        y_train = df_treino[request.target]
+
+        X_test = df_teste[request.atributos]
+        y_test = df_teste[request.target]
+
+        from sklearn.svm import SVC
+        model = SVC(**request.hiperparametros)
+        model.fit(X_train, y_train)
+
+        # Armazena modelo e atributos pelo nome 'svm'
+        modelos_treinados['svm'] = model
+        atributos_usados['svm'] = request.atributos
+
+        # Cria um DataFrame juntando X_test e y_test
+        df_teste_completo = X_test.copy()
+        df_teste_completo[request.target] = y_test
+
+        return {
+            "status": "modelo svm treinado com sucesso",
+            "total_amostras_treino": len(X_train),
+            "total_amostras_teste": len(X_test),
+            "atributos": request.atributos,
+            "target": request.target,
+            "teste": df_teste_completo.to_dict(orient='records'),
+            "hiperparametros": model.get_params(),
+            "classes": list(model.classes_),
+            "modelo": "svm"
+        }
+
+    except Exception as e:
+        return {"erro": str(e)}
+
 # Rota para avaliar modelos
 @app.post("/classificador/avaliar")
 def avaliar_modelo(request: AvaliacaoRequest):
@@ -139,25 +196,65 @@ def avaliar_modelo(request: AvaliacaoRequest):
             else:
                 resultados[metrica] = func(y_test, y_pred, average='weighted')
 
-        # Mapeando nomes bonitos
-        nomes_metricas = {
-            "f1_score": "F1-Score",
-            "recall_score": "Recall",
-            "precision_score": "Precisão",
-            "accuracy_score": "Acurácia",
-            "roc_auc_score": "ROC AUC"
-        }
-
-        resultados_legiveis = {nomes_metricas.get(k, k): v for k, v in resultados.items()}
-
         return {
             "status": "Avaliação concluída com sucesso",
-            "resultados": resultados_legiveis
+            "resultados": resultados
         }
 
     except Exception as e:
         return {"erro": str(e)}
 
+
+@app.post("/classificador/avaliar-multiplos")
+def avaliar_multiplos_modelos_compacto(request: AvaliacaoCompactaRequest):
+    resultados_gerais = {}
+    df_teste = pd.DataFrame(request.dados_teste)
+
+    for col in request.atributos + [request.target]:
+        if col not in df_teste.columns:
+            return {"erro": f"Coluna '{col}' não encontrada nos dados de teste."}
+
+    X_test = df_teste[request.atributos]
+    y_test = df_teste[request.target]
+
+    for avaliacao in request.avaliacoes:
+        modelo = modelos_treinados.get(avaliacao["modelo_nome"])
+        if modelo is None:
+            resultados_gerais[avaliacao["modelo_nome"]] = {"erro": f"Modelo '{avaliacao['modelo_nome']}' não foi treinado ou não existe."}
+            continue
+
+        try:
+            y_pred = modelo.predict(X_test)
+            resultados = {}
+
+            for metrica in avaliacao.get("metricas", []):
+                if metrica not in metricas_disponiveis:
+                    resultados[metrica] = "Métrica não suportada"
+                    continue
+
+                func = globals().get(metrica)
+                if func is None:
+                    resultados[metrica] = "Métrica não suportada"
+                    continue
+
+                if metrica == "roc_auc_score":
+                    if len(set(y_test)) != 2:
+                        resultados[metrica] = "ROC AUC requer problema binário"
+                        continue
+                    y_prob = modelo.predict_proba(X_test)[:, 1]
+                    resultados[metrica] = func(y_test, y_prob)
+                else:
+                    resultados[metrica] = func(y_test, y_pred, average='weighted')
+
+            resultados_gerais[avaliacao["modelo_nome"]] = {
+                "status": "Avaliação concluída com sucesso",
+                "resultados": resultados
+            }
+        except Exception as e:
+            resultados_gerais[avaliacao["modelo_nome"]] = {"erro": str(e)}
+
+    return resultados_gerais
+    
 # Rota para fazer previsões com KNN (pode ser extendido para outros modelos)
 @app.post("/classificador/prever/knn")
 def fazer_previsoes_knn(request: PrevisaoRequest):
