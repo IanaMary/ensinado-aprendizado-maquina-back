@@ -1,0 +1,51 @@
+# Diretórios de ambiente virtual
+.venv/
+venv/
+ENV/
+env/
+
+# Arquivos e diretórios Python compilados
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Arquivos de build e distribuição
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Arquivos temporários e logs
+*.log
+*.tmp
+
+# Cache de ferramentas
+.cache/
+.pytest_cache/
+.mypy_cache/
+.pylint.d/
+
+# VSCode e PyCharm
+.vscode/
+.idea/
+
+# Arquivos de configuração e segredos locais
+*.env
+.env.*
+*.db
+*.sqlite3
+config.yaml
+config/*.yaml
+secrets.json
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Diretório de experimentos e artefatos do MLflow
+mlruns/
+mlartifacts/
+
+# Outros
+.DS_Store
+Thumbs.db

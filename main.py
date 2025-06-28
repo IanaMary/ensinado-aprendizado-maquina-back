@@ -1,12 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import pandas as pd
+import mlflow
+import mlflow.sklearn
+from sklearn.svm import SVC
 
 app = FastAPI()
 
@@ -56,20 +58,23 @@ class AvaliacaoRequest(BaseModel):
     atributos: List[str]
     metricas: Optional[List[str]] = []
     modelo_nome: Optional[Any]
+    mlflow_run_id_modelo: str
+class PrevisaoRequest(BaseModel):
+    dados: List[Dict[str, Any]]
+    modelo_nome: Optional[str] = None
+    mlflow_run_id: Optional[str] = None  
 
-# Rota para treinar o classificador KNN
+
 @app.post("/classificador/treinamento/knn")
 def treinar_knn(request: DatasetRequest):
     try:
         df_treino = pd.DataFrame(request.dados_treino)
 
-        # Divide dados se dados_teste não for fornecido
         if request.dados_teste and len(request.dados_teste) > 0:
             df_teste = pd.DataFrame(request.dados_teste)
         else:
             df_treino, df_teste = train_test_split(df_treino, test_size=0.2, random_state=42)
 
-        # Verifica se colunas existem
         for col in request.atributos + [request.target]:
             if col not in df_treino.columns:
                 raise ValueError(f"Coluna '{col}' não encontrada nos dados de treino.")
@@ -81,13 +86,19 @@ def treinar_knn(request: DatasetRequest):
         y_test = df_teste[request.target]
 
         model = KNeighborsClassifier(**request.hiperparametros)
-        model.fit(X_train, y_train)
 
-        # Armazena modelo e atributos pelo nome 'knn'
+        with mlflow.start_run(run_name="KNN Model"):
+            model.fit(X_train, y_train)
+
+            mlflow.log_params(request.hiperparametros)
+
+            mlflow.sklearn.log_model(model, "knn_model")
+            
+            run_id = mlflow.active_run().info.run_id
+
         modelos_treinados['knn'] = model
         atributos_usados['knn'] = request.atributos
 
-        # Cria um DataFrame juntando X_test e y_test
         df_teste_completo = X_test.copy()
         df_teste_completo[request.target] = y_test
 
@@ -97,29 +108,27 @@ def treinar_knn(request: DatasetRequest):
             "total_amostras_teste": len(X_test),
             "atributos": request.atributos,
             "target": request.target,
-            "teste": df_teste_completo.to_dict(orient='records'),  # lista de dicts com atributos + target
+            "teste": df_teste_completo.to_dict(orient='records'),
             "hiperparametros": model.get_params(),
             "classes": list(model.classes_),
-            "modelo": "knn"
+            "modelo": "knn",
+            "mlflow_run_id_modelo": run_id
         }
 
     except Exception as e:
         return {"erro": str(e)}
 
 
-# Rota para treinar o classificador SVM
 @app.post("/classificador/treinamento/svm")
 def treinar_svm(request: DatasetRequest):
     try:
         df_treino = pd.DataFrame(request.dados_treino)
 
-        # Divide dados se dados_teste não for fornecido
         if request.dados_teste and len(request.dados_teste) > 0:
             df_teste = pd.DataFrame(request.dados_teste)
         else:
             df_treino, df_teste = train_test_split(df_treino, test_size=0.2, random_state=42)
 
-        # Verifica se colunas existem
         for col in request.atributos + [request.target]:
             if col not in df_treino.columns:
                 raise ValueError(f"Coluna '{col}' não encontrada nos dados de treino.")
@@ -130,15 +139,19 @@ def treinar_svm(request: DatasetRequest):
         X_test = df_teste[request.atributos]
         y_test = df_teste[request.target]
 
-        from sklearn.svm import SVC
         model = SVC(**request.hiperparametros)
-        model.fit(X_train, y_train)
 
-        # Armazena modelo e atributos pelo nome 'svm'
+        with mlflow.start_run(run_name="SVM Model"):
+            model.fit(X_train, y_train)      
+            
+            mlflow.log_params(request.hiperparametros)
+            mlflow.sklearn.log_model(model, "svm_model")
+
+            run_id = mlflow.active_run().info.run_id
+
         modelos_treinados['svm'] = model
         atributos_usados['svm'] = request.atributos
 
-        # Cria um DataFrame juntando X_test e y_test
         df_teste_completo = X_test.copy()
         df_teste_completo[request.target] = y_test
 
@@ -151,13 +164,14 @@ def treinar_svm(request: DatasetRequest):
             "teste": df_teste_completo.to_dict(orient='records'),
             "hiperparametros": model.get_params(),
             "classes": list(model.classes_),
-            "modelo": "svm"
+            "modelo": "svm",
+            "mlflow_run_id_modelo": run_id
         }
 
     except Exception as e:
         return {"erro": str(e)}
-
-# Rota para avaliar modelos
+    
+    
 @app.post("/classificador/avaliar")
 def avaliar_modelo(request: AvaliacaoRequest):
     modelo = modelos_treinados.get(request.modelo_nome)
@@ -177,33 +191,46 @@ def avaliar_modelo(request: AvaliacaoRequest):
 
         resultados = {}
 
-        for metrica in request.metricas:
-            if metrica not in metricas_disponiveis:
-                resultados[metrica] = "Métrica não suportada"
-                continue
-
-            func = globals().get(metrica)
-            if func is None:
-                resultados[metrica] = "Métrica não suportada"
-                continue
-
-            if metrica == "roc_auc_score":
-                if len(set(y_test)) != 2:
-                    resultados[metrica] = "ROC AUC requer problema binário"
+        with mlflow.start_run(run_name=f"Avaliacao_{request.modelo_nome}"):
+            for metrica in request.metricas:
+                if metrica not in metricas_disponiveis:
+                    resultados[metrica] = "Métrica não suportada"
                     continue
-                y_prob = modelo.predict_proba(X_test)[:, 1]
-                resultados[metrica] = func(y_test, y_prob)
-            else:
-                resultados[metrica] = func(y_test, y_pred, average='weighted')
+
+                func = globals().get(metrica)
+                if func is None:
+                    resultados[metrica] = "Métrica não suportada"
+                    continue
+
+                try:
+                    if metrica == "roc_auc_score":
+                        if len(set(y_test)) != 2:
+                            resultados[metrica] = "ROC AUC requer problema binário"
+                            continue
+                        y_prob = modelo.predict_proba(X_test)[:, 1]
+                        valor = func(y_test, y_prob)
+                    else:
+                        valor = func(y_test, y_pred, average='weighted')
+
+                    resultados[metrica] = valor
+                    mlflow.log_metric(metrica, valor)
+
+                except Exception as erro_metricas:
+                    resultados[metrica] = f"Erro ao calcular: {erro_metricas}"
+
+            mlflow.set_tag("tipo", "avaliacao")
+            mlflow.set_tag("modelo", request.modelo_nome)
+
+            run_id = mlflow.active_run().info.run_id
 
         return {
             "status": "Avaliação concluída com sucesso",
-            "resultados": resultados
+            "resultados": resultados,
+            "mlflow_run_id_avaliacao": run_id
         }
 
     except Exception as e:
         return {"erro": str(e)}
-
 
 @app.post("/classificador/avaliar-multiplos")
 def avaliar_multiplos_modelos_compacto(request: AvaliacaoCompactaRequest):
@@ -218,67 +245,99 @@ def avaliar_multiplos_modelos_compacto(request: AvaliacaoCompactaRequest):
     y_test = df_teste[request.target]
 
     for avaliacao in request.avaliacoes:
-        modelo = modelos_treinados.get(avaliacao["modelo_nome"])
-        if modelo is None:
-            resultados_gerais[avaliacao["modelo_nome"]] = {"erro": f"Modelo '{avaliacao['modelo_nome']}' não foi treinado ou não existe."}
+        modelo_nome = avaliacao.get("modelo_nome", "modelo_desconhecido")
+        run_id = avaliacao.get("mlflow_run_id_modelo")
+
+        if not run_id:
+            resultados_gerais[modelo_nome] = {"erro": "mlflow_run_id_modelo ausente na requisição."}
             continue
 
         try:
+            
+            if modelo_nome.lower() == "knn":
+                model_uri = f"runs:/{run_id}/knn_model"
+            elif modelo_nome.lower() == "svm":
+                model_uri = f"runs:/{run_id}/svm_model"
+            else:
+                resultados_gerais[modelo_nome] = {"erro": f"Modelo '{modelo_nome}' não suportado."}
+                continue
+
+            modelo = mlflow.sklearn.load_model(model_uri)
+
             y_pred = modelo.predict(X_test)
             resultados = {}
 
-            for metrica in avaliacao.get("metricas", []):
-                if metrica not in metricas_disponiveis:
-                    resultados[metrica] = "Métrica não suportada"
-                    continue
-
-                func = globals().get(metrica)
-                if func is None:
-                    resultados[metrica] = "Métrica não suportada"
-                    continue
-
-                if metrica == "roc_auc_score":
-                    if len(set(y_test)) != 2:
-                        resultados[metrica] = "ROC AUC requer problema binário"
+            with mlflow.start_run(run_name=f"Avaliacao_{modelo_nome}"):
+                for metrica in avaliacao.get("metricas", []):
+                    if metrica not in metricas_disponiveis:
+                        resultados[metrica] = "Métrica não suportada"
                         continue
-                    y_prob = modelo.predict_proba(X_test)[:, 1]
-                    resultados[metrica] = func(y_test, y_prob)
-                else:
-                    resultados[metrica] = func(y_test, y_pred, average='weighted')
 
-            resultados_gerais[avaliacao["modelo_nome"]] = {
+                    func = globals().get(metrica)
+                    if func is None:
+                        resultados[metrica] = "Métrica não suportada"
+                        continue
+
+                    try:
+                        if metrica == "roc_auc_score":
+                            if len(set(y_test)) != 2:
+                                resultados[metrica] = "ROC AUC requer problema binário"
+                                continue
+                            y_prob = modelo.predict_proba(X_test)[:, 1]
+                            valor = func(y_test, y_prob)
+                        else:
+                            valor = func(y_test, y_pred, average='weighted')
+
+                        resultados[metrica] = valor
+                        mlflow.log_metric(metrica, valor)
+
+                    except Exception as erro_metricas:
+                        resultados[metrica] = f"Erro ao calcular: {erro_metricas}"
+
+                mlflow.set_tag("tipo", "avaliacao_multipla")
+                mlflow.set_tag("modelo", modelo_nome)
+                mlflow_run_avaliacao = mlflow.active_run().info.run_id
+
+            resultados_gerais[modelo_nome] = {
                 "status": "Avaliação concluída com sucesso",
-                "resultados": resultados
+                "resultados": resultados,
+                "mlflow_run_id_avaliacao": mlflow_run_avaliacao
             }
+
         except Exception as e:
-            resultados_gerais[avaliacao["modelo_nome"]] = {"erro": str(e)}
+            resultados_gerais[modelo_nome] = {"erro": str(e)}
 
     return resultados_gerais
-    
-# Rota para fazer previsões com KNN (pode ser extendido para outros modelos)
+
 @app.post("/classificador/prever/knn")
 def fazer_previsoes_knn(request: PrevisaoRequest):
-    modelo_nome = request.modelo_nome
-    modelo = modelos_treinados.get(modelo_nome)
-    if modelo is None:
-        return {"erro": f"Modelo '{modelo_nome}' não foi treinado ou não existe."}
-
     try:
         df_novo = pd.DataFrame(request.dados)
+        
+        if request.mlflow_run_id:
+            model_uri = f"runs:/{request.mlflow_run_id}/knn_model"
+            modelo = mlflow.sklearn.load_model(model_uri)
+            atributos = list(df_novo.columns)
+        else:
+            modelo_nome = request.modelo_nome
+            modelo = modelos_treinados.get(modelo_nome)
+            if modelo is None:
+                return {"erro": f"Modelo '{modelo_nome}' não foi treinado ou não existe."}
 
-        atributos = atributos_usados.get(modelo_nome)
-        if not atributos:
-            return {"erro": f"Atributos para o modelo '{modelo_nome}' não encontrados."}
+            atributos = atributos_usados.get(modelo_nome)
+            if not atributos:
+                return {"erro": f"Atributos para o modelo '{modelo_nome}' não encontrados."}
 
-        for col in atributos:
-            if col not in df_novo.columns:
-                raise ValueError(f"Atributo '{col}' ausente nos dados enviados.")
+            for col in atributos:
+                if col not in df_novo.columns:
+                    raise ValueError(f"Atributo '{col}' ausente nos dados enviados.")
 
         X_novo = df_novo[atributos]
         preds = modelo.predict(X_novo)
 
         return {
             "status": "previsões realizadas",
+            "fonte_modelo": "mlflow" if request.mlflow_run_id else "memória",
             "previsoes": preds.tolist()
         }
 
