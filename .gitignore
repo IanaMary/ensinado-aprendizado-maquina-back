@@ -8,6 +8,7 @@ env/
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyc
 
 # Arquivos de build e distribuição
 build/
