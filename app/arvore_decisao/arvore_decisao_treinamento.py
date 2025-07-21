@@ -1,6 +1,6 @@
 from sklearn.tree import DecisionTreeClassifier
 from app.models.schemas import DatasetRequest
-from app.deps import pd, mlflow, metricas_disponiveis, accuracy_score, train_test_split
+from app.deps import pd, mlflow, train_test_split
 from fastapi import APIRouter
 from typing import List, Dict, Any
 
@@ -36,7 +36,7 @@ def treinar_arvore_decisao(request: DatasetRequest):
         with mlflow.start_run(run_name="Decision Tree Model"):
             model.fit(X_train, y_train)
             mlflow.log_params(request.hiperparametros)
-            mlflow.sklearn.log_model(model, "decision_tree_model")
+            mlflow.sklearn.log_model(model, "arvore_decisao")
             run_id = mlflow.active_run().info.run_id
 
         modelos_treinados['arvore_decisao'] = model

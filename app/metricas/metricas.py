@@ -27,10 +27,8 @@ def avaliar_multiplos_modelos_compacto(request: AvaliacaoCompactaRequest):
 
         try:
             
-            if modelo_nome.lower() == "knn":
-                model_uri = f"runs:/{run_id}/knn_model"
-            elif modelo_nome.lower() == "svm":
-                model_uri = f"runs:/{run_id}/svm_model"
+            if modelo_nome:
+                model_uri = f"runs:/{run_id}/{modelo_nome}"
             else:
                 resultados_gerais[modelo_nome] = {"erro": f"Modelo '{modelo_nome}' não suportado."}
                 continue

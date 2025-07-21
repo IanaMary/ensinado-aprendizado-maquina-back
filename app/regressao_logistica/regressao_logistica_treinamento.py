@@ -1,6 +1,6 @@
-
+from sklearn.linear_model import LogisticRegression
 from app.models.schemas import DatasetRequest
-from app.deps import pd, mlflow, KNeighborsClassifier, train_test_split
+from app.deps import pd, mlflow,  train_test_split
 from fastapi import APIRouter
 from typing import List, Dict, Any
 
@@ -10,8 +10,8 @@ modelos_treinados: Dict[str, Any] = {}
 atributos_usados: Dict[str, List[str]] = {}
 
 
-@router.post("/knn")
-def treinar_knn(request: DatasetRequest):
+@router.post("/regressao_logistica")
+def treinar_regressao_logistica(request: DatasetRequest):
     try:
         df_treino = pd.DataFrame(request.dados_treino)
 
@@ -31,22 +31,22 @@ def treinar_knn(request: DatasetRequest):
         X_test = df_teste[request.atributos]
         y_test = df_teste[request.target]
 
-        model = KNeighborsClassifier(**request.hiperparametros)
+        model = LogisticRegression(**request.hiperparametros)
 
-        with mlflow.start_run(run_name="KNN Model"):
+        with mlflow.start_run(run_name="Logistic Regression Model"):
             model.fit(X_train, y_train)
             mlflow.log_params(request.hiperparametros)
-            mlflow.sklearn.log_model(model, "knn")
+            mlflow.sklearn.log_model(model, "regressao_logistica")
             run_id = mlflow.active_run().info.run_id
 
-        modelos_treinados['knn'] = model
-        atributos_usados['knn'] = request.atributos
+        modelos_treinados['regressao_logistica'] = model
+        atributos_usados['regressao_logistica'] = request.atributos
 
         df_teste_completo = X_test.copy()
         df_teste_completo[request.target] = y_test
 
         return {
-            "status": "modelo knn treinado com sucesso",
+            "status": "modelo regressão logística treinado com sucesso",
             "total_amostras_treino": len(X_train),
             "total_amostras_teste": len(X_test),
             "atributos": request.atributos,
@@ -54,7 +54,7 @@ def treinar_knn(request: DatasetRequest):
             "teste": df_teste_completo.to_dict(orient='records'),
             "hiperparametros": model.get_params(),
             "classes": list(model.classes_),
-            "modelo": "knn",
+            "modelo": "regressao_logistica",
             "mlflow_run_id_modelo": run_id
         }
 

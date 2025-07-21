@@ -37,7 +37,7 @@ def treinar_svm(request: DatasetRequest):
             model.fit(X_train, y_train)      
             
             mlflow.log_params(request.hiperparametros)
-            mlflow.sklearn.log_model(model, "svm_model")
+            mlflow.sklearn.log_model(model, "svm")
 
             run_id = mlflow.active_run().info.run_id
 
