@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.knn import router as knn_router
 from app.svm import router as svm_router
+from app.arvore_decisao import router as arvore_decisao_router
 from app.metricas import router as metricas_router
 
 app = FastAPI()
@@ -17,5 +18,6 @@ app.add_middleware(
 
 app.include_router(knn_router, prefix="/classificador/treinamento")
 app.include_router(svm_router, prefix="/classificador/treinamento")
+app.include_router(arvore_decisao_router, prefix="/classificador/treinamento")
 app.include_router(metricas_router, prefix="/classificador")
 
