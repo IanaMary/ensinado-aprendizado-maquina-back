@@ -18,7 +18,8 @@ def treinar_svm(request: DatasetRequest):
         if request.dados_teste and len(request.dados_teste) > 0:
             df_teste = pd.DataFrame(request.dados_teste)
         else:
-            df_treino, df_teste = train_test_split(df_treino, test_size=0.2, random_state=42)
+            test_size = request.porcentagem_teste
+            df_treino, df_teste = train_test_split(df_treino, test_size=test_size, random_state=42)
 
         for col in request.atributos + [request.target]:
             if col not in df_treino.columns:

@@ -68,7 +68,7 @@ def avaliar_multiplos_modelos_compacto(request: AvaliacaoCompactaRequest):
                         resultados[metrica] = f"Erro ao calcular: {erro_metricas}"
 
                 mlflow.set_tag("tipo", "avaliacao_multipla")
-                mlflow.set_tag("modelo", modelo_nome)
+                mlflow.set_tag("modelo", run_id)
                 mlflow_run_avaliacao = mlflow.active_run().info.run_id
 
             resultados_gerais[modelo_nome] = {

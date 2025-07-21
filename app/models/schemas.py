@@ -15,7 +15,8 @@ class DatasetRequest(BaseModel):
     atributos: List[str]
     target: str
     hiperparametros: Optional[Dict[str, Any]] = {}
-
+    porcentagem_teste: float
+    
 class PrevisaoRequest(BaseModel):
     dados: List[Dict[str, Any]]
     modelo_nome: str
