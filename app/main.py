@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.database import db
 
 from app.knn import router as knn_router
 from app.svm import router as svm_router
@@ -22,4 +23,14 @@ app.include_router(svm_router, prefix="/classificador/treinamento")
 app.include_router(arvore_decisao_router, prefix="/classificador/treinamento")
 app.include_router(regressao_logistica_router, prefix="/classificador/treinamento")
 app.include_router(metricas_router, prefix="/classificador")
+
+
+@app.get("/healthcheck")
+async def healthcheck():
+    try:
+        # consulta simples para checar a conexão
+        collections = await db.list_collection_names()
+        return {"status": "ok", "collections": collections}
+    except Exception as e:
+        return {"status": "erro", "detalhe": str(e)}
 
