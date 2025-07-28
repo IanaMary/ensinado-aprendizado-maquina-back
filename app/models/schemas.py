@@ -1,7 +1,5 @@
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-
-
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Optional 
 class AvaliacaoCompactaRequest(BaseModel):
     dados_teste: List[Dict[str, Any]]
     target: str
@@ -32,3 +30,14 @@ class PrevisaoRequest(BaseModel):
     dados: List[Dict[str, Any]]
     modelo_nome: Optional[str] = None
     mlflow_run_id: Optional[str] = None  
+
+class ConfiguracaoColetaRequest(BaseModel):
+    target: str
+    atributos: Dict[str, bool]
+class Config:
+    allow_population_by_field_name = True
+    
+class KnnRequestById(BaseModel):
+    id_coleta: str
+    hiperparametros: Optional[Dict[str, Any]] = {}
+    

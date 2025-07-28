@@ -2,10 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import db
 
-from app.knn import router as knn_router
-from app.svm import router as svm_router
-from app.arvore_decisao import router as arvore_decisao_router
-from app.regressao_logistica import router as regressao_logistica_router
+
+from app.coleta_dados import router as coleta_dados_csv_router
+from app.coleta_dados import router as coleta_dados_xlsx_router
+
+from app.modelos_supervisionados.knn import router as knn_router
+from app.modelos_supervisionados.svm import router as svm_router
+from app.modelos_supervisionados.arvore_decisao import router as arvore_decisao_router
+from app.modelos_supervisionados.regressao_logistica import router as regressao_logistica_router
 from app.metricas import router as metricas_router
 
 app = FastAPI()
@@ -17,6 +21,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+
+
+app.include_router(coleta_dados_xlsx_router, prefix="/coleta-dados")
+app.include_router(coleta_dados_csv_router, prefix="/coleta-dados")
+
+
 
 app.include_router(knn_router, prefix="/classificador/treinamento")
 app.include_router(svm_router, prefix="/classificador/treinamento")

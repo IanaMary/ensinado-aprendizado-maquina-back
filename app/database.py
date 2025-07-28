@@ -1,12 +1,16 @@
 import os
 from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo.server_api import ServerApi
 from dotenv import load_dotenv
 
-load_dotenv()  # Carrega as variáveis do .env
+load_dotenv()
 
 MONGO_URL = os.getenv("MONGO_URL")
-DB_NAME = os.getenv("DB_NAME")
+MONGO_DB = os.getenv("MONGO_DB")
 
-client = AsyncIOMotorClient(MONGO_URL, server_api=ServerApi('1'))
-db = client[DB_NAME]
+if not MONGO_URL or not MONGO_DB:
+    raise RuntimeError("MONGO_URL e MONGO_DB precisam estar definidos no .env")
+
+client = AsyncIOMotorClient(MONGO_URL)
+db = client[MONGO_DB]
+
+coleta_collection = db["coleta_collection"]  # ou outro nome que desejar
