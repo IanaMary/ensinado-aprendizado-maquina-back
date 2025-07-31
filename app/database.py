@@ -13,4 +13,5 @@ if not MONGO_URL or not MONGO_DB:
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[MONGO_DB]
 
-coleta_collection = db["coleta_collection"]  # ou outro nome que desejar
+arquivos_xlxs = db["arquivos_xlxs"] 
+configuracoes_treinamento = db["configuracoes_treinamento"] 

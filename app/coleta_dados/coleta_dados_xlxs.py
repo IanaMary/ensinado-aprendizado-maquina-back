@@ -7,91 +7,13 @@ import pandas as pd
 from io import BytesIO
 import base64
 
-from app.database import coleta_collection
+from app.database import arquivos_xlxs, configuracoes_treinamento
 from app.deps import train_test_split
 from app.models.schemas import ConfiguracaoColetaRequest
+from app.models.funcoes_genericas import validar_xlsx, ler_excel, df_para_base64, gerar_colunas_detalhes, montar_resposta_coleta
 
 
 router = APIRouter()
-
-def mapear_tipo(dtype_str: str) -> str:
-    tipo = dtype_str.lower()
-    if tipo in ("int64", "int32"):
-        return "Número"
-    elif tipo in ("float64", "float32"):
-        return "Número"
-    elif tipo in ("bool", "boolean"):
-        return "Boolean"
-    elif tipo in ("object", "string"):
-        return "Texto"
-    else:
-        return dtype_str  # fallback: retorna como está
-
-
-def validar_xlsx(file: UploadFile, nome: str):
-    if not file or not file.filename.endswith(".xlsx"):
-        raise HTTPException(400, f"Arquivo de {nome} deve ser .xlsx")
-
-
-async def ler_excel(file: UploadFile) -> Tuple[pd.DataFrame, bytes]:
-    try:
-        content = await file.read()
-        df = pd.read_excel(BytesIO(content), engine='openpyxl')
-        return df, content
-    except Exception as e:
-        raise HTTPException(400, f"Erro ao ler XLSX: {e}")
-    
-def decode_excel_base64(base64_string: str) -> List[dict]:
-    try:
-        binary = base64.b64decode(base64_string)
-        df = pd.read_excel(BytesIO(binary))
-        return df.head(5).to_dict(orient="records")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao decodificar Excel: {e}")
-
-
-def df_para_base64(df: pd.DataFrame) -> str:
-    buffer = BytesIO()
-    df.to_excel(buffer, index=False, engine='openpyxl')
-    buffer.seek(0)
-    return base64.b64encode(buffer.read()).decode("utf-8")
-
-
-def gerar_colunas_detalhes(df: pd.DataFrame) -> List[dict]:
-    return [
-        {
-            "nomeColuna": col,
-            "tipoColuna": mapear_tipo(str(df[col].dtype)),
-            "atributo": False
-        }
-        for col in df.columns
-    ]
-
-
-def montar_resposta_coleta(
-    atributos,
-    id_coleta,
-    tipo,
-    df_treino,
-    df_teste,
-    colunas_detalhes,
-    arquivo_nome_treino=None,
-    arquivo_nome_teste=None
-):
-    return {
-        "id_coleta": id_coleta,
-        "tipo": tipo,
-        "arquivo_nome_treino": arquivo_nome_treino,
-        "arquivo_nome_teste": arquivo_nome_teste,
-        "num_linhas_treino": df_treino.shape[0],
-        "num_linhas_teste": df_teste.shape[0],
-        "num_colunas": df_treino.shape[1],
-        "colunas_detalhes": colunas_detalhes,
-        "atributos": atributos,
-        "preview_treino": df_treino.head(5).to_dict(orient="records"),
-        "preview_teste": df_teste.head(5).to_dict(orient="records")
-    }
-
 
 @router.post("/salvar_xlxs")
 async def upload_xlsx(
@@ -124,22 +46,32 @@ async def upload_xlsx(
         content_teste_b64 = df_para_base64(df_teste)
 
         colunas_detalhes = gerar_colunas_detalhes(df)
+        
+        atributos = {coluna: False for coluna in df.columns},
 
-        doc = {
-            "tipo": tipo,
+        doc_arquivo = {
             "arquivo_nome_treino": arquivo_nome_treino,
             "content_completo_base64": content_completo_b64,
             "content_treino_base64": content_treino_b64,
             "content_teste_base64": content_teste_b64,
             "num_linhas_total": df.shape[0],
             "num_colunas": df.shape[1],
-            "atributos": {coluna: False for coluna in df.columns},  # salva no banco como dict
+            "atributos": atributos,  # salva no banco como dict
             "colunas_detalhes": colunas_detalhes,
-            "config": {"test_size": test_size}
+        }
+        
+        result = await arquivos_xlxs.insert_one(doc_arquivo)
+        id_coleta = str(result.inserted_id)
+        
+        doc_configuracoes_treinamento = {
+            "id_coleta" : ObjectId(result.inserted_id),
+            "test_size": test_size,
+            "atributos": atributos,
         }
 
-        result = await coleta_collection.insert_one(doc)
-        id_coleta = str(result.inserted_id)
+        result = await configuracoes_treinamento.insert_one(doc_configuracoes_treinamento)
+        id_configuracoes_treinamento = str(result.inserted_id)
+       
 
     elif tipo == "teste":
         if not id_coleta:
@@ -159,7 +91,7 @@ async def upload_xlsx(
             content_treino_b64 = base64.b64encode(content_treino).decode("utf-8")
             arquivo_nome_treino = file_treino.filename
         else:
-            doc_original = await coleta_collection.find_one({"_id": ObjectId(id_coleta)})
+            doc_original = await arquivos_xlxs.find_one({"_id": ObjectId(id_coleta)})
             if not doc_original:
                 raise HTTPException(404, "Documento com id_coleta não encontrado")
 
@@ -174,11 +106,10 @@ async def upload_xlsx(
 
         colunas_detalhes = gerar_colunas_detalhes(df_treino)
 
-        update_result = await coleta_collection.update_one(
+        update_result = await arquivos_xlxs.update_one(
             {"_id": ObjectId(id_coleta)},
             {
                 "$set": {
-                    "tipo": tipo,
                     "arquivo_nome_treino": arquivo_nome_treino,
                     "arquivo_nome_teste": arquivo_nome_teste,
                     "content_completo_base64": content_treino_b64,
@@ -188,7 +119,6 @@ async def upload_xlsx(
                     "num_linhas_teste": df_teste.shape[0],
                     "num_colunas": df_treino.shape[1],
                     "colunas_detalhes": colunas_detalhes,
-                    "config": None
                 }
             }
         )
@@ -198,6 +128,7 @@ async def upload_xlsx(
 
     # Aqui retornamos a lista simples de nomes das colunas para o front
     return montar_resposta_coleta(
+        id_configuracoes_treinamento=id_configuracoes_treinamento,
         id_coleta=id_coleta,
         atributos={coluna: False for coluna in df_treino.columns},  # retorna dicionário com False  # RETORNO: lista simples
         tipo=tipo,
@@ -209,72 +140,6 @@ async def upload_xlsx(
     )
 
     
-@router.get("/buscar_xlxs/{coleta_id}")
-async def get_dados_por_coleta(coleta_id: str):
-    try:
-        doc = await coleta_collection.find_one({"_id": ObjectId(coleta_id)})
-    except Exception:
-        raise HTTPException(status_code=400, detail="ID inválido.")
-
-    if not doc:
-        raise HTTPException(status_code=404, detail="Coleta não encontrada.")
-
-    def decode_excel_base64(base64_string: str) -> pd.DataFrame:
-        try:
-            binary = base64.b64decode(base64_string)
-            df = pd.read_excel(BytesIO(binary))
-            return df
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Erro ao decodificar Excel: {e}")
-
-    df_treino = decode_excel_base64(doc.get("content_treino_base64", ""))
-    df_teste = decode_excel_base64(doc.get("content_teste_base64", ""))
-
-    preview_treino = df_treino.head(5).to_dict(orient="records")
-    preview_teste = df_teste.head(5).to_dict(orient="records")
-
-    # Garantir que "colunas" seja uma lista de nomes no retorno
-    colunas = doc.get("colunas")
-    if isinstance(colunas, dict):
-        colunas = list(colunas.keys())
-    elif colunas is None:
-        colunas = []
-
-    return {
-        "id_coleta": str(doc["_id"]),
-        "tipo": doc.get("tipo"),
-        "arquivo_nome_treino": doc.get("arquivo_nome_treino"),
-        "arquivo_nome_teste": doc.get("arquivo_nome_teste"),
-        "target": doc.get("target"),              
-        "atributos": doc.get("atributos"),    
-        "preview_treino": preview_treino,
-        "preview_teste": preview_teste,
-        "colunas_detalhes": doc.get("colunas_detalhes"),
-        "num_linhas_treino": df_treino.shape[0],
-        "num_linhas_teste": df_teste.shape[0],
-        "num_linhas_total": df_treino.shape[0] + df_teste.shape[0],
-    }
-    
-
-@router.put("/configurar_coleta_xlxs/{coleta_id}")
-async def configurar_coleta(coleta_id: str, config: ConfiguracaoColetaRequest):
-    coleta = await coleta_collection.find_one({"_id": ObjectId(coleta_id)})
-    
-    if not coleta:
-        raise HTTPException(status_code=404, detail="Coleta não encontrada.")
-
-    update_data = {
-        "target": config.target,
-        "atributos": config.atributos
-    }
-
-    await coleta_collection.update_one(
-        {"_id": ObjectId(coleta_id)},
-        {"$set": update_data}
-    )
-
-    return {"mensagem": "Configuração salva com sucesso."}
-    
 @router.get("/unique")
 async def get_unique_values(
     id_coleta: str = Query(..., description="ID da coleta para buscar os dados"),
@@ -283,7 +148,7 @@ async def get_unique_values(
   if not ObjectId.is_valid(id_coleta):
     raise HTTPException(400, "ID da coleta inválido")
 
-  doc = await coleta_collection.find_one({"_id": ObjectId(id_coleta)})
+  doc = await arquivos_xlxs.find_one({"_id": ObjectId(id_coleta)})
   if not doc:
     raise HTTPException(404, "Coleta não encontrada")
 

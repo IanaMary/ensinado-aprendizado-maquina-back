@@ -3,8 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import db
 
 
-from app.coleta_dados import router as coleta_dados_csv_router
-from app.coleta_dados import router as coleta_dados_xlsx_router
+from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, configuracao_treinamento_router
+
 
 from app.modelos_supervisionados.knn import router as knn_router
 from app.modelos_supervisionados.svm import router as svm_router
@@ -23,11 +23,9 @@ app.add_middleware(
 )
 
 
-
-
-app.include_router(coleta_dados_xlsx_router, prefix="/coleta-dados")
-app.include_router(coleta_dados_csv_router, prefix="/coleta-dados")
-
+app.include_router(coleta_dados_xlxs_router, prefix="/coleta_dados")
+app.include_router(coleta_dados_csv_router, prefix="/coleta_dados")
+app.include_router(configuracao_treinamento_router, prefix="/configurar_treinamento")
 
 
 app.include_router(knn_router, prefix="/classificador/treinamento")
