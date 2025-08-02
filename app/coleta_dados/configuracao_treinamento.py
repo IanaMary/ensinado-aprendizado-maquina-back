@@ -3,29 +3,52 @@ from bson import ObjectId
 
 from app.database import arquivos_xlxs, configuracoes_treinamento
 from app.models.schemas import ConfiguracaoColetaRequest
-from app.models.funcoes_genericas import decode_excel_base64_df
+from app.models.funcoes_genericas import decode_excel_base64_df, mapear_tipo
 
 router = APIRouter()
 
 @router.put("/{tipo}/{configurar_treinamento_id}")
 async def configurar_treinamento(configurar_treinamento_id: str, config: ConfiguracaoColetaRequest):
-  coleta = await configuracoes_treinamento.find_one({"_id": ObjectId(configurar_treinamento_id)})
-  
-  if not coleta:
-    raise HTTPException(status_code=404, detail="Coleta não encontrada.")
+    config_doc = await configuracoes_treinamento.find_one({"_id": ObjectId(configurar_treinamento_id)})
+    
+    if not config_doc:
+        raise HTTPException(status_code=404, detail="Configuração não encontrada.")
+    
+    id_coleta = config_doc.get("id_coleta")
+    tipo_target = None
 
-  update_data = {
-    "target": config.target,
-    "atributos": config.atributos
-  }
+    if id_coleta and config.target:
+      resultado = await arquivos_xlxs.find_one(
+        {
+            "_id": ObjectId(id_coleta),
+            "colunas_detalhes.nome_coluna": config.target  # ajuste conforme seu campo no Mongo
+        },
+        {
+            "colunas_detalhes.$": 1  # traz só o item do array que bateu
+        }
+      )
+      if resultado and "colunas_detalhes" in resultado:
+        coluna_encontrada = resultado["colunas_detalhes"][0]
+        tipo_target = coluna_encontrada.get("tipo_coluna")  # pega o tipo da coluna
 
-  await configuracoes_treinamento.update_one(
-    {"_id": ObjectId(configurar_treinamento_id)},
-    {"$set": update_data}
-  )
+    
+    update_data = {
+      "target": config.target,
+      "atributos": config.atributos,
+      "tipo_target": tipo_target,
+    }
+    
+    await configuracoes_treinamento.update_one(
+      {"_id": ObjectId(configurar_treinamento_id)},
+      {"$set": update_data}
+    )
 
-  return {"mensagem": "Configuração salva com sucesso."}
-
+    return {
+      "mensagem": "Configuração salva com sucesso.",
+      "tipo_target": tipo_target
+    }
+    
+    
 @router.get("/{tipo}/{configurar_treinamento_id}")
 async def get_configuracoe(configurar_treinamento_id: str):
   try:

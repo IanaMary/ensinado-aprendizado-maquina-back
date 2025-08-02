@@ -49,8 +49,8 @@ def df_para_base64(df: pd.DataFrame) -> str:
 def gerar_colunas_detalhes(df: pd.DataFrame) -> List[dict]:
   return [
     {
-      "nomeColuna": col,
-      "tipoColuna": mapear_tipo(str(df[col].dtype)),
+      "nome_coluna": col,
+      "tipo_coluna": mapear_tipo(str(df[col].dtype)),
       "atributo": False
     }
     for col in df.columns
@@ -79,5 +79,6 @@ def montar_resposta_coleta(
     "colunas_detalhes": colunas_detalhes,
     "atributos": atributos,
     "preview_treino": df_treino.head(5).to_dict(orient="records"),
-    "preview_teste": df_teste.head(5).to_dict(orient="records")
+    "preview_teste": df_teste.head(5).to_dict(orient="records"),
+    "tipo_target": None
   }

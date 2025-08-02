@@ -66,7 +66,8 @@ async def upload_xlsx(
         doc_configuracoes_treinamento = {
             "id_coleta" : ObjectId(result.inserted_id),
             "test_size": test_size,
-            "atributos": [],
+            "atributos": atributos,
+            "tipo_target": None
         }
 
         result = await configuracoes_treinamento.insert_one(doc_configuracoes_treinamento)
