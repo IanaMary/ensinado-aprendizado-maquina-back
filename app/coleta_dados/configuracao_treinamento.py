@@ -62,17 +62,13 @@ async def get_configuracoe(configurar_treinamento_id: str):
   elif colunas is None:
     colunas = []
 
-  atributos = config_doc.get("atributos")
-  if isinstance(atributos, list) and len(atributos) > 0:
-    atributos = atributos[0]
-
   return {
     "id_coleta": str(coleta_doc["_id"]),
     "tipo": coleta_doc.get("tipo"),
     "arquivo_nome_treino": coleta_doc.get("arquivo_nome_treino"),
     "arquivo_nome_teste": coleta_doc.get("arquivo_nome_teste"),
     "target": config_doc.get("target"),
-    "atributos": atributos,
+    "atributos": config_doc.get("atributos"),
     "preview_treino": preview_treino,
     "preview_teste": preview_teste,
     "colunas_detalhes": coleta_doc.get("colunas_detalhes"),

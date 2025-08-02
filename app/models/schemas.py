@@ -32,8 +32,8 @@ class PrevisaoRequest(BaseModel):
     mlflow_run_id: Optional[str] = None  
 
 class ConfiguracaoColetaRequest(BaseModel):
-    target: str
-    atributos: Dict[str, bool]
+    target: Optional[str]  = None
+    atributos: Dict[str, Any]
 class Config:
     allow_population_by_field_name = True
     

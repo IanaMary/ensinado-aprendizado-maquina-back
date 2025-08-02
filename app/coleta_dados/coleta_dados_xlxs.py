@@ -47,7 +47,7 @@ async def upload_xlsx(
 
         colunas_detalhes = gerar_colunas_detalhes(df)
         
-        atributos = {coluna: False for coluna in df.columns},
+        atributos = {coluna: False for coluna in df.columns}
 
         doc_arquivo = {
             "arquivo_nome_treino": arquivo_nome_treino,
@@ -66,7 +66,7 @@ async def upload_xlsx(
         doc_configuracoes_treinamento = {
             "id_coleta" : ObjectId(result.inserted_id),
             "test_size": test_size,
-            "atributos": atributos,
+            "atributos": [],
         }
 
         result = await configuracoes_treinamento.insert_one(doc_configuracoes_treinamento)
