@@ -1,11 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.database import db
 
+from app.usuario.routers import usuarios
+from app.usuario.routers import login
 
 from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, configuracao_treinamento_router
-
-
 from app.modelos_supervisionados.knn import router as knn_router
 from app.modelos_supervisionados.svm import router as svm_router
 from app.modelos_supervisionados.arvore_decisao import router as arvore_decisao_router
@@ -22,6 +21,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(usuarios.router)
+app.include_router(login.router)
+
 
 app.include_router(coleta_dados_xlxs_router, prefix="/coleta_dados")
 app.include_router(coleta_dados_csv_router, prefix="/coleta_dados")
@@ -33,6 +35,10 @@ app.include_router(svm_router, prefix="/classificador/treinamento")
 app.include_router(arvore_decisao_router, prefix="/classificador/treinamento")
 app.include_router(regressao_logistica_router, prefix="/classificador/treinamento")
 app.include_router(metricas_router, prefix="/classificador")
+
+
+
+
 
 
 @app.get("/healthcheck")

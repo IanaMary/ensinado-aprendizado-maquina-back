@@ -13,5 +13,12 @@ if not MONGO_URL or not MONGO_DB:
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[MONGO_DB]
 
+# USUARIOS
+colecao_usuario = db["usuarios"] 
+verificadores_professor = db["verificadores_professor"]
+
+# PIPELINE
+opcoes_coletas = db["itens_coleta_dados"] 
+
 arquivos_xlxs = db["arquivos_xlxs"] 
 configuracoes_treinamento = db["configuracoes_treinamento"] 
