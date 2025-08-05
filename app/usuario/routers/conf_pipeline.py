@@ -13,7 +13,7 @@ async def itens_coleta_dados(itens: List[ItemColeta]):
   resultado = await opcoes_coletas.insert_many(documentos)
   return {"ids_inseridos": [str(_id) for _id in resultado.inserted_ids]}
 
-@router.get("/itens_coleta_dados/todos", response_model=List[ItemColetaOut])
+@router.get("/coleta_dados/todos", response_model=List[ItemColetaOut])
 async def get_all_itens_coleta(
     limite: int = Query(10, ge=1, le=100),
     pagina: int = Query(1, ge=1),
