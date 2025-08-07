@@ -7,7 +7,8 @@ from app.models.schemas import ConfiguracaoColetaRequest
 import pandas as pd
 import base64
 from io import StringIO
-from app.database import arquivos_xlxs
+from bson import ObjectId
+from app.database import arquivos
 
 router = APIRouter()
 
@@ -37,7 +38,7 @@ async def upload_csv(
         "config": None
     }
 
-    result = await arquivos_xlxs.insert_one(doc)
+    result = await arquivos.insert_one(doc)
 
     return {
         "id_coleta": str(result.inserted_id),
@@ -57,7 +58,7 @@ async def configurar_treino(config: ConfiguracaoColetaRequest):
     except InvalidId:
         raise HTTPException(status_code=400, detail="id_coleta inválido")
 
-    update_result = await arquivos_xlxs.update_one(
+    update_result = await arquivos.update_one(
         {"_id": oid},
         {"$set": {
             "config": {

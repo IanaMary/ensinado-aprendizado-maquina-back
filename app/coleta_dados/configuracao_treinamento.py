@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from bson import ObjectId
 
-from app.database import arquivos_xlxs, configuracoes_treinamento
+from app.database import arquivos, configuracoes_treinamento
 from app.models.schemas import ConfiguracaoColetaRequest
 from app.models.funcoes_genericas import decode_excel_base64_df, mapear_tipo
 
@@ -18,13 +18,13 @@ async def configurar_treinamento(configurar_treinamento_id: str, config: Configu
   tipo_target = None
 
   if id_coleta and config.target:
-    resultado = await arquivos_xlxs.find_one(
+    resultado = await arquivos.find_one(
       {
-          "_id": ObjectId(id_coleta),
-          "colunas_detalhes.nome_coluna": config.target  # ajuste conforme seu campo no Mongo
+        "_id": ObjectId(id_coleta),
+        "colunas_detalhes.nome_coluna": config.target  # ajuste conforme seu campo no Mongo
       },
       {
-          "colunas_detalhes.$": 1  # traz só o item do array que bateu
+        "colunas_detalhes.$": 1  # traz só o item do array que bateu
       }
     )
     if resultado and "colunas_detalhes" in resultado:
@@ -64,7 +64,7 @@ async def get_configuracoe(configurar_treinamento_id: str):
     raise HTTPException(status_code=400, detail="Campo 'id_coleta' não encontrado na configuração.")
 
   try:
-    coleta_doc = await arquivos_xlxs.find_one({"_id": ObjectId(id_coleta)})
+    coleta_doc = await arquivos.find_one({"_id": ObjectId(id_coleta)})
   except Exception as e:
     raise HTTPException(status_code=400, detail=f"Erro ao buscar coleta: {str(e)}")
 

@@ -7,7 +7,7 @@ import pandas as pd
 from io import BytesIO
 import base64
 
-from app.database import arquivos_xlxs, configuracoes_treinamento
+from app.database import arquivos, configuracoes_treinamento
 from app.deps import train_test_split
 from app.models.schemas import ConfiguracaoColetaRequest
 from app.models.funcoes_genericas import validar_xlsx, ler_excel, df_para_base64, gerar_colunas_detalhes, montar_resposta_coleta
@@ -60,14 +60,15 @@ async def upload_xlsx(
             "colunas_detalhes": colunas_detalhes,
         }
         
-        result = await arquivos_xlxs.insert_one(doc_arquivo)
+        result = await arquivos.insert_one(doc_arquivo)
         id_coleta = str(result.inserted_id)
         
         doc_configuracoes_treinamento = {
             "id_coleta" : ObjectId(result.inserted_id),
             "test_size": test_size,
             "atributos": atributos,
-            "tipo_target": None
+            "tipo_target": None,
+            "target": None
         }
 
         result = await configuracoes_treinamento.insert_one(doc_configuracoes_treinamento)
@@ -92,7 +93,7 @@ async def upload_xlsx(
             content_treino_b64 = base64.b64encode(content_treino).decode("utf-8")
             arquivo_nome_treino = file_treino.filename
         else:
-            doc_original = await arquivos_xlxs.find_one({"_id": ObjectId(id_coleta)})
+            doc_original = await arquivos.find_one({"_id": ObjectId(id_coleta)})
             if not doc_original:
                 raise HTTPException(404, "Documento com id_coleta não encontrado")
 
@@ -107,7 +108,7 @@ async def upload_xlsx(
 
         colunas_detalhes = gerar_colunas_detalhes(df_treino)
 
-        update_result = await arquivos_xlxs.update_one(
+        update_result = await arquivos.update_one(
             {"_id": ObjectId(id_coleta)},
             {
                 "$set": {
@@ -149,7 +150,7 @@ async def get_unique_values(
   if not ObjectId.is_valid(id_coleta):
     raise HTTPException(400, "ID da coleta inválido")
 
-  doc = await arquivos_xlxs.find_one({"_id": ObjectId(id_coleta)})
+  doc = await arquivos.find_one({"_id": ObjectId(id_coleta)})
   if not doc:
     raise HTTPException(404, "Coleta não encontrada")
 

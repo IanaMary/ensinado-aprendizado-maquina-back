@@ -8,12 +8,10 @@ class AvaliacaoCompactaRequest(BaseModel):
 
 # Modelos Pydantic
 class DatasetRequest(BaseModel):
-    dados_treino: List[Dict[str, Any]]
-    dados_teste: Optional[List[Dict[str, Any]]] = []
-    atributos: List[str]
-    target: str
-    hiperparametros: Optional[Dict[str, Any]] = {}
-    porcentagem_teste: float
+    arquivo_id: str
+    tipo_arquivo: str              
+    configuracao_id: str   
+    modelo_id: str           
     
 class PrevisaoRequest(BaseModel):
     dados: List[Dict[str, Any]]

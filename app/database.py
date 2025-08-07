@@ -22,5 +22,9 @@ opcoes_coletas = db["coleta_dados"]
 opcoes_modelos = db["modelos"] 
 opcoes_metricas = db["metricas"] 
 
-arquivos_xlxs = db["arquivos_xlxs"] 
+arquivos = db["arquivos"]
 configuracoes_treinamento = db["configuracoes_treinamento"] 
+
+# MODELOS TREINADOS
+
+modelos_treinados = db["modelos_treinados"] 

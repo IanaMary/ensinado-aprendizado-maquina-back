@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, OrderedDict
 from fastapi import APIRouter, HTTPException, Depends, Query
 from datetime import datetime
 from typing import List, Optional
@@ -59,6 +59,7 @@ async def get_all_modelos(
   cursor = (
     opcoes_modelos.find()
     .sort(campo_ordenacao, direcao_ordenacao)
+    .collation({"locale": "en", "strength": 1})
     .skip(skip)
     .limit(limite)
   )
@@ -66,7 +67,19 @@ async def get_all_modelos(
 
 
   return [
-    {**doc, "id": str(doc["_id"])} for doc in documentos
+    ItemColetaOut(
+      id=str(doc["_id"]),
+      label=doc.get("label"),
+      tipoItem=doc.get("tipoItem"),
+      habilitado=doc.get("habilitado"),
+      movido=doc.get("movido"),
+      resumo=doc.get("resumo", ""),
+      valor=doc.get("valor", ""),
+      tipo=doc.get("tipo", ""),
+      metricas=doc.get("metricas", []),  # Corrigido aqui
+      hiperparametros=doc.get("hiperparametros", []),  # Corrigido também
+    )
+    for doc in documentos
   ]
   
 @router.get("/metricas/todos", response_model=List[ItemColetaOut])
