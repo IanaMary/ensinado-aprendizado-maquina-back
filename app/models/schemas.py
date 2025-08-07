@@ -1,10 +1,17 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional 
-class AvaliacaoCompactaRequest(BaseModel):
-    dados_teste: List[Dict[str, Any]]
-    target: str
-    atributos: List[str]
-    avaliacoes: List[Dict[str, Any]]
+
+class ModeloSelecionado(BaseModel):
+    label: str
+    id: str
+
+class MetricaSelecionada(BaseModel):
+    label: str
+    valor: str
+
+class AvaliacaoModelosRequest(BaseModel):
+    modelos: List[ModeloSelecionado]
+    metricas: List[MetricaSelecionada]
 
 # Modelos Pydantic
 class DatasetRequest(BaseModel):

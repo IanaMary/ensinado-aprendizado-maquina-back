@@ -1,81 +1,83 @@
 from fastapi import APIRouter
-from app.models.schemas import AvaliacaoCompactaRequest
 from app.deps import pd, mlflow, metricas_disponiveis
+from app.database import modelos_treinados
+from app.models.schemas import AvaliacaoModelosRequest
+from bson import ObjectId
+import pickle
+import base64
+import io
 
 router = APIRouter()
 
 
-@router.post("/avaliar-multiplos")
-def avaliar_multiplos_modelos_compacto(request: AvaliacaoCompactaRequest):
-    resultados_gerais = {}
-    df_teste = pd.DataFrame(request.dados_teste)
+@router.post("/avaliar_modelos")
+async def avaliar_modelos(request: AvaliacaoModelosRequest):
+    # estrutura: {nome_metrica: {label_modelo: valor}}
+    resultados_formatados = {
+        metrica.label: {} for metrica in request.metricas
+    }
 
-    for col in request.atributos + [request.target]:
-        if col not in df_teste.columns:
-            return {"erro": f"Coluna '{col}' não encontrada nos dados de teste."}
-
-    X_test = df_teste[request.atributos]
-    y_test = df_teste[request.target]
-
-    for avaliacao in request.avaliacoes:
-        modelo_nome = avaliacao.get("modelo_nome", "modelo_desconhecido")
-        run_id = avaliacao.get("mlflow_run_id_modelo")
-
-        if not run_id:
-            resultados_gerais[modelo_nome] = {"erro": "mlflow_run_id_modelo ausente na requisição."}
-            continue
+    for modelo in request.modelos:
+        id_modelo = modelo.id
+        nome_modelo = modelo.label
 
         try:
-            
-            if modelo_nome:
-                model_uri = f"runs:/{run_id}/{modelo_nome}"
-            else:
-                resultados_gerais[modelo_nome] = {"erro": f"Modelo '{modelo_nome}' não suportado."}
+            doc = await modelos_treinados.find_one({"_id": ObjectId(id_modelo)})
+
+            if not doc:
+                for metrica in request.metricas:
+                    resultados_formatados[metrica.label][nome_modelo] = "Modelo não encontrado"
                 continue
 
-            modelo = mlflow.sklearn.load_model(model_uri)
+            modelo_treinado = pickle.loads(doc["modelo_treinado"])
 
-            y_pred = modelo.predict(X_test)
-            resultados = {}
+            atributos = doc["atributos"]
+            target = doc["target"]
+            base64_str = doc["arq_teste"]
+            arquivo_bytes = base64.b64decode(base64_str)
+            df_teste = pd.read_excel(io.BytesIO(arquivo_bytes))
 
-            with mlflow.start_run(run_name=f"Avaliacao_{modelo_nome}"):
-                for metrica in avaliacao.get("metricas", []):
-                    if metrica not in metricas_disponiveis:
-                        resultados[metrica] = "Métrica não suportada"
-                        continue
+            X_teste = df_teste[atributos]
+            y_teste = df_teste[target]
+            y_pred = modelo_treinado.predict(X_teste)
 
-                    func = metricas_disponiveis.get(metrica)
-                    if func is None:
-                        resultados[metrica] = "Métrica não suportada"
-                        continue
+            for metrica in request.metricas:
+                nome_metrica = metrica.label
+                func_key = metrica.valor
+                func = metricas_disponiveis.get(func_key)
 
-                    try:
-                        if metrica == "roc_auc_score":
-                            if len(set(y_test)) != 2:
-                                resultados[metrica] = "ROC AUC requer problema binário"
-                                continue
-                            y_prob = modelo.predict_proba(X_test)[:, 1]
-                            valor = func(y_test, y_prob)
-                        else:
-                            valor = func(y_test, y_pred, average='weighted')
+                if not func:
+                    resultados_formatados[nome_metrica][nome_modelo] = "Métrica não suportada"
+                    continue
 
-                        resultados[metrica] = valor
-                        mlflow.log_metric(metrica, valor)
+                try:
+                    if func_key == "roc_auc_score":
+                        if len(set(y_teste)) != 2:
+                            resultados_formatados[nome_metrica][nome_modelo] = "ROC AUC requer problema binário"
+                            continue
+                        y_prob = modelo_treinado.predict_proba(X_teste)[:, 1]
+                        valor = func(y_teste, y_prob)
 
-                    except Exception as erro_metricas:
-                        resultados[metrica] = f"Erro ao calcular: {erro_metricas}"
+                    elif func_key in {"precision_score", "recall_score", "f1_score"}:
+                        valor = func(y_teste, y_pred, average="weighted", zero_division=0)
 
-                mlflow.set_tag("tipo", "avaliacao_multipla")
-                mlflow.set_tag("modelo", run_id)
-                mlflow_run_avaliacao = mlflow.active_run().info.run_id
+                    elif func_key in {"accuracy_score", "confusion_matrix"}:
+                        valor = func(y_teste, y_pred)
 
-            resultados_gerais[modelo_nome] = {
-                "status": "Avaliação concluída com sucesso",
-                "resultados": resultados,
-                "mlflow_run_id_avaliacao": mlflow_run_avaliacao
-            }
+                    else:
+                        # tentativa genérica: com average, e fallback sem average
+                        try:
+                            valor = func(y_teste, y_pred, average="weighted")
+                        except TypeError:
+                            valor = func(y_teste, y_pred)
 
-        except Exception as e:
-            resultados_gerais[modelo_nome] = {"erro": str(e)}
+                    resultados_formatados[nome_metrica][nome_modelo] = valor
 
-    return resultados_gerais
+                except Exception as e:
+                    resultados_formatados[nome_metrica][nome_modelo] = f"Erro ao calcular: {str(e)}"
+
+        except Exception as erro_geral:
+            for metrica in request.metricas:
+                resultados_formatados[metrica.label][nome_modelo] = f"Erro geral: {str(erro_geral)}"
+
+    return resultados_formatados

@@ -70,7 +70,8 @@ async def treinar_knn(request: DatasetRequest):
         
         # Serializa com joblib
         modelo_bytes = bson.Binary(pickle.dumps(modelo))
-        modelos_treinados.insert_one({
+        
+        result = await modelos_treinados.insert_one({
             "arq_treinamento":  conteudo_base64,
             "arq_teste":  arquivo_doc.get("content_teste_base64"),
             "hiperparametros": hiperparametros,
@@ -80,6 +81,8 @@ async def treinar_knn(request: DatasetRequest):
             "modelo": modelo_doc.get('valor'),
         })
         
+        id_result = str(result.inserted_id)
+        
         # registro = await modelos_treinados.find_one({"_id": ObjectId(id_do_modelo)})
         # modelo_recuperado = pickle.loads(registro["modelo_treinado"])
         
@@ -88,7 +91,6 @@ async def treinar_knn(request: DatasetRequest):
         raise HTTPException(status_code=500, detail=f"Erro ao treinar o modelo: {str(e)}")
 
     return {
-        "amostra": df.head().to_dict(orient="records"),
         "atributos": atributos,
         "target": target,
         "modelo_treinado": str(modelo),
@@ -98,4 +100,5 @@ async def treinar_knn(request: DatasetRequest):
         "classes": list(modelo.classes_),
         "modelo": "knn",
         "nome_modelo": modelo_doc.get('label'),
+        "id": id_result
     }

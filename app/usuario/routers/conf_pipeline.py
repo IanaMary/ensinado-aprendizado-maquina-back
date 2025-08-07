@@ -13,7 +13,7 @@ async def itens_coleta_dados(itens: List[ItemColeta]):
   resultado = await opcoes_coletas.insert_many(documentos)
   return {"ids_inseridos": [str(_id) for _id in resultado.inserted_ids]}
 
-@router.get("/coleta_dados/todos", response_model=List[ItemColetaOut])
+@router.get("/coleta_dados/todos", response_model=List)
 async def get_all_coleta(
     limite: int = Query(10, ge=1, le=100),
     pagina: int = Query(1, ge=1),
@@ -34,17 +34,14 @@ async def get_all_coleta(
   documentos = await cursor.to_list(length=limite)
 
   return [
-    ItemColetaOut(
-      id=str(doc["_id"]),
-      label=doc.get("label", ""),
-      tipoItem=doc.get("tipoItem", "coleta-dado"),
-      habilitado=doc.get("habilitado", True),
-      movido=doc.get("movido", False),
-    )
+    {
+      **{k: v for k, v in doc.items() if k != "_id"},
+      "id": str(doc["_id"])
+    }
     for doc in documentos
   ]
   
-@router.get("/modelos/todos", response_model=List[ItemColetaOut])
+@router.get("/modelos/todos", response_model=List)
 async def get_all_modelos(
     limite: int = Query(10, ge=1, le=100),
     pagina: int = Query(1, ge=1),
@@ -67,22 +64,14 @@ async def get_all_modelos(
 
 
   return [
-    ItemColetaOut(
-      id=str(doc["_id"]),
-      label=doc.get("label"),
-      tipoItem=doc.get("tipoItem"),
-      habilitado=doc.get("habilitado"),
-      movido=doc.get("movido"),
-      resumo=doc.get("resumo", ""),
-      valor=doc.get("valor", ""),
-      tipo=doc.get("tipo", ""),
-      metricas=doc.get("metricas", []),  # Corrigido aqui
-      hiperparametros=doc.get("hiperparametros", []),  # Corrigido também
-    )
+    {
+      **{k: v for k, v in doc.items() if k != "_id"},
+      "id": str(doc["_id"])
+    }
     for doc in documentos
   ]
   
-@router.get("/metricas/todos", response_model=List[ItemColetaOut])
+@router.get("/metricas/todos", response_model=List)
 async def get_all_modelos(
     limite: int = Query(10, ge=1, le=100),
     pagina: int = Query(1, ge=1),
@@ -103,12 +92,10 @@ async def get_all_modelos(
   documentos = await cursor.to_list(length=limite)
 
   return [
-    ItemColetaOut(
-      id=str(doc["_id"]),
-      label=doc.get("label", ""),
-      tipoItem=doc.get("tipoItem", "coleta-dado"),
-      habilitado=doc.get("habilitado", True),
-      movido=doc.get("movido", False),
-    )
+    {
+      **{k: v for k, v in doc.items() if k != "_id"},
+      "id": str(doc["_id"]),
+      "marcado": False,
+    }
     for doc in documentos
   ]
