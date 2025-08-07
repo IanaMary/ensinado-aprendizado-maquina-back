@@ -1,3 +1,4 @@
+from typing import List, Optional
 from pydantic import BaseModel
 
 class ItemColeta(BaseModel):
@@ -8,3 +9,8 @@ class ItemColeta(BaseModel):
 
 class ItemColetaOut(ItemColeta):
     id: str
+    tipo: Optional[str] = None
+    valor: Optional[str] = None
+    metricas: Optional[List[str]] = None
+    resumo: Optional[str] = None
+    hiperparametros: Optional[List[object]] = None

@@ -64,15 +64,9 @@ async def get_all_modelos(
   )
   documentos = await cursor.to_list(length=limite)
 
+
   return [
-    ItemColetaOut(
-      id=str(doc["_id"]),
-      label=doc.get("label", ""),
-      tipoItem=doc.get("tipoItem", "coleta-dado"),
-      habilitado=doc.get("habilitado", True),
-      movido=doc.get("movido", False),
-    )
-    for doc in documentos
+    {**doc, "id": str(doc["_id"])} for doc in documentos
   ]
   
 @router.get("/metricas/todos", response_model=List[ItemColetaOut])
