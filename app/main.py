@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.usuario.routers import usuarios
 from app.usuario.routers import login
 from app.usuario.routers import conf_pipeline
+from app.usuario.routers import tutor
+
 
 from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, configuracao_treinamento_router
 from app.modelos_supervisionados.knn import router as knn_router
@@ -25,6 +27,8 @@ app.add_middleware(
 app.include_router(usuarios.router)
 app.include_router(login.router)
 app.include_router(conf_pipeline.router)
+app.include_router(tutor.router)
+
 
 app.include_router(coleta_dados_xlxs_router, prefix="/coleta_dados")
 app.include_router(coleta_dados_csv_router, prefix="/coleta_dados")

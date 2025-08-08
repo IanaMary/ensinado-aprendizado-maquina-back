@@ -28,3 +28,8 @@ configuracoes_treinamento = db["configuracoes_treinamento"]
 # MODELOS TREINADOS
 
 modelos_treinados = db["modelos_treinados"] 
+
+
+# TUTOR
+
+tutor = db["tutor"] 
