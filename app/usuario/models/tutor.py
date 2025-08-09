@@ -110,3 +110,29 @@ def avaliar_condicoes(lista_condicoes, contexto):
             continue
 
     return "Nenhuma condição satisfeita"
+
+def atualizar_descricao_recursiva(lista_condicoes, contexto, nova_desc):
+    import re
+
+    def extrair_variaveis(condicao):
+        tokens = re.findall(r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', condicao)
+        keywords = {"and", "or", "not", "True", "False"}
+        vars = [t for t in tokens if t not in keywords]
+        return vars
+
+    for item in lista_condicoes:
+        cond = item.get("condicao", "")
+        vars = extrair_variaveis(cond)
+        if not all(v in contexto for v in vars):
+            continue
+        try:
+            if eval(cond, {}, contexto):
+                item["descricao"] = nova_desc
+                return True
+        except Exception:
+            continue
+        resultado = item.get("resultado")
+        if isinstance(resultado, list):
+            if atualizar_descricao_recursiva(resultado, contexto, nova_desc):
+                return True
+    return False
