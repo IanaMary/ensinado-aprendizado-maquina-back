@@ -29,6 +29,7 @@ async def upload_xlsx(
 
     arquivo_nome_treino = None
     arquivo_nome_teste = None
+    id_configuracoes_treinamento = None
 
     if tipo == "treino":
         if file is None:
