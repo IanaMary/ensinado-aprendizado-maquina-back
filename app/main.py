@@ -5,12 +5,14 @@ from app.routers import usuarios
 from app.routers import login
 from app.routers import conf_pipeline
 from app.routers import tutor
+from app.routers import knn
+from app.routers import arvore_decisao
+
+
 
 
 from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, configuracao_treinamento_router
-from app.modelos_supervisionados.knn import router as knn_router
 from app.modelos_supervisionados.svm import router as svm_router
-from app.modelos_supervisionados.arvore_decisao import router as arvore_decisao_router
 from app.modelos_supervisionados.regressao_logistica import router as regressao_logistica_router
 from app.metricas import router as metricas_router
 
@@ -35,9 +37,10 @@ app.include_router(coleta_dados_csv_router, prefix="/coleta_dados")
 app.include_router(configuracao_treinamento_router, prefix="/configurar_treinamento")
 
 
-app.include_router(knn_router, prefix="/classificador/treinamento")
+app.include_router(knn.router, prefix="/classificador/treinamento")
+app.include_router(arvore_decisao.router, prefix="/classificador/treinamento")
+
 app.include_router(svm_router, prefix="/classificador/treinamento")
-app.include_router(arvore_decisao_router, prefix="/classificador/treinamento")
 app.include_router(regressao_logistica_router, prefix="/classificador/treinamento")
 app.include_router(metricas_router, prefix="/classificador")
 
