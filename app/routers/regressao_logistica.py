@@ -1,20 +1,20 @@
-from fastapi import APIRouter, HTTPException
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
 from app.schemas.schemas import DatasetRequest
 from app.deps import pd
+from fastapi import APIRouter, HTTPException
 from typing import List
+from io import BytesIO
+from app.database import configuracoes_treinamento, arquivos, opcoes_modelos, modelos_treinados
 from bson import ObjectId
 import bson
 import pickle
 import base64
-from io import BytesIO
-from app.database import configuracoes_treinamento, arquivos, opcoes_modelos, modelos_treinados
 
 router = APIRouter()
 
 
-@router.post("/arvore_decisao")
-async def treinar_arvore_decisao(request: DatasetRequest):
+@router.post("/regressao_logistica")
+async def treinar_regressao_logistica(request: DatasetRequest):
     tipo = request.tipo_arquivo.lower()
     arquivo_id = request.arquivo_id
     conf_treino_id = request.configuracao_id
@@ -65,7 +65,7 @@ async def treinar_arvore_decisao(request: DatasetRequest):
     y_train = df[target]
 
     try:
-        modelo = DecisionTreeClassifier(**hiperparametros)
+        modelo = LogisticRegression(max_iter=1000, **hiperparametros)
         modelo.fit(X_train, y_train)
         
         # Serializa com joblib
@@ -91,11 +91,11 @@ async def treinar_arvore_decisao(request: DatasetRequest):
         "atributos": atributos,
         "target": target,
         "modelo_treinado": str(modelo),
-        "status": "modelo árvore de decisão treinado com sucesso",
+        "status": "modelo regressão logística treinado com sucesso",
         "total_amostras_treino": len(X_train),
         "hiperparametros": modelo.get_params(),
         "classes": list(modelo.classes_),
-        "modelo": "arvore_decisao",
+        "modelo": "regressao_logistica",
         "nome_modelo": modelo_doc.get('label'),
         "id": id_result
     }

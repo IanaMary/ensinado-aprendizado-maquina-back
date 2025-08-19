@@ -1,1 +1,0 @@
-from .regressao_logistica_treinamento import router
