@@ -1,6 +1,6 @@
 import base64
 from io import BytesIO
-from app.models.schemas import DatasetRequest
+from app.schemas.schemas import DatasetRequest
 from app.deps import pd, KNeighborsClassifier
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any

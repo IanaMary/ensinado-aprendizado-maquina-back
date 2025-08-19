@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.usuario.routers import usuarios
-from app.usuario.routers import login
-from app.usuario.routers import conf_pipeline
-from app.usuario.routers import tutor
+from app.routers import usuarios
+from app.routers import login
+from app.routers import conf_pipeline
+from app.routers import tutor
 
 
 from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, configuracao_treinamento_router

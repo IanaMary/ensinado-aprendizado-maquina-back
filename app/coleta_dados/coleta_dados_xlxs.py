@@ -9,8 +9,8 @@ import base64
 
 from app.database import arquivos, configuracoes_treinamento
 from app.deps import train_test_split
-from app.models.schemas import ConfiguracaoColetaRequest
-from app.models.funcoes_genericas import validar_xlsx, ler_excel, df_para_base64, gerar_colunas_detalhes, montar_resposta_coleta
+from app.schemas.schemas import ConfiguracaoColetaRequest
+from app.funcoes_genericas.funcoes_genericas import validar_xlsx, ler_excel, df_para_base64, gerar_colunas_detalhes, montar_resposta_coleta
 
 
 router = APIRouter()

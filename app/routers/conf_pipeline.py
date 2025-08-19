@@ -2,7 +2,7 @@ from typing import List, OrderedDict
 from fastapi import APIRouter, HTTPException, Depends, Query
 from datetime import datetime
 from typing import List, Optional
-from app.usuario.schemas.conf_pipeline import ItemColeta, ItemColetaOut
+from app.schemas.conf_pipeline import ItemColeta, ItemColetaOut
 from app.database import opcoes_coletas, opcoes_modelos, opcoes_metricas
 
 router = APIRouter(prefix="/conf_pipeline", tags=["Configuração Pipeline"])

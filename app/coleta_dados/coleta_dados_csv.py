@@ -3,7 +3,7 @@ from typing_extensions import Annotated
 from typing import Optional
 from fastapi import Form, File, UploadFile
 from bson.errors import InvalidId
-from app.models.schemas import ConfiguracaoColetaRequest
+from app.schemas.schemas import ConfiguracaoColetaRequest
 import pandas as pd
 import base64
 from io import StringIO

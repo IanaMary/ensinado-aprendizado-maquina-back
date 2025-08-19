@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException
 from bson import ObjectId
 
 from app.database import arquivos, configuracoes_treinamento
-from app.models.schemas import ConfiguracaoColetaRequest
-from app.models.funcoes_genericas import decode_excel_base64_df, mapear_tipo
+from app.schemas.schemas import ConfiguracaoColetaRequest
+from app.funcoes_genericas.funcoes_genericas import decode_excel_base64_df, mapear_tipo
 
 router = APIRouter()
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from app.deps import pd, mlflow, metricas_disponiveis
 from app.database import modelos_treinados
-from app.models.schemas import AvaliacaoModelosRequest
+from app.schemas.schemas import AvaliacaoModelosRequest
 from bson import ObjectId
 import pickle
 import base64

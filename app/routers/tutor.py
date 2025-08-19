@@ -1,7 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException
-from app.usuario.schemas.tutor import AtualizarDescricaoRequest
-from app.usuario.models.tutor import obter_arvore, avaliar_condicoes, tem_condicoes_validas
+from app.schemas.tutor import AtualizarDescricaoRequest
+from app.models.tutor import obter_arvore, avaliar_condicoes, tem_condicoes_validas
 from app.database import tutor
 
 

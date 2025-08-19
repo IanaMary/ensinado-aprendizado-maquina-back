@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime
 import secrets
 
-from app.usuario.schemas.usuarios import UserCreate, UserOut
+from app.schemas.usuarios import UserCreate, UserOut
 from app.security import get_senha_hash, verificar_senha
 from app.database import colecao_usuario, verificadores_professor
 

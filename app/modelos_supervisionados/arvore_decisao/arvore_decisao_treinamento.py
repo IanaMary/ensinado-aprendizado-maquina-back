@@ -1,5 +1,5 @@
 from sklearn.tree import DecisionTreeClassifier
-from app.models.schemas import DatasetRequest
+from app.schemas.schemas import DatasetRequest
 from app.deps import pd, mlflow, train_test_split
 from fastapi import APIRouter
 from typing import List, Dict, Any

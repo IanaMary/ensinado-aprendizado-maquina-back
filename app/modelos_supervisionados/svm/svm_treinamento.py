@@ -1,5 +1,5 @@
 
-from app.models.schemas import DatasetRequest
+from app.schemas.schemas import DatasetRequest
 from app.deps import pd, mlflow, SVC, train_test_split
 from fastapi import APIRouter
 from typing import List, Dict, Any

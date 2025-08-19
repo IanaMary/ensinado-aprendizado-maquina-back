@@ -6,8 +6,8 @@ import os
 
 from app.database import colecao_usuario
 from app.security import verificar_senha  
-from app.usuario.schemas.login import LoginRequest
-from app.usuario.schemas.usuarios import UsuarioResponse
+from app.schemas.login import LoginRequest
+from app.schemas.usuarios import UsuarioResponse
 
 from dotenv import load_dotenv
 

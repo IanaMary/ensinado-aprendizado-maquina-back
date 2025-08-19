@@ -8,7 +8,7 @@ import jwt  # pyjwt
 from jwt import PyJWTError
 
 from app.database import colecao_usuario
-from app.usuario.schemas.usuarios import UserOut  # ou seu schema de usuário
+from app.schemas.usuarios import UserOut  # ou seu schema de usuário
 
 load_dotenv()
 
