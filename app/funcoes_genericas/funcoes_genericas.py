@@ -9,13 +9,13 @@ import base64
 def mapear_tipo(dtype_str: str) -> str:
   tipo = dtype_str.lower()
   if tipo in ("int64", "int32"):
-    return "Número"
+    return "number"
   elif tipo in ("float64", "float32"):
-    return "Número"
+    return "number"
   elif tipo in ("bool", "boolean"):
-    return "Boolean"
+    return "boolean"
   elif tipo in ("object", "string"):
-    return "Texto"
+    return "string"
   else:
     return dtype_str  # fallback: retorna como está
 
