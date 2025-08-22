@@ -23,7 +23,7 @@ async def avaliar(
         elif(pipe == 'coleta-dado'):
             chaves = textos or list(ContextoPipeColetaDados.__fields__.keys())
             texto = concatenar_campos(result, chaves, sep='\n')
-        elif(pipe == 'selecao_modelo'):
+        elif(pipe == 'selecao-modelo'):
             chaves = ['tipos.nao_supervisionado.explicacao', 'tipos.nao_supervisionado.reducao_dimensionalidade.explicacao',
                     'tipos.nao_supervisionado.reducao_dimensionalidade.modelos[0].explicacao']
             texto = concatenar_campos(result, chaves, sep='\n')
