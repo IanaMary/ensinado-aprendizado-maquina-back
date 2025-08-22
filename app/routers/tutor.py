@@ -1,78 +1,67 @@
-from typing import Optional
-from fastapi import APIRouter, HTTPException
-from app.schemas.tutor import AtualizarDescricaoRequest
+from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Query
+from app.schemas.tutor import AtualizarDescricaoRequest, ContextoPipeColetaDados
 from app.models.tutor import obter_arvore, avaliar_condicoes, tem_condicoes_validas
+from app.funcoes_genericas.funcoes_genericas import serialize_doc, concatenar_campos
 from app.database import tutor
-
+from bson import ObjectId
 
 router = APIRouter(prefix="/tutor", tags=["Tutor"])
 
 @router.get("/")
 async def avaliar(
-    tamanho_arq: Optional[int] = None,
-    prever_categoria: Optional[bool] = None,
-    dados_rotulados: Optional[bool] = None,
-    prever_quantidade: Optional[bool] =  None,
-    num_categorias_conhecidas: Optional[bool] =  None,
-    apenas_olhando: Optional[bool]=  None  
+    pipe: str,
+    textos: Optional[List[str]] = Query(None)
 ):
-    arvore = await obter_arvore()
-
-    # Monta o dicionário no formato esperado por avaliar_condicoes
-    contexto_dict = {
-        "tamanho_arq": tamanho_arq,
-        "prever_categoria": prever_categoria,
-        "dados_rotulados": dados_rotulados,
-        "num_categorias_conhecidas": num_categorias_conhecidas,
-        "apenas_olhando": apenas_olhando,
-        "prever_quantidade": prever_quantidade,
+    try:
+        texto = ''
+        print('pipe ', pipe)
+        result = await tutor.find_one({"pipe": pipe})
+        if(pipe == 'inicio'):
+            chaves = textos or ['explicacao']
+            texto = concatenar_campos(result, chaves, sep='\n')
+        elif(pipe == 'coleta-dado'):
+            chaves = textos or list(ContextoPipeColetaDados.__fields__.keys())
+            texto = concatenar_campos(result, chaves, sep='\n')
+        elif(pipe == 'selecao_modelo'):
+            chaves = ['tipos.nao_supervisionado.explicacao', 'tipos.nao_supervisionado.reducao_dimensionalidade.explicacao',
+                    'tipos.nao_supervisionado.reducao_dimensionalidade.modelos[0].explicacao']
+            texto = concatenar_campos(result, chaves, sep='\n')
         
-    }
-
-    descricao = avaliar_condicoes(arvore["start"], contexto_dict)
-
-    return {
-        "descricao": descricao
-    }
+        
+        return {'descricao': texto, 'id': str(result['_id'])}
+    except Exception as e:
+        raise HTTPException(400, f"Erro: {e}")
     
     
-@router.put("/")
-async def atualizar_descricao(request: AtualizarDescricaoRequest):
-    arvore = await obter_arvore()
+@router.get("/editar")
+async def avaliar(
+    pipe: str
+):
+    try:
+        print('pipe ', pipe)
+        result = await tutor.find_one({"pipe": pipe})
+        return serialize_doc(result)
+    except Exception as e:
+        raise HTTPException(400, f"Erro: {e}")
     
-    contexto_dict = request.contexto.dict(exclude_none=True)
-    nova_descricao = request.nova_descricao
+    
+@router.put("/{id}")
+async def atualizar_descricao(id: str, request: AtualizarDescricaoRequest):
+    try:
+        filtro = {"_id": ObjectId(id)}
+    except Exception:
+        raise HTTPException(status_code=400, detail="ID inválido")
 
-    # Função para buscar e atualizar a descrição do nó que casa com o contexto
-    def atualizar_no(lista_condicoes):
-        for item in lista_condicoes:
-            cond = item.get("condicao", "")
-            try:
-                if eval(cond, {}, contexto_dict):
-                    # Atualiza a descrição aqui
-                    item["descricao"] = nova_descricao
+    # Atualiza os campos do contexto diretamente no documento
+    update_data = request.contexto.dict(exclude_none=True)
 
-                    # Se tem subcondições (resultado é lista), tenta atualizar lá também
-                    resultado = item.get("resultado")
-                    if isinstance(resultado, list) and tem_condicoes_validas(resultado):
-                        atualizar_no(resultado)
-                    return True
-                else:
-                    # Tenta na lista interna (resultado), se for lista com condições
-                    resultado = item.get("resultado")
-                    if isinstance(resultado, list) and tem_condicoes_validas(resultado):
-                        if atualizar_no(resultado):
-                            return True
-            except Exception:
-                continue
-        return False
+    if not update_data:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
 
-    encontrou = atualizar_no(arvore["start"])
+    resultado = await tutor.update_one(filtro, {"$set": update_data})
 
-    if not encontrou:
-        return {"detail": "Nenhuma condição satisfeita para o contexto fornecido."}
+    if resultado.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Documento não encontrado")
 
-    # Salva a árvore atualizada no banco
-    await tutor.update_one({}, {"$set": {"start": arvore["start"]}})
-
-    return {"detail": "Descrição atualizada com sucesso."}
+    return {"detail": "Contexto atualizado com sucesso", "update_data": update_data}
