@@ -10,7 +10,8 @@ class Contexto(BaseModel):
     apenas_olhando: Optional[bool] = None  
 
 class ContextoPipeInicio(BaseModel):
-    explicacao: Optional[str] = None 
+    texto_pipe: Optional[str] = None,
+    explicacao: Optional[str] = None,
     
 class ContextoPipeColetaDados(BaseModel):
     texto_pipe: Optional[str] = None
@@ -29,8 +30,12 @@ class ContextoPipeSelecaoModelo(BaseModel):
     reducao_dimensionalidade: Optional[str] = None  
     agrupamento: Optional[str] = None  
     
+class ContextoTreinamento(BaseModel):
+    texto_pipe: Optional[str] = None,
+    explicacao: Optional[str] = None,
+    
 class AtualizarDescricaoRequest(BaseModel):
-    contexto: Union[Contexto, ContextoPipeInicio, ContextoPipeColetaDados, ContextoPipeSelecaoModelo] 
+    contexto: Union[Contexto, ContextoPipeInicio, ContextoPipeColetaDados, ContextoPipeSelecaoModelo, ContextoTreinamento] 
     
 
 
