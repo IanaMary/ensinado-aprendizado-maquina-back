@@ -19,37 +19,37 @@ class ContextoPipeColetaDados(BaseModel):
 
 # ---------------------- Seleção de modelo ----------------------
 class Hiperparametro(BaseModel):
-    nome: str
-    explicacao: str
-
-class Modelo(BaseModel):
-    label: str
-    valor: str
-    explicacao: str
-    hiperparametros: List[Hiperparametro]
-
-class SubTipo(BaseModel):
-    explicacao: str
-    modelos: List[Modelo]
-
-class Supervisionado(BaseModel):
-    explicacao: str
-    classficacao: SubTipo  
-    regressao: SubTipo
-
-class NaoSupervisionado(BaseModel):
-    explicacao: str
-    reducao_dimensionalidade: SubTipo
-    agrupamento: SubTipo
-
-class TiposSelecaoModelo(BaseModel):
-    supervisionado: Supervisionado
-    nao_supervisionado: NaoSupervisionado
-
-class ContextoPipeSelecaoModelo(BaseModel):
-    texto_pipe: str
+    nome: Optional[str] = None
     explicacao: Optional[str] = None
-    tipos: Optional[TiposSelecaoModelo]
+    
+class Modelo(BaseModel):
+    label: Optional[str] = None
+    valor: Optional[str] = None
+    explicacao: Optional[str] = None
+    hiperparametros: Optional[List[Hiperparametro]] = None
+    
+class SubTipo(BaseModel):
+    explicacao: Optional[str] = None
+    modelos: Optional[List[Modelo]] = None
+    
+class Supervisionado(BaseModel):
+    explicacao: Optional[str] = None
+    classficacao: Optional[SubTipo] = None
+    regressao: Optional[SubTipo] = None
+    
+class NaoSupervisionado(BaseModel):
+    explicacao:  Optional[str] = None
+    reducao_dimensionalidade:  Optional[SubTipo] = None
+    agrupamento: Optional[SubTipo] = None
+    
+class TiposSelecaoModelo(BaseModel):
+    supervisionado: Optional[Supervisionado]  = None
+    nao_supervisionado: Optional[NaoSupervisionado] = None
+    
+class ContextoPipeSelecaoModelo(BaseModel):
+    texto_pipe:  Optional[str] = None
+    explicacao: Optional[str] = None
+    tipos: Optional[TiposSelecaoModelo] = None
 
 
 # ---------------------- Treinamento ----------------------
