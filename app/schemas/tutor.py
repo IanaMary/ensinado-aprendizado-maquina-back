@@ -1,10 +1,6 @@
 from typing import Optional, Union, List
 from pydantic import BaseModel
 
-
-from typing import Optional, Union, List
-from pydantic import BaseModel
-
 # ---------------------- Inicio ----------------------
 class ContextoPipeInicio(BaseModel):
     texto_pipe: str
