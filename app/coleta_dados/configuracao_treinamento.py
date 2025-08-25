@@ -36,6 +36,8 @@ async def configurar_treinamento(configurar_treinamento_id: str, config: Configu
     "target": config.target,
     "atributos": config.atributos,
     "tipo_target": tipo_target,
+    "prever_categoria": config.prever_categoria,
+    "daods_rotulados": config.daods_rotulados
   }
   
   await configuracoes_treinamento.update_one(
@@ -99,4 +101,6 @@ async def get_configuracoe(configurar_treinamento_id: str):
     "num_linhas_treino": df_treino.shape[0],
     "num_linhas_teste": df_teste.shape[0],
     "num_linhas_total": df_treino.shape[0] + df_teste.shape[0],
+    "prever_categoria": config_doc.get("prever_categoria"),
+    "daods_rotulados": config_doc.get("daods_rotulados"),
   }

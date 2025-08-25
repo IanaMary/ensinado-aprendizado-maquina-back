@@ -14,19 +14,20 @@ async def avaliar(
     textos: Optional[List[str]] = Query(None)
 ):
     try:
+        sep='<br><br>'
         texto = ''
         print('pipe ', pipe)
         result = await tutor.find_one({"pipe": pipe})
         if(pipe == 'inicio'):
             chaves = textos or ['explicacao']
-            texto = concatenar_campos(result, chaves, sep='\n')
+            texto = concatenar_campos(result, chaves, sep=sep)
         elif(pipe == 'coleta-dado'):
             chaves = textos or list(ContextoPipeColetaDados.__fields__.keys())
-            texto = concatenar_campos(result, chaves, sep='\n')
+            texto = concatenar_campos(result, chaves, sep=sep)
         elif(pipe == 'selecao-modelo'):
             chaves = ['tipos.nao_supervisionado.explicacao', 'tipos.nao_supervisionado.reducao_dimensionalidade.explicacao',
                     'tipos.nao_supervisionado.reducao_dimensionalidade.modelos[0].explicacao']
-            texto = concatenar_campos(result, chaves, sep='\n')
+            texto = concatenar_campos(result, chaves, sep=sep)
         
         
         return {'descricao': texto, 'id': str(result['_id'])}
