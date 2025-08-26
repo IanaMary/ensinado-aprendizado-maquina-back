@@ -8,7 +8,7 @@ from bson import ObjectId
 router = APIRouter(prefix="/tutor", tags=["Tutor"])
 
 @router.get("/")
-async def avaliar(
+async def buscar_tutor_descricao(
     pipe: str,
     textos: Optional[List[str]] = Query(None)
 ):
@@ -35,11 +35,12 @@ async def avaliar(
     
     
 @router.get("/editar")
-async def avaliar(
-    pipe: str
+async def buscar_tutor_pipe(
+    pipe: str,
+    tipos: Optional[List[str]] = Query(None)
 ):
     try:
-        print('pipe ', pipe)
+        print('pipe ', tipos)
         result = await tutor.find_one({"pipe": pipe})
         return serialize_doc(result)
     except Exception as e:

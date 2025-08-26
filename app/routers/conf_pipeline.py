@@ -46,15 +46,24 @@ async def get_all_modelos(
     limite: int = Query(10, ge=1, le=100),
     pagina: int = Query(1, ge=1),
     ordenar: Optional[str] = Query(None, description="Campo para ordenar, ex: 'label', 'tipoItem'"),
-    direcao: Optional[str] = Query("asc", regex="^(asc|desc)$", description="Direção da ordenação: 'asc' ou 'desc'")
+    direcao: Optional[str] = Query("asc", regex="^(asc|desc)$", description="Direção da ordenação: 'asc' ou 'desc'"),
+    prever_categoria: Optional[bool] = Query(None, description=""),
+    dados_rotulados: Optional[bool] = Query(None, description="")
 ):
   skip = (pagina - 1) * limite
 
   campo_ordenacao = ordenar if ordenar else "label"
   direcao_ordenacao = 1 if direcao == "asc" else -1
+  
+
+  filtro = {}
+  if prever_categoria is not None:
+    filtro["prever_categoria"] = prever_categoria
+  if dados_rotulados is not None:
+    filtro["dados_rotulados"] = dados_rotulados
 
   cursor = (
-    opcoes_modelos.find()
+    opcoes_modelos.find(filtro)
     .sort(campo_ordenacao, direcao_ordenacao)
     .collation({"locale": "en", "strength": 1})
     .skip(skip)
