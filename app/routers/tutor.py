@@ -1,7 +1,6 @@
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
-from app.schemas.tutor import AtualizarDescricaoRequest, ContextoPipeColetaDados
-from app.models.tutor import obter_arvore, avaliar_condicoes, tem_condicoes_validas
+from app.schemas.tutor import AtualizarDescricaoRequest, ContextoPipeColetaDados, ContextoPipeSelecaoModelo
 from app.funcoes_genericas.funcoes_genericas import serialize_doc, concatenar_campos
 from app.database import tutor
 from bson import ObjectId
@@ -16,7 +15,6 @@ async def avaliar(
     try:
         sep='<br><br>'
         texto = ''
-        print('pipe ', pipe)
         result = await tutor.find_one({"pipe": pipe})
         if(pipe == 'inicio'):
             chaves = textos or ['explicacao']
@@ -25,8 +23,9 @@ async def avaliar(
             chaves = textos or list(ContextoPipeColetaDados.__fields__.keys())
             texto = concatenar_campos(result, chaves, sep=sep)
         elif(pipe == 'selecao-modelo'):
-            chaves = ['tipos.nao_supervisionado.explicacao', 'tipos.nao_supervisionado.reducao_dimensionalidade.explicacao',
-                    'tipos.nao_supervisionado.reducao_dimensionalidade.modelos[0].explicacao']
+            chaves = textos or list(ContextoPipeSelecaoModelo.__fields__.keys())
+            # chaves = ['tipos.nao_supervisionado.explicacao', 'tipos.nao_supervisionado.reducao_dimensionalidade.explicacao',
+            #         'tipos.nao_supervisionado.reducao_dimensionalidade.modelos[0].explicacao']
             texto = concatenar_campos(result, chaves, sep=sep)
         
         
