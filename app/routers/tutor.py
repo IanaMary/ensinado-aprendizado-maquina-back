@@ -1,6 +1,6 @@
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
-from app.schemas.tutor import AtualizarDescricaoRequest, ContextoPipeColetaDados, ContextoPipeSelecaoModelo
+from app.schemas.tutor import AtualizarDescricaoRequest, ContextoPipeInicio, ContextoPipeColetaDados, ContextoPipeSelecaoModelo, ContextoPipeTreinamento, ContextoPipeSelecaoMetricas
 from app.funcoes_genericas.funcoes_genericas import serialize_doc, concatenar_campos
 from app.database import tutor
 from bson import ObjectId
@@ -17,7 +17,7 @@ async def buscar_tutor_descricao(
         texto = ''
         result = await tutor.find_one({"pipe": pipe})
         if(pipe == 'inicio'):
-            chaves = textos or ['explicacao']
+            chaves = textos  or list(ContextoPipeInicio.__fields__.keys())
             texto = concatenar_campos(result, chaves, sep=sep)
         elif(pipe == 'coleta-dado'):
             chaves = textos or list(ContextoPipeColetaDados.__fields__.keys())
@@ -26,6 +26,15 @@ async def buscar_tutor_descricao(
             chaves = textos or list(ContextoPipeSelecaoModelo.__fields__.keys())
             # chaves = ['tipos.nao_supervisionado.explicacao', 'tipos.nao_supervisionado.reducao_dimensionalidade.explicacao',
             #         'tipos.nao_supervisionado.reducao_dimensionalidade.modelos[0].explicacao']
+            texto = concatenar_campos(result, chaves, sep=sep)
+        elif(pipe == 'treinamento'):
+            chaves = textos  or list(ContextoPipeTreinamento.__fields__.keys())
+            texto = concatenar_campos(result, chaves, sep=sep)
+        elif(pipe == 'selecao-metricas'):
+            chaves = textos  or list(ContextoPipeSelecaoMetricas.__fields__.keys())
+            texto = concatenar_campos(result, chaves, sep=sep)
+        elif(pipe == 'avaliacao'):
+            chaves = textos  or list(ContextoPipeSelecaoMetricas.__fields__.keys())
             texto = concatenar_campos(result, chaves, sep=sep)
         
         
