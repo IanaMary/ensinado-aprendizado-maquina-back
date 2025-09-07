@@ -49,7 +49,8 @@ class TiposSelecaoModelo(BaseModel):
 class ContextoPipeSelecaoModelo(BaseModel):
     texto_pipe:  Optional[str] = None
     explicacao: Optional[str] = None
-    tipos: Optional[TiposSelecaoModelo] = None
+    supervisionado: Optional[Supervisionado]  = None
+    nao_supervisionado: Optional[NaoSupervisionado] = None
 
 
 # ---------------------- Treinamento ----------------------
