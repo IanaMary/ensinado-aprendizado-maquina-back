@@ -74,8 +74,10 @@ async def get_all_modelos(
 
   return [
     {
-      **{k: v for k, v in doc.items() if k != "_id"},
-      "id": str(doc["_id"])
+      **{k: v for k, v in doc.items() if k not in ["_id", "prever_categoria", "dados_rotulados"]},
+      "id": str(doc["_id"]),
+      "preverCategoria": doc["prever_categoria"],
+      "dadosRotulados": doc["dados_rotulados"]
     }
     for doc in documentos
   ]
