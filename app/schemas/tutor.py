@@ -34,7 +34,7 @@ class SubTipo(BaseModel):
     
 class Supervisionado(BaseModel):
     explicacao: Optional[str] = None
-    classficacao: Optional[SubTipo] = None
+    classificacao: Optional[SubTipo] = None
     regressao: Optional[SubTipo] = None
     
 class NaoSupervisionado(BaseModel):

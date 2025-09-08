@@ -17,7 +17,6 @@ async def buscar_tutor_descricao(
         sep='<br>'
         texto = ''
         result = await tutor.find_one({"pipe": pipe})
-        print("pipe ", pipe)
         if(pipe == 'inicio'):
             chaves = textos  or list(ContextoPipeInicio.__fields__.keys())
             texto = concatenar_campos(result, chaves, sep=sep)
@@ -46,7 +45,7 @@ async def buscar_tutor_descricao(
 @router.get("/editar")
 async def buscar_tutor_pipe(
     pipe: str,
-    modelos: Optional[List[str]] = Query(None)  # espera algo como ?modelos=supervisionado&modelos=classficacao
+    modelos: Optional[List[str]] = Query(None)  # espera algo como ?modelos=supervisionado&modelos=classificacao
 ):
     try:
         pipeline = [{"$match": {"pipe": pipe}}]
@@ -64,8 +63,7 @@ async def buscar_tutor_pipe(
 
         cursor = tutor.aggregate(pipeline)
         result = await cursor.to_list(length=1)
-        
-        print('result => ', result)
+
 
         if result:
             return serialize_doc(result[0])
@@ -79,7 +77,7 @@ async def buscar_tutor_pipe(
 async def atualizar_descricao(
     id: str,
     request: AtualizarDescricaoRequest,
-    modelos: Optional[List[str]] = Query(None)  # ?modelos=supervisionado&modelos=classficacao
+    modelos: Optional[List[str]] = Query(None)  # ?modelos=supervisionado&modelos=classificacao
 ):
     try:
         filtro = {"_id": ObjectId(id)}
@@ -113,6 +111,52 @@ async def atualizar_descricao(
     return {"detail": "Contexto atualizado com sucesso", "update_data": set_data}
 
 
+@router.put("/editar-modelos/{id}")
+async def atualizar_modelos(id: str, request: AtualizarDescricaoRequest):
+    """
+    Atualiza apenas os campos de modelos nos subníveis fixos,
+    ignorando listas vazias.
+    """
+    try:
+        filtro = {"_id": ObjectId(id)}
+    except Exception:
+        raise HTTPException(status_code=400, detail="ID inválido")
+
+    update_data = request.contexto.dict(exclude_none=True)
+    set_data = {}
+
+    # supervisionado
+    supervisionado = update_data.get("supervisionado", {})
+    if "classificacao" in supervisionado:
+        modelos = supervisionado["classificacao"].get("modelos", [])
+        if modelos:  # só atualiza se não estiver vazio
+            set_data["supervisionado.classificacao.modelos"] = modelos
+    if "regressao" in supervisionado:
+        modelos = supervisionado["regressao"].get("modelos", [])
+        if modelos:
+            set_data["supervisionado.regressao.modelos"] = modelos
+
+    # nao_supervisionado
+    nao_supervisionado = update_data.get("nao_supervisionado", {})
+    if "reducao_dimensionalidade" in nao_supervisionado:
+        modelos = nao_supervisionado["reducao_dimensionalidade"].get("modelos", [])
+        if modelos:
+            set_data["nao_supervisionado.reducao_dimensionalidade.modelos"] = modelos
+    if "agrupamento" in nao_supervisionado:
+        modelos = nao_supervisionado["agrupamento"].get("modelos", [])
+        if modelos:
+            set_data["nao_supervisionado.agrupamento.modelos"] = modelos
+
+    if not set_data:
+        raise HTTPException(status_code=400, detail="Nenhum modelo para atualizar")
+
+    resultado = await tutor.update_one(filtro, {"$set": set_data})
+
+    if resultado.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Documento não encontrado")
+
+    return {"detail": "Modelos atualizados com sucesso", "update_data": set_data}
+
 
     
 @router.put("/editar-tipo-aprendizado/{id}")
@@ -136,11 +180,11 @@ async def atualizar_chaves_fixas(id: str, request: AtualizarDescricaoRequest):
         if getattr(request.contexto.supervisionado, "explicacao", None) is not None:
             set_data["supervisionado.explicacao"] = request.contexto.supervisionado.explicacao
 
-        # supervisionado.classficacao.explicacao
-        if getattr(request.contexto.supervisionado, "classficacao", None):
-            classficacao = request.contexto.supervisionado.classficacao
-            if getattr(classficacao, "explicacao", None) is not None:
-                set_data["supervisionado.classficacao.explicacao"] = classficacao.explicacao
+        # supervisionado.classificacao.explicacao
+        if getattr(request.contexto.supervisionado, "classificacao", None):
+            classificacao = request.contexto.supervisionado.classificacao
+            if getattr(classificacao, "explicacao", None) is not None:
+                set_data["supervisionado.classificacao.explicacao"] = classificacao.explicacao
 
         # supervisionado.regressao.explicacao
         if getattr(request.contexto.supervisionado, "regressao", None):
