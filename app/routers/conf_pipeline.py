@@ -79,6 +79,7 @@ async def get_all_modelos(
       "preverCategoria": doc["prever_categoria"],
       "dadosRotulados": doc["dados_rotulados"]
     }
+    
     for doc in documentos
   ]
   
