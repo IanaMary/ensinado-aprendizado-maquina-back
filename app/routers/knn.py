@@ -5,8 +5,8 @@ from app.deps import pd, KNeighborsClassifier
 from fastapi import APIRouter, HTTPException
 from typing import List
 from app.database import configuracoes_treinamento, arquivos, opcoes_modelos, modelos_treinados
-from bson import ObjectId
-import bson
+from bson.objectid import ObjectId
+import bson.json_util as bson
 import pickle
 
 

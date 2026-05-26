@@ -5,8 +5,8 @@ from fastapi import APIRouter, HTTPException
 from typing import List
 from io import BytesIO
 from app.database import configuracoes_treinamento, arquivos, opcoes_modelos, modelos_treinados
-from bson import ObjectId
-import bson
+from bson.objectid import ObjectId
+import bson.json_util as bson
 import pickle
 import base64
 

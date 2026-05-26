@@ -3,8 +3,8 @@ from sklearn.tree import DecisionTreeClassifier
 from app.schemas.schemas import DatasetRequest
 from app.deps import pd
 from typing import List
-from bson import ObjectId
-import bson
+from bson.objectid import ObjectId
+import bson.json_util as bson
 import pickle
 import base64
 from io import BytesIO
