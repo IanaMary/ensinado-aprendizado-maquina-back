@@ -28,7 +28,7 @@ async def login(request: LoginRequest):
   if not verificar_senha(request.senha, usuario["senha"]):
     raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
-  expira = datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
+  expira = datetime.now(datetime.timezone.utc) + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
   payload = {"sub": request.email, "exp": expira}
   token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
