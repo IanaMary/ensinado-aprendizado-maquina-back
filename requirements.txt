@@ -53,7 +53,7 @@ mlflow-skinny>=2.13.0
 mlflow-tracing>=3.0.0
 monotonic>=1.6
 more-itertools>=8.10.0
-motor==3.4.0
+motor==3.5.1
 numpy==1.26.4
 oauthlib>=3.2.0
 olefile>=0.46
@@ -77,7 +77,7 @@ pydantic_core==2.18.4
 Pygments>=2.11.2
 PyJWT>=2.8.0
 pymacaroons>=0.13.0
-pymongo==4.7.2
+pymongo==4.8.0
 PyNaCl>=1.5.0
 pyparsing>=3.1.2
 python-dateutil>=2.9.0
