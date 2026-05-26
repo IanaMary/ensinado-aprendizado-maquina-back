@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import db 
+from app.database import db, client
 from app.routers import usuarios
 from app.routers import login
 from app.routers import conf_pipeline
