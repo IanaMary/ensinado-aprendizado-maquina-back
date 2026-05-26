@@ -6,7 +6,7 @@ bcrypt==3.2.0
 blinker==1.9.0
 bson==0.5.10
 cachetools==6.2.2
-certifi==2024.7.2
+certifi==2024.7.4
 cffi==2.0.0
 chardet==4.0.0
 charset-normalizer==3.4.4
