@@ -2,34 +2,53 @@ import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 
-load_dotenv()
+# Carrega o .env apenas em ambiente local
+if os.getenv("RENDER") is None:
+    load_dotenv()
 
+# Obtém as variáveis de ambiente
 MONGO_URL = os.getenv("MONGO_URL")
 MONGO_DB = os.getenv("MONGO_DB")
 
-if not MONGO_URL or not MONGO_DB:
-    raise RuntimeError("MONGO_URL e MONGO_DB precisam estar definidos no .env")
+# Validação das variáveis obrigatórias
+if not MONGO_URL:
+    raise RuntimeError(
+        "A variável de ambiente 'MONGO_URL' não foi definida."
+    )
 
+if not MONGO_DB:
+    raise RuntimeError(
+        "A variável de ambiente 'MONGO_DB' não foi definida."
+    )
+
+# Cria conexão com MongoDB
 client = AsyncIOMotorClient(MONGO_URL)
+
+# Seleciona banco de dados
 db = client[MONGO_DB]
 
-# USUARIOS
-colecao_usuario = db["usuarios"] 
+# =========================
+# COLEÇÕES DE USUÁRIOS
+# =========================
+colecao_usuario = db["usuarios"]
 verificadores_professor = db["verificadores_professor"]
 
-# PIPELINE
-opcoes_coletas = db["coleta_dados"] 
-opcoes_modelos = db["modelos"] 
-opcoes_metricas = db["metricas"] 
+# =========================
+# COLEÇÕES DO PIPELINE
+# =========================
+opcoes_coletas = db["coleta_dados"]
+opcoes_modelos = db["modelos"]
+opcoes_metricas = db["metricas"]
 
 arquivos = db["arquivos"]
-configuracoes_treinamento = db["configuracoes_treinamento"] 
+configuracoes_treinamento = db["configuracoes_treinamento"]
 
+# =========================
 # MODELOS TREINADOS
+# =========================
+modelos_treinados = db["modelos_treinados"]
 
-modelos_treinados = db["modelos_treinados"] 
-
-
+# =========================
 # TUTOR
-
-tutor = db["tutor"] 
+# =========================
+tutor = db["tutor"]
