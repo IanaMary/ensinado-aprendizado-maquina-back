@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.database import db 
 from app.routers import usuarios
 from app.routers import login
 from app.routers import conf_pipeline
@@ -9,10 +10,6 @@ from app.routers import knn
 from app.routers import arvore_decisao
 from app.routers import regressao_logistica
 from app.routers import svm
-
-
-
-
 from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, configuracao_treinamento_router
 from app.metricas import router as metricas_router
 
