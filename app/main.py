@@ -38,20 +38,26 @@ app.include_router(knn.router, prefix="/classificador/treinamento")
 app.include_router(arvore_decisao.router, prefix="/classificador/treinamento")
 app.include_router(regressao_logistica.router, prefix="/classificador/treinamento")
 app.include_router(svm.router, prefix="/classificador/treinamento")
-
 app.include_router(metricas_router, prefix="/classificador")
-
-
-
-
-
 
 @app.get("/healthcheck")
 async def healthcheck():
     try:
-        # consulta simples para checar a conexão
-        collections = await db.list_collection_names()
-        return {"status": "ok", "collections": collections}
-    except Exception as e:
-        return {"status": "erro", "detalhe": str(e)}
+        # Lista bancos disponíveis
+        databases = await client.list_database_names()
 
+        # Lista coleções do banco atual
+        collections = await db.list_collection_names()
+
+        return {
+            "status": "ok",
+            "database_atual": db.name,
+            "databases_disponiveis": databases,
+            "collections": collections,
+        }
+
+    except Exception as e:
+        return {
+            "status": "erro",
+            "detalhe": str(e),
+        }
