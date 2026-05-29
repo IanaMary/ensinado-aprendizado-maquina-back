@@ -1,9 +1,14 @@
 import os
+import asyncio
+import functools
+import time
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 import jwt
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, status
+from starlette.requests import Request
 
 from app.database import colecao_usuario
 from app.schemas.login import LoginRequest
@@ -30,6 +35,32 @@ if not SECRET_KEY:
     )
 
 # =========================
+# RATE LIMITING (Simples, em memória)
+# =========================
+_request_log = defaultdict(list)
+
+async def rate_limit(request: Request):
+    """
+    Limita para 5 requisições por minuto por IP.
+    """
+    # Obtém IP do request
+    client_ip = request.client.host
+    now = time.time()
+    
+    # Limpa registros antigos (> 60 segundos)
+    _request_log[client_ip] = [t for t in _request_log[client_ip] if now - t < 60]
+    
+    # Verifica limite
+    if len(_request_log[client_ip]) >= 5:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Muitas tentativas de login. Tente novamente em 1 minuto."
+        )
+    
+    # Registra a requisição
+    _request_log[client_ip].append(now)
+
+# =========================
 # ROUTER
 # =========================
 router = APIRouter()
@@ -38,7 +69,9 @@ router = APIRouter()
 # LOGIN
 # =========================
 @router.post("/login")
-async def login(request: LoginRequest):
+async def login(request: LoginRequest, req: Request):
+    # Rate limiting
+    await rate_limit(req)
 
     usuario = await colecao_usuario.find_one(
         {"email": request.email}

@@ -1,11 +1,12 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from app.deps import pd, mlflow, metricas_disponiveis
-from app.database import modelos_treinados
+from app.database import modelos_treinados, arquivos
 from app.schemas.schemas import AvaliacaoModelosRequest
 from bson import ObjectId
-import pickle
+import joblib
 import base64
 import io
+import hashlib
 
 router = APIRouter()
 
@@ -29,11 +30,39 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
                     resultados_formatados[metrica.label][nome_modelo] = "Modelo não encontrado"
                 continue
 
-            modelo_treinado = pickle.loads(doc["modelo_treinado"])
+            # Validação de checksum
+            modelo_treinado_bytes = doc["modelo_treinado"]
+            if isinstance(modelo_treinado_bytes, bytes):
+                modelo_treinado_bytes = modelo_treinado_bytes
+            else:
+                modelo_treinado_bytes = bytes(modelo_treinado_bytes)
+
+            # Recupera o checksum esperado
+            checksum_esperado = doc.get("checksum")
+            if checksum_esperado:
+                checksum_atual = hashlib.sha256(modelo_treinado_bytes).hexdigest()
+                if checksum_atual != checksum_esperado:
+                    raise HTTPException(status_code=400, detail="Erro de integridade: checksum do modelo não corresponde.")
+
+            # Desserializa o modelo com joblib
+            modelo_treinado = joblib.loads(modelo_treinado_bytes)
 
             atributos = doc["atributos"]
             target = doc["target"]
-            base64_str = doc["arq_teste"]
+            
+            # Busca o arquivo de teste pelo ID (separado do documento do modelo)
+            arquivo_id = doc.get("arquivo_id")
+            if not arquivo_id:
+                base64_str = doc.get("arq_teste")
+            else:
+                arquivo_doc = await arquivos.find_one({"_id": ObjectId(arquivo_id)})
+                if not arquivo_doc:
+                    raise HTTPException(status_code=404, detail="Arquivo de teste não encontrado.")
+                base64_str = arquivo_doc.get("content_teste_base64")
+
+            if not base64_str:
+                raise HTTPException(status_code=400, detail="Conteúdo do arquivo de teste ausente.")
+
             arquivo_bytes = base64.b64decode(base64_str)
             df_teste = pd.read_excel(io.BytesIO(arquivo_bytes))
 
