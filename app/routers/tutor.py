@@ -19,7 +19,22 @@ async def buscar_tutor_descricao(
         result = await tutor.find_one({"pipe": pipe})
         if(pipe == 'inicio'):
             chaves = textos  or list(ContextoPipeInicio.model_fields.keys())
-            texto = concatenar_campos(result, chaves, sep=sep)
+            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
+        elif(pipe == 'coleta-dado'):
+            chaves = textos or list(ContextoPipeColetaDados.model_fields.keys())
+            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
+        elif(pipe == 'selecao-modelo'):
+            chaves = textos or list(ContextoPipeSelecaoModelo.model_fields.keys())
+            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
+        elif(pipe == 'treinamento'):
+            chaves = textos  or list(ContextoPipeTreinamento.model_fields.keys())
+            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
+        elif(pipe == 'selecao-metricas'):
+            chaves = textos or list(ContextoPipeSelecaoMetricas.model_fields.keys())
+            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
+        elif(pipe == 'avaliacao'):
+            chaves = textos or list(ContextoPipeSelecaoMetricas.model_fields.keys())
+            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
         elif(pipe == 'coleta-dado'):
             chaves = textos or list(ContextoPipeColetaDados.model_fields.keys())
             texto = concatenar_campos(result, chaves, sep=sep)
