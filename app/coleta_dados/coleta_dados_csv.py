@@ -16,6 +16,8 @@ router = APIRouter()
 async def upload_csv(
     tipo: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
+    test_size: Optional[float] = Form(None),
+    id_coleta: Optional[str] = Form(None),
 ):
     if not file.filename.endswith(".csv"):
         raise HTTPException(400, "Arquivo deve ser CSV")

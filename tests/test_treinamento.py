@@ -1,103 +1,47 @@
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+from bson import ObjectId
+import pandas as pd
+import io
+import base64
+import joblib
+from sklearn.neighbors import KNeighborsClassifier
 
 
-async def test_treinar_knn():
-    with patch("app.routers.treinamento_base.arquivos") as mock_arquivos, \
-         patch("app.routers.treinamento_base.configuracoes_treinamento") as mock_config, \
-         patch("app.routers.treinamento_base.opcoes_modelos") as mock_opcoes, \
-         patch("app.routers.treinamento_base.modelos_treinados") as mock_modelos, \
-         patch("app.routers.treinamento_base.pd") as mock_pd:
+class TestTreinamentoBase:
+    @pytest.mark.asyncio
+    async def test_treinar_knn(self, client, mock_db, auth_headers):
+        df = pd.DataFrame({"f1": [1, 2, 3, 4, 5], "f2": [5, 4, 3, 2, 1], "target": [0, 0, 0, 1, 1]})
+        buffer = io.BytesIO()
+        df.to_excel(buffer, index=False, engine="openpyxl")
+        b64 = base64.b64encode(buffer.getvalue()).decode()
 
-        mock_arquivos.find_one = AsyncMock(return_value={
-            "content_treino_base64": "Zm9vYmFy",
-            "content_teste_base64": "Zm9vYmFy"
+        coleta_id = ObjectId()
+        config_id = ObjectId()
+
+        mock_db["configuracoes"].find_one = AsyncMock(return_value={
+            "_id": config_id,
+            "id_coleta": str(coleta_id),
+            "target": "target",
+            "atributos": {"f1": True, "f2": True},
+            "tipo_target": "number",
+        })
+        mock_db["arquivos"].find_one = AsyncMock(return_value={
+            "_id": coleta_id,
+            "content_treino_base64": b64,
+            "content_teste_base64": b64,
         })
 
-        mock_config.find_one = AsyncMock(return_value={
-            "atributos": {"feature1": True, "feature2": True},
-            "target": "target"
-        })
-
-        mock_opcoes.find_one = AsyncMock(return_value={
-            "hiperparametros": [],
-            "valor": "knn",
-            "label": "KNN"
-        })
-
-        mock_modelos.insert_one = AsyncMock(return_value=MagicMock(inserted_id="123"))
-
-        mock_pd.read_csv.return_value = MagicMock()
-        mock_pd.read_excel.return_value = MagicMock()
-        mock_pd.read_json.return_value = MagicMock()
-
-        from app.routers.treinamento_base import treinar_modelo_generico
-
-        class FakeModel:
-            def __init__(self, **kwargs):
-                pass
-            def fit(self, x, y):
-                pass
-            @property
-            def classes_(self):
-                return [1, 2]
-            def get_params(self, deep=True):
-                return {}
-
-        result = await treinar_modelo_generico(
-            MagicMock(tipo_arquivo="csv", arquivo_id="abc", configuracao_id="def", modelo_id="ghi"),
-            "KNN",
-            FakeModel
+        response = await client.post(
+            "/classificador/treinamento/knn",
+            headers=auth_headers,
+            json={
+                "id_coleta": str(coleta_id),
+                "configuracao_id": str(config_id),
+                "hiperparametros": {"n_neighbors": 3},
+            },
         )
-
-        assert "status" in result
-        assert "KNN" in result["nome_modelo"]
-
-
-async def test_treinar_arvore_decisao():
-    with patch("app.routers.treinamento_base.arquivos") as mock_arquivos, \
-         patch("app.routers.treinamento_base.configuracoes_treinamento") as mock_config, \
-         patch("app.routers.treinamento_base.opcoes_modelos") as mock_opcoes, \
-         patch("app.routers.treinamento_base.modelos_treinados") as mock_modelos, \
-         patch("app.routers.treinamento_base.pd") as mock_pd:
-
-        mock_arquivos.find_one = AsyncMock(return_value={
-            "content_treino_base64": "Zm9vYmFy",
-            "content_teste_base64": "Zm9vYmFy"
-        })
-
-        mock_config.find_one = AsyncMock(return_value={
-            "atributos": {"feature1": True},
-            "target": "target"
-        })
-
-        mock_opcoes.find_one = AsyncMock(return_value={
-            "hiperparametros": [],
-            "valor": "arvore_decisao",
-            "label": "Árvore de Decisão"
-        })
-
-        mock_modelos.insert_one = AsyncMock(return_value=MagicMock(inserted_id="456"))
-
-        mock_pd.read_csv.return_value = MagicMock()
-
-        from app.routers.treinamento_base import treinar_modelo_generico
-
-        class FakeModel:
-            def __init__(self, **kwargs):
-                pass
-            def fit(self, x, y):
-                pass
-            @property
-            def classes_(self):
-                return [0, 1]
-            def get_params(self, deep=True):
-                return {}
-
-        result = await treinar_modelo_generico(
-            MagicMock(tipo_arquivo="csv", arquivo_id="abc", configuracao_id="def", modelo_id="ghi"),
-            "Árvore de Decisão",
-            FakeModel
-        )
-
-        assert "status" in result
-        assert "Árvore de Decisão" in result["nome_modelo"]
+        assert response.status_code == 200
+        data = response.json()
+        assert "modelo_id" in data
+        assert data["tipo_modelo"] == "knn"

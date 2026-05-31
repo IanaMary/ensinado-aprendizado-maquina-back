@@ -1,43 +1,57 @@
 import pytest
-from httpx import AsyncClient
-from main import app
+from unittest.mock import AsyncMock, patch, MagicMock
+from bson import ObjectId
 
 
-@pytest.fixture
-async def client():
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        yield ac
+class TestLogin:
+    @pytest.mark.asyncio
+    async def test_login_credenciais_invalidas(self, client, mock_db):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=None)
+        response = await client.post("/login", json={"email": "x@x.com", "senha": "123"})
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_login_senha_incorreta(self, client, mock_db):
+        from app.security import get_senha_hash
+        user = {
+            "_id": ObjectId(),
+            "email": "test@test.com",
+            "senha": get_senha_hash("senha_correta"),
+            "nome_usuario": "test",
+            "role": "aluno",
+        }
+        mock_db["usuarios"].find_one = AsyncMock(return_value=user)
+        response = await client.post("/login", json={"email": "test@test.com", "senha": "senha_errada"})
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_login_sucesso(self, client, mock_db):
+        from app.security import get_senha_hash
+        user = {
+            "_id": ObjectId(),
+            "email": "test@test.com",
+            "senha": get_senha_hash("senha123"),
+            "nome_usuario": "test",
+            "role": "aluno",
+        }
+        mock_db["usuarios"].find_one = AsyncMock(return_value=user)
+        response = await client.post("/login", json={"email": "test@test.com", "senha": "senha123"})
+        assert response.status_code == 200
+        data = response.json()
+        assert "access_token" in data
+        assert data["usuario"]["email"] == "test@test.com"
 
 
-@pytest.mark.asyncio
-async def test_login_com_credenciais_corretas(client):
-    response = await client.post("/login", json={
-        "email": "test@example.com",
-        "senha": "senha123"
-    })
-    assert response.status_code == 200
-    assert "access_token" in response.json()
+class TestRotaProtegida:
+    @pytest.mark.asyncio
+    async def test_rota_protegida_sem_token(self, client):
+        response = await client.get("/tutor/?pipe=inicio")
+        assert response.status_code == 401
 
-
-@pytest.mark.asyncio
-async def test_login_com_senha_incorreta(client):
-    response = await client.post("/login", json={
-        "email": "test@example.com",
-        "senha": "senha_errada"
-    })
-    assert response.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_rota_protegida_sem_token(client):
-    response = await client.get("/conf_pipeline/coleta_dados/todos")
-    assert response.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_rota_protegida_com_token_invalido(client):
-    response = await client.get(
-        "/conf_pipeline/coleta_dados/todos",
-        headers={"Authorization": "Bearer token_invalido"}
-    )
-    assert response.status_code == 401
+    @pytest.mark.asyncio
+    async def test_rota_protegida_token_invalido(self, client):
+        response = await client.get(
+            "/tutor/?pipe=inicio",
+            headers={"Authorization": "Bearer token-invalido"}
+        )
+        assert response.status_code == 401

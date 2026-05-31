@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from app.deps import pd, mlflow, metricas_disponiveis
+from app.deps import pd, metricas_disponiveis
 from app.database import modelos_treinados, arquivos
 from app.schemas.schemas import AvaliacaoModelosRequest
 from bson import ObjectId

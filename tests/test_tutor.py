@@ -1,0 +1,95 @@
+import pytest
+from unittest.mock import AsyncMock, patch, MagicMock
+from bson import ObjectId
+
+
+class TestTutorDescricao:
+    @pytest.mark.asyncio
+    async def test_buscar_tutor_inicio(self, client, mock_db, auth_headers):
+        mock_db["tutor"].find_one = AsyncMock(return_value={
+            "_id": ObjectId(),
+            "pipe": "inicio",
+            "texto_pipe": "Bem-vindo!",
+            "explicacao": "Explicacao teste",
+        })
+        response = await client.get("/tutor/?pipe=inicio", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert "descricao" in data
+        assert "id" in data
+
+    @pytest.mark.asyncio
+    async def test_buscar_tutor_inicio_sem_explicacao(self, client, mock_db, auth_headers):
+        mock_db["tutor"].find_one = AsyncMock(return_value={
+            "_id": ObjectId(),
+            "pipe": "inicio",
+            "texto_pipe": "Bem-vindo!",
+        })
+        response = await client.get("/tutor/?pipe=inicio", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert "Bem-vindo!" in data["descricao"]
+
+    @pytest.mark.asyncio
+    async def test_buscar_tutor_coleta_dado(self, client, mock_db, auth_headers):
+        mock_db["tutor"].find_one = AsyncMock(return_value={
+            "_id": ObjectId(),
+            "pipe": "coleta-dado",
+            "texto_pipe": "Coleta de Dados",
+        })
+        response = await client.get(
+            "/tutor/?pipe=coleta-dado&textos=texto_pipe&textos=planilha_treino",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_buscar_tutor_com_textos_customizados(self, client, mock_db, auth_headers):
+        mock_db["tutor"].find_one = AsyncMock(return_value={
+            "_id": ObjectId(),
+            "pipe": "inicio",
+            "texto_pipe": "Texto pipe",
+            "introducao": "Introducao teste",
+            "objetivo": "Objetivo teste",
+        })
+        response = await client.get(
+            "/tutor/?pipe=inicio&textos=texto_pipe&textos=introducao",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "Texto pipe" in data["descricao"]
+        assert "Introducao teste" in data["descricao"]
+
+
+class TestTutorEditar:
+    @pytest.mark.asyncio
+    async def test_buscar_tutor_editar(self, client, mock_db, auth_headers):
+        mock_db["tutor"].aggregate = MagicMock(return_value=MagicMock(
+            to_list=AsyncMock(return_value=[{
+                "_id": ObjectId(),
+                "pipe": "inicio",
+                "texto_pipe": "Teste",
+            }])
+        ))
+        response = await client.get("/tutor/editar?pipe=inicio", headers=auth_headers)
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_atualizar_descricao(self, client, mock_db, auth_headers):
+        oid = ObjectId()
+        response = await client.put(
+            f"/tutor/{str(oid)}",
+            headers=auth_headers,
+            json={"contexto": {"texto_pipe": "Novo texto"}},
+        )
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_atualizar_descricao_id_invalido(self, client, mock_db, auth_headers):
+        response = await client.put(
+            "/tutor/id-invalido",
+            headers=auth_headers,
+            json={"contexto": {"texto_pipe": "Novo texto"}},
+        )
+        assert response.status_code == 400
