@@ -26,7 +26,9 @@ async def upload_csv(
 
     content = await file.read()
     try:
-        df = pd.read_csv(StringIO(content.decode("utf-8")))
+        text = content.decode("utf-8")
+        sep = ";" if ";" in text.split("\n")[0] else ","
+        df = pd.read_csv(StringIO(text), sep=sep)
     except Exception as e:
         raise HTTPException(400, f"Erro ao ler CSV: {e}")
 
