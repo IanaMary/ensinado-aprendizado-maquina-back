@@ -1,8 +1,6 @@
 # app/deps.py
 
 import pandas as pd
-import mlflow
-import mlflow.sklearn
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.model_selection import train_test_split
@@ -17,10 +15,9 @@ from sklearn.metrics import (
 # Bibliotecas compartilhadas
 __all__ = [
   'pd',
-  'mlflow',
   'train_test_split',
   'KNeighborsClassifier',
-  'SVC'
+  'SVC',
   'metricas_disponiveis',
 ]
 

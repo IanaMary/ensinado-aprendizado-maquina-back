@@ -13,7 +13,7 @@ from starlette.requests import Request
 from app.database import colecao_usuario
 from app.schemas.login import LoginRequest
 from app.schemas.usuarios import UsuarioResponse
-from app.security import verificar_senha
+from app.security import verificar_senha, SECRET_KEY, ALGORITHM
 
 # Carrega o .env apenas em ambiente local
 if os.getenv("RENDER") is None:
@@ -22,17 +22,9 @@ if os.getenv("RENDER") is None:
 # =========================
 # CONFIGURAÇÕES JWT
 # =========================
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = "HS256"
-
 TOKEN_EXPIRE_MINUTES = int(
     os.getenv("TOKEN_EXPIRE_MINUTES", 60)
 )
-
-if not SECRET_KEY:
-    raise RuntimeError(
-        "A variável de ambiente 'SECRET_KEY' não foi definida."
-    )
 
 # =========================
 # RATE LIMITING (Simples, em memória)

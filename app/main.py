@@ -51,19 +51,8 @@ app.include_router(metricas_router, prefix="/classificador", dependencies=auth_d
 @app.get("/healthcheck")
 async def healthcheck():
     try:
-        # Lista bancos disponíveis
-        databases = await client.list_database_names()
-
-        # Lista coleções do banco atual
-        collections = await db.list_collection_names()
-
-        return {
-            "status": "ok",
-            "database_atual": db.name,
-            "databases_disponiveis": databases,
-            "collections": collections,
-        }
-
+        await client.admin.command('ping')
+        return {"status": "ok"}
     except Exception as e:
         return {
             "status": "erro",

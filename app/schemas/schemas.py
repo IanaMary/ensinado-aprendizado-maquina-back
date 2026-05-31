@@ -39,7 +39,7 @@ class PrevisaoRequest(BaseModel):
 class ConfiguracaoColetaRequest(BaseModel):
     atributos: Dict[str, Any]
     prever_categoria: bool
-    daods_rotulados: bool
+    dados_rotulados: bool
     target: Optional[str]  = None
     
 class Config:

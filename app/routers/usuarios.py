@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from datetime import datetime
+from datetime import datetime, timezone
 import secrets
 
 from app.schemas.usuarios import UserCreate, UserOut
@@ -19,7 +19,7 @@ async def gerar_verificador(current_user=Depends(verificar_senha)):
     "codigo": codigo,
     "criado_por": current_user["nome_usuario"],
     "usado": False,
-    "data_criacao": datetime.utcnow(),
+    "data_criacao": datetime.now(timezone.utc),
     "data_uso": None
   })
 
@@ -43,7 +43,7 @@ async def create_user(user_data: UserCreate):
     
     await verificadores_professor.update_one(
       {"_id": verificador_doc["_id"]},
-      {"$set": {"usado": True, "data_uso": datetime.utcnow()}}
+      {"$set": {"usado": True, "data_uso": datetime.now(timezone.utc)}}
     )
 
   senha_hash = get_senha_hash(user_data.senha)
@@ -54,7 +54,7 @@ async def create_user(user_data: UserCreate):
     "instituicao_ensino": user_data.instituicao_ensino,
     "senha": senha_hash,
     "role": user_data.role,
-    "criado_em": datetime.utcnow()
+    "criado_em": datetime.now(timezone.utc)
   }
 
   result = await colecao_usuario.insert_one(user_doc)
