@@ -45,7 +45,7 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
                     raise HTTPException(status_code=400, detail="Erro de integridade: checksum do modelo não corresponde.")
 
             # Desserializa o modelo com joblib
-            modelo_treinado = joblib.loads(modelo_treinado_bytes)
+            modelo_treinado = joblib.load(io.BytesIO(modelo_treinado_bytes))
 
             atributos = doc["atributos"]
             target = doc["target"]
