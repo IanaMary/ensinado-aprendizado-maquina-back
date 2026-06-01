@@ -46,12 +46,16 @@ async def treinar_modelo_generico(
     
     try:
         conteudo_bytes = base64.b64decode(conteudo_base64)
-        if tipo == "xlsx":
-            df = pd.read_excel(BytesIO(conteudo_bytes))
-        elif tipo == "csv":
-            df = pd.read_csv(BytesIO(conteudo_bytes))
-        elif tipo == "json":
-            df = pd.read_json(BytesIO(conteudo_bytes))
+        # Tenta Excel primeiro, depois CSV
+        try:
+            df = pd.read_excel(BytesIO(conteudo_bytes), engine="openpyxl")
+        except Exception:
+            try:
+                text = conteudo_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                text = conteudo_bytes.decode("latin-1")
+            sep = ";" if ";" in text.split("\n")[0] else ","
+            df = pd.read_csv(pd.io.common.StringIO(text), sep=sep)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erro ao processar o arquivo: {str(e)}")
     
@@ -68,7 +72,9 @@ async def treinar_modelo_generico(
         modelo.fit(X_train, y_train)
         
         # Serializa com joblib (seguro e eficiente)
-        modelo_bytes = joblib.dumps(modelo)
+        buffer = BytesIO()
+        joblib.dump(modelo, buffer)
+        modelo_bytes = buffer.getvalue()
         
         # Calcula checksum de validação
         checksum = hashlib.sha256(modelo_bytes).hexdigest()

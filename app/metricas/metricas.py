@@ -64,7 +64,15 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
                 raise HTTPException(status_code=400, detail="Conteúdo do arquivo de teste ausente.")
 
             arquivo_bytes = base64.b64decode(base64_str)
-            df_teste = pd.read_excel(io.BytesIO(arquivo_bytes))
+            try:
+                df_teste = pd.read_excel(io.BytesIO(arquivo_bytes), engine="openpyxl")
+            except Exception:
+                try:
+                    text = arquivo_bytes.decode("utf-8")
+                except UnicodeDecodeError:
+                    text = arquivo_bytes.decode("latin-1")
+                sep = ";" if ";" in text.split("\n")[0] else ","
+                df_teste = pd.read_csv(pd.io.common.StringIO(text), sep=sep)
 
             X_teste = df_teste[atributos]
             y_teste = df_teste[target]
