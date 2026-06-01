@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from typing_extensions import Annotated
-from typing import Optional
+from typing import Optional, List
 from bson.errors import InvalidId
 from app.schemas.schemas import ConfiguracaoColetaRequest
 import pandas as pd
@@ -13,6 +13,53 @@ from app.funcoes_genericas.funcoes_genericas import gerar_colunas_detalhes, df_p
 
 router = APIRouter()
 
+SEPARADORES = {
+    "virgula": ",",
+    "ponto_virgula": ";",
+    "tab": "\t",
+    "pipe": "|",
+}
+
+
+@router.post("/csv/preview")
+async def preview_csv(
+    file: Annotated[UploadFile, File()],
+    separador: Annotated[str, Form()] = "virgula",
+    encoding: Annotated[str, Form()] = "utf-8",
+    linhas: Annotated[int, Form()] = 10,
+):
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(400, "Arquivo deve ser CSV")
+
+    content = await file.read()
+    sep = SEPARADORES.get(separador, ",")
+
+    try:
+        text = content.decode(encoding)
+        df = pd.read_csv(StringIO(text), sep=sep, nrows=linhas)
+    except UnicodeDecodeError:
+        try:
+            text = content.decode("latin-1")
+            df = pd.read_csv(StringIO(text), sep=sep, nrows=linhas)
+            encoding = "latin-1"
+        except Exception as e:
+            raise HTTPException(400, f"Erro ao decodificar arquivo: {e}")
+    except Exception as e:
+        raise HTTPException(400, f"Erro ao ler CSV: {e}")
+
+    colunas = df.columns.tolist()
+    preview = df.head(linhas).to_dict(orient="records")
+    colunas_detalhes = gerar_colunas_detalhes(df)
+
+    return {
+        "colunas": colunas,
+        "colunas_detalhes": colunas_detalhes,
+        "preview": preview,
+        "num_linhas_preview": len(preview),
+        "separador_usado": separador,
+        "encoding_usado": encoding,
+    }
+
 
 @router.post("/csv")
 async def upload_csv(
@@ -20,15 +67,24 @@ async def upload_csv(
     file: Annotated[UploadFile, File()],
     test_size: Optional[float] = Form(0.2),
     id_coleta: Optional[str] = Form(None),
+    separador: Annotated[str, Form()] = "virgula",
+    encoding: Annotated[str, Form()] = "utf-8",
 ):
     if not file.filename.endswith(".csv"):
         raise HTTPException(400, "Arquivo deve ser CSV")
 
     content = await file.read()
+    sep = SEPARADORES.get(separador, ",")
+
     try:
-        text = content.decode("utf-8")
-        sep = ";" if ";" in text.split("\n")[0] else ","
+        text = content.decode(encoding)
         df = pd.read_csv(StringIO(text), sep=sep)
+    except UnicodeDecodeError:
+        try:
+            text = content.decode("latin-1")
+            df = pd.read_csv(StringIO(text), sep=sep)
+        except Exception as e:
+            raise HTTPException(400, f"Erro ao decodificar arquivo: {e}")
     except Exception as e:
         raise HTTPException(400, f"Erro ao ler CSV: {e}")
 
