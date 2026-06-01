@@ -159,7 +159,11 @@ def get_nested(dados: Any, path: Union[str, Iterable[PathPart]], default: Any = 
       elif isinstance(parte, dict):
           # filtro dentro de lista
           if isinstance(atual, list):
-              atual = next((x for x in atual if all(x.get(k) == v for k, v in parte.items())), default)
+              def _match(item):
+                  if isinstance(item, Mapping):
+                      return all(item.get(k) == v for k, v in parte.items())
+                  return False
+              atual = next((x for x in atual if _match(x)), default)
               if atual is None and default is _SENTINEL:
                   raise KeyError(f"Nenhum item corresponde ao filtro {parte} em {parts}")
           else:

@@ -3,104 +3,119 @@ from bson import ObjectId
 
 from app.database import arquivos, configuracoes_treinamento
 from app.schemas.schemas import ConfiguracaoColetaRequest
-from app.funcoes_genericas.funcoes_genericas import decode_excel_base64_df, mapear_tipo
+import pandas as pd
+import base64
+from io import BytesIO, StringIO
 
 router = APIRouter()
 
+
+def decode_base64_df(base64_string: str) -> pd.DataFrame:
+    if not base64_string:
+        return pd.DataFrame()
+    try:
+        binary = base64.b64decode(base64_string)
+        try:
+            return pd.read_excel(BytesIO(binary), engine="openpyxl")
+        except Exception:
+            text = binary.decode("utf-8")
+            sep = ";" if ";" in text.split("\n")[0] else ","
+            return pd.read_csv(StringIO(text), sep=sep)
+    except Exception:
+        return pd.DataFrame()
+
+
 @router.put("/{tipo}/{configurar_treinamento_id}")
 async def configurar_treinamento(configurar_treinamento_id: str, config: ConfiguracaoColetaRequest):
-  config_doc = await configuracoes_treinamento.find_one({"_id": ObjectId(configurar_treinamento_id)})
-  
-  if not config_doc:
-    raise HTTPException(status_code=404, detail="Configuração não encontrada.")
-  
-  id_coleta = config_doc.get("id_coleta")
-  tipo_target = None
+    config_doc = await configuracoes_treinamento.find_one({"_id": ObjectId(configurar_treinamento_id)})
 
-  if id_coleta and config.target:
-    resultado = await arquivos.find_one(
-      {
-        "_id": ObjectId(id_coleta),
-        "colunas_detalhes.nome_coluna": config.target  # ajuste conforme seu campo no Mongo
-      },
-      {
-        "colunas_detalhes.$": 1  # traz só o item do array que bateu
-      }
+    if not config_doc:
+        raise HTTPException(status_code=404, detail="Configuração não encontrada.")
+
+    id_coleta = config_doc.get("id_coleta")
+    tipo_target = None
+
+    if id_coleta and config.target:
+        resultado = await arquivos.find_one(
+            {
+                "_id": ObjectId(id_coleta),
+                "colunas_detalhes.nome_coluna": config.target
+            },
+            {
+                "colunas_detalhes.$": 1
+            }
+        )
+        if resultado and "colunas_detalhes" in resultado:
+            coluna_encontrada = resultado["colunas_detalhes"][0]
+            tipo_target = coluna_encontrada.get("tipo_coluna")
+
+    update_data = {
+        "target": config.target,
+        "atributos": config.atributos,
+        "tipo_target": tipo_target,
+        "prever_categoria": config.prever_categoria,
+        "dados_rotulados": config.dados_rotulados
+    }
+
+    await configuracoes_treinamento.update_one(
+        {"_id": ObjectId(configurar_treinamento_id)},
+        {"$set": update_data}
     )
-    if resultado and "colunas_detalhes" in resultado:
-      coluna_encontrada = resultado["colunas_detalhes"][0]
-      tipo_target = coluna_encontrada.get("tipo_coluna")  # pega o tipo da coluna
 
-  
-  update_data = {
-    "target": config.target,
-    "atributos": config.atributos,
-    "tipo_target": tipo_target,
-    "prever_categoria": config.prever_categoria,
-    "dados_rotulados": config.dados_rotulados
-  }
-  
-  await configuracoes_treinamento.update_one(
-    {"_id": ObjectId(configurar_treinamento_id)},
-    {"$set": update_data}
-  )
+    return {
+        "mensagem": "Configuração salva com sucesso.",
+        "tipo_target": tipo_target
+    }
 
-  return {
-    "mensagem": "Configuração salva com sucesso.",
-    "tipo_target": tipo_target
-  }
-    
-    
+
 @router.get("/{tipo}/{configurar_treinamento_id}")
 async def get_configuracoe(configurar_treinamento_id: str):
-  try:
-    config_doc = await configuracoes_treinamento.find_one({"_id": ObjectId(configurar_treinamento_id)})
-  except Exception:
-    raise HTTPException(status_code=400, detail="ID inválido.")
+    try:
+        config_doc = await configuracoes_treinamento.find_one({"_id": ObjectId(configurar_treinamento_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="ID inválido.")
 
-  if not config_doc:
-    raise HTTPException(status_code=404, detail="Configuração de treinamento não encontrada.")
+    if not config_doc:
+        raise HTTPException(status_code=404, detail="Configuração de treinamento não encontrada.")
 
-  id_coleta = config_doc.get("id_coleta")
-  if not id_coleta:
-    raise HTTPException(status_code=400, detail="Campo 'id_coleta' não encontrado na configuração.")
+    id_coleta = config_doc.get("id_coleta")
+    if not id_coleta:
+        raise HTTPException(status_code=400, detail="Campo 'id_coleta' não encontrado na configuração.")
 
-  try:
-    coleta_doc = await arquivos.find_one({"_id": ObjectId(id_coleta)})
-  except Exception as e:
-    raise HTTPException(status_code=400, detail=f"Erro ao buscar coleta: {str(e)}")
+    try:
+        coleta_doc = await arquivos.find_one({"_id": ObjectId(id_coleta)})
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao buscar coleta: {str(e)}")
 
-  if not coleta_doc:
-    raise HTTPException(status_code=404, detail="Documento de coleta não encontrado.")
+    if not coleta_doc:
+        raise HTTPException(status_code=404, detail="Documento de coleta não encontrado.")
 
-  # Decodifica planilhas completas
-  df_treino = decode_excel_base64_df(coleta_doc.get("content_treino_base64", ""))
-  df_teste = decode_excel_base64_df(coleta_doc.get("content_teste_base64", ""))
+    df_treino = decode_base64_df(coleta_doc.get("content_treino_base64", ""))
+    df_teste = decode_base64_df(coleta_doc.get("content_teste_base64", ""))
 
-  # Extrai preview (5 primeiras linhas como lista de dicts)
-  preview_treino = df_treino.head(5).to_dict(orient="records")
-  preview_teste = df_teste.head(5).to_dict(orient="records")
+    preview_treino = df_treino.head(5).to_dict(orient="records")
+    preview_teste = df_teste.head(5).to_dict(orient="records")
 
-  colunas = coleta_doc.get("colunas")
-  if isinstance(colunas, dict):
-    colunas = list(colunas.keys())
-  elif colunas is None:
-    colunas = []
+    colunas = coleta_doc.get("colunas")
+    if isinstance(colunas, dict):
+        colunas = list(colunas.keys())
+    elif colunas is None:
+        colunas = []
 
-  return {
-    "id_coleta": str(coleta_doc["_id"]),
-    "tipo": coleta_doc.get("tipo"),
-    "arquivo_nome_treino": coleta_doc.get("arquivo_nome_treino"),
-    "arquivo_nome_teste": coleta_doc.get("arquivo_nome_teste"),
-    "target": config_doc.get("target"),
-    "tipo_target": config_doc.get("tipo_target"),
-    "atributos": config_doc.get("atributos"),
-    "preview_treino": preview_treino,
-    "preview_teste": preview_teste,
-    "colunas_detalhes": coleta_doc.get("colunas_detalhes"),
-    "num_linhas_treino": df_treino.shape[0],
-    "num_linhas_teste": df_teste.shape[0],
-    "num_linhas_total": df_treino.shape[0] + df_teste.shape[0],
-    "prever_categoria": config_doc.get("prever_categoria"),
-    "dados_rotulados": config_doc.get("dados_rotulados") or config_doc.get("daods_rotulados"),
-  }
+    return {
+        "id_coleta": str(coleta_doc["_id"]),
+        "tipo": coleta_doc.get("tipo"),
+        "arquivo_nome_treino": coleta_doc.get("arquivo_nome_treino"),
+        "arquivo_nome_teste": coleta_doc.get("arquivo_nome_teste"),
+        "target": config_doc.get("target"),
+        "tipo_target": config_doc.get("tipo_target"),
+        "atributos": config_doc.get("atributos"),
+        "preview_treino": preview_treino,
+        "preview_teste": preview_teste,
+        "colunas_detalhes": coleta_doc.get("colunas_detalhes"),
+        "num_linhas_treino": df_treino.shape[0],
+        "num_linhas_teste": df_teste.shape[0],
+        "num_linhas_total": df_treino.shape[0] + df_teste.shape[0],
+        "prever_categoria": config_doc.get("prever_categoria"),
+        "dados_rotulados": config_doc.get("dados_rotulados") or config_doc.get("daods_rotulados"),
+    }
