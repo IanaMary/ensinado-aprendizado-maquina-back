@@ -7,6 +7,7 @@ import joblib
 import base64
 import io
 import hashlib
+from sklearn.metrics import confusion_matrix
 
 router = APIRouter()
 
@@ -95,14 +96,22 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
                         y_prob = modelo_treinado.predict_proba(X_teste)[:, 1]
                         valor = func(y_teste, y_prob)
 
+                    elif func_key == "confusion_matrix":
+                        cm = confusion_matrix(y_teste, y_pred)
+                        classes = sorted(set(y_teste) | set(y_pred))
+                        valor = {
+                            "matriz": cm.tolist(),
+                            "classes": classes,
+                            "total": int(cm.sum())
+                        }
+
                     elif func_key in {"precision_score", "recall_score", "f1_score"}:
                         valor = func(y_teste, y_pred, average="weighted", zero_division=0)
 
-                    elif func_key in {"accuracy_score", "confusion_matrix"}:
+                    elif func_key == "accuracy_score":
                         valor = func(y_teste, y_pred)
 
                     else:
-                        # tentativa genérica: com average, e fallback sem average
                         try:
                             valor = func(y_teste, y_pred, average="weighted")
                         except TypeError:
