@@ -82,21 +82,9 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
             for metrica in request.metricas:
                 nome_metrica = metrica.label
                 func_key = metrica.valor
-                func = metricas_disponiveis.get(func_key)
-
-                if not func:
-                    resultados_formatados[nome_metrica][nome_modelo] = "Métrica não suportada"
-                    continue
 
                 try:
-                    if func_key == "roc_auc_score":
-                        if len(set(y_teste)) != 2:
-                            resultados_formatados[nome_metrica][nome_modelo] = "ROC AUC requer problema binário"
-                            continue
-                        y_prob = modelo_treinado.predict_proba(X_teste)[:, 1]
-                        valor = func(y_teste, y_prob)
-
-                    elif func_key == "confusion_matrix":
+                    if func_key == "confusion_matrix":
                         cm = confusion_matrix(y_teste, y_pred)
                         classes = sorted(set(y_teste) | set(y_pred))
                         valor = {
@@ -105,17 +93,32 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
                             "total": int(cm.sum())
                         }
 
-                    elif func_key in {"precision_score", "recall_score", "f1_score"}:
-                        valor = func(y_teste, y_pred, average="weighted", zero_division=0)
-
-                    elif func_key == "accuracy_score":
-                        valor = func(y_teste, y_pred)
+                    elif func_key == "roc_auc_score":
+                        func = metricas_disponiveis.get(func_key)
+                        if not func:
+                            resultados_formatados[nome_metrica][nome_modelo] = "Métrica não suportada"
+                            continue
+                        if len(set(y_teste)) != 2:
+                            resultados_formatados[nome_metrica][nome_modelo] = "ROC AUC requer problema binário"
+                            continue
+                        y_prob = modelo_treinado.predict_proba(X_teste)[:, 1]
+                        valor = func(y_teste, y_prob)
 
                     else:
-                        try:
-                            valor = func(y_teste, y_pred, average="weighted")
-                        except TypeError:
+                        func = metricas_disponiveis.get(func_key)
+                        if not func:
+                            resultados_formatados[nome_metrica][nome_modelo] = "Métrica não suportada"
+                            continue
+
+                        if func_key in {"precision_score", "recall_score", "f1_score"}:
+                            valor = func(y_teste, y_pred, average="weighted", zero_division=0)
+                        elif func_key == "accuracy_score":
                             valor = func(y_teste, y_pred)
+                        else:
+                            try:
+                                valor = func(y_teste, y_pred, average="weighted")
+                            except TypeError:
+                                valor = func(y_teste, y_pred)
 
                     resultados_formatados[nome_metrica][nome_modelo] = valor
 
