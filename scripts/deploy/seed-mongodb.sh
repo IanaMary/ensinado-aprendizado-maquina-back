@@ -162,6 +162,91 @@ db.modelos.insertMany([
         hiperparametros: [
             { nomeHiperparametro: "n_components", valorPadrao: 2 }
         ]
+    },
+    {
+        label: "SVM Linear",
+        valor: "svm_linear",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: true,
+        dados_rotulados: true,
+        resumo: "SVM com kernel linear. Mais rápido para dados linearmente separáveis.",
+        hiperparametros: [
+            { nomeHiperparametro: "C", valorPadrao: 1.0 }
+        ]
+    },
+    {
+        label: "Random Forest",
+        valor: "random_forest",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: true,
+        dados_rotulados: true,
+        resumo: "Conjunto de árvores de decisão que votam na classe final.",
+        hiperparametros: [
+            { nomeHiperparametro: "n_estimators", valorPadrao: 100 },
+            { nomeHiperparametro: "max_depth", valorPadrao: null },
+            { nomeHiperparametro: "criterion", valorPadrao: "gini" }
+        ]
+    },
+    {
+        label: "AdaBoost",
+        valor: "adaboost",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: true,
+        dados_rotulados: true,
+        resumo: "Combina classificadores fracos em um classificador forte.",
+        hiperparametros: [
+            { nomeHiperparametro: "n_estimators", valorPadrao: 50 },
+            { nomeHiperparametro: "learning_rate", valorPadrao: 1.0 }
+        ]
+    },
+    {
+        label: "Naive Bayes",
+        valor: "naive_bayes",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: true,
+        dados_rotulados: true,
+        resumo: "Classificador probabilístico baseado no Teorema de Bayes.",
+        hiperparametros: []
+    },
+    {
+        label: "Rede Neural (MLP)",
+        valor: "mlp",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: true,
+        dados_rotulados: true,
+        resumo: "Multi-Layer Perceptron: rede neural com camadas ocultas.",
+        hiperparametros: [
+            { nomeHiperparametro: "hidden_layer_sizes", valorPadrao: "100" },
+            { nomeHiperparametro: "max_iter", valorPadrao: 500 },
+            { nomeHiperparametro: "activation", valorPadrao: "relu" }
+        ]
+    },
+    {
+        label: "QDA",
+        valor: "qda",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: true,
+        dados_rotulados: true,
+        resumo: "Quadratic Discriminant Analysis: assume covariância diferente por classe.",
+        hiperparametros: []
     }
 ]);
 print("  -> modelos: OK (" + db.modelos.countDocuments({}) + " documentos)");
