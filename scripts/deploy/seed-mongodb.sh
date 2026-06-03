@@ -23,7 +23,7 @@ mongosh --quiet "$DB_NAME" --eval '
 db.coleta_dados.deleteMany({});
 db.coleta_dados.insertMany([
     {
-        label: "Arquivo XLSX",
+        label: "Excel",
         valor: "xlsx",
         tipoItem: "coleta-dado",
         habilitado: true,
@@ -32,7 +32,7 @@ db.coleta_dados.insertMany([
         resumo: "Upload de arquivo Excel (.xlsx)"
     },
     {
-        label: "Arquivo CSV",
+        label: "CSV",
         valor: "csv",
         tipoItem: "coleta-dado",
         habilitado: true,
@@ -41,7 +41,7 @@ db.coleta_dados.insertMany([
         resumo: "Upload de arquivo CSV"
     },
     {
-        label: "Arquivo JSON",
+        label: "JSON",
         valor: "json",
         tipoItem: "coleta-dado",
         habilitado: true,
