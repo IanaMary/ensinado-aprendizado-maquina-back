@@ -48,6 +48,15 @@ db.coleta_dados.insertMany([
         movido: false,
         icon: "coleta-dado",
         resumo: "Upload de arquivo JSON"
+    },
+    {
+        label: "Dataset",
+        valor: "dataset",
+        tipoItem: "coleta-dado",
+        habilitado: true,
+        movido: false,
+        icon: "coleta-dado",
+        resumo: "Escolher um dataset pronto (sklearn ou UCI)"
     }
 ]);
 print("  -> coleta_dados: OK (" + db.coleta_dados.countDocuments({}) + " documentos)");

@@ -47,31 +47,39 @@ async def carregar_dataset(
     
     try:
         df = None
+        target_names = None
         
         # Carregar baseado na fonte
         if ds.fonte == "sklearn":
-            df = _carregar_sklearn(dataset_name)
+            df, target_names = _carregar_sklearn(dataset_name)
         elif ds.fonte == "uci":
             df = _carregar_uci(dataset_name, ds)
         
         if df is None:
             raise HTTPException(status_code=500, detail="Erro ao carregar dataset")
         
+        target = ds.target
+        
+        # Substituir target numerico por labels de texto se disponivel
+        if target_names is not None and target in df.columns:
+            if df[target].dtype in ['int64', 'float64']:
+                # Mapear inteiros para labels de texto
+                df[target] = df[target].apply(lambda x: target_names[int(x)] if int(x) < len(target_names) else str(x))
+        
         # Preparar dados
         colunas = list(df.columns)
         colunas_detalhes = []
         for col in colunas:
-            tipo = "Numerico" if df[col].dtype in ['int64', 'float64'] else "Texto"
+            tipo_col = "Numerico" if df[col].dtype in ['int64', 'float64'] else "Texto"
             colunas_detalhes.append({
                 "nome_coluna": col,
-                "tipo_coluna": tipo
+                "tipo_coluna": tipo_col
             })
         
         # Dados para preview (limitar a 50 linhas)
         dados = df.head(50).to_dict(orient='records')
         
         # Informacoes do target
-        target = ds.target
         tipo_target = None
         if target and target in df.columns:
             tipo_target = "number" if df[target].dtype in ['int64', 'float64'] else "string"
@@ -125,13 +133,16 @@ def _carregar_sklearn(dataset_name: str):
         data = load_digits(as_frame=True)
         df = data.frame
         df['target'] = data.target
-        return df
+        return df, None
     
     if dataset_name in loaders:
         data = loaders[dataset_name](as_frame=True)
-        return data.frame
+        df = data.frame
+        # Retornar target_names se existir (para mapear inteiros para labels)
+        target_names = getattr(data, 'target_names', None)
+        return df, target_names
     
-    return None
+    return None, None
 
 
 def _carregar_uci(dataset_name: str, ds: DatasetConfig):
