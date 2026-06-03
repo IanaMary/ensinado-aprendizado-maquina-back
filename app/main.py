@@ -12,6 +12,7 @@ from app.routers import regressao_logistica
 from app.routers import svm
 from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, configuracao_treinamento_router
 from app.metricas import router as metricas_router
+from app.routers import toy_datasets
 from app.security import get_usuario_atual
 
 app = FastAPI()
@@ -47,6 +48,7 @@ app.include_router(arvore_decisao.router, prefix="/classificador/treinamento", d
 app.include_router(regressao_logistica.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(svm.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(metricas_router, prefix="/classificador", dependencies=auth_dependency)
+app.include_router(toy_datasets.router, dependencies=auth_dependency)
 
 @app.get("/healthcheck")
 async def healthcheck():
