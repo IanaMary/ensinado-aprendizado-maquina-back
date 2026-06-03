@@ -58,13 +58,14 @@ async def carregar_dataset(
         if df is None:
             raise HTTPException(status_code=500, detail="Erro ao carregar dataset")
         
-        target = ds.target
-        
         # Substituir target numerico por labels de texto se disponivel
-        if target_names is not None and target in df.columns:
-            if df[target].dtype in ['int64', 'float64']:
+        # O target real no dataframe e sempre "target" para sklearn datasets
+        target_col = "target" if "target" in df.columns else ds.target
+        
+        if target_names is not None and target_col in df.columns:
+            if df[target_col].dtype in ['int64', 'float64']:
                 # Mapear inteiros para labels de texto
-                df[target] = df[target].apply(lambda x: target_names[int(x)] if int(x) < len(target_names) else str(x))
+                df[target_col] = df[target_col].apply(lambda x: target_names[int(x)] if int(x) < len(target_names) else str(x))
         
         # Preparar dados
         colunas = list(df.columns)
@@ -81,8 +82,8 @@ async def carregar_dataset(
         
         # Informacoes do target
         tipo_target = None
-        if target and target in df.columns:
-            tipo_target = "number" if df[target].dtype in ['int64', 'float64'] else "string"
+        if target_col and target_col in df.columns:
+            tipo_target = "number" if df[target_col].dtype in ['int64', 'float64'] else "string"
         
         return {
             "nome_dataset": ds.nome,
@@ -91,7 +92,7 @@ async def carregar_dataset(
             "colunas_detalhes": colunas_detalhes,
             "dados": dados,
             "total_dados": len(df),
-            "target": target,
+            "target": target_col,
             "tipo_target": tipo_target,
             "prever_categoria": ds.tipo == DatasetType.CLASSIFICATION,
             "dados_rotulados": target is not None,
