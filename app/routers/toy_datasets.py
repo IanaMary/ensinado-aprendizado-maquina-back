@@ -95,7 +95,7 @@ async def carregar_dataset(
             "target": target_col,
             "tipo_target": tipo_target,
             "prever_categoria": ds.tipo == DatasetType.CLASSIFICATION,
-            "dados_rotulados": target is not None,
+            "dados_rotulados": target_col is not None,
             "n_amostras": ds.n_amostras,
             "n_features": ds.n_features,
             "pre_split": ds.pre_split.value,
