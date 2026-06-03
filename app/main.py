@@ -31,6 +31,7 @@ app.add_middleware(
 
 # Rotas públicas (sem autenticação)
 app.include_router(login.router)
+app.include_router(toy_datasets.router)
 
 # Rotas protegidas (requer JWT)
 auth_dependency = [Depends(get_usuario_atual)]
@@ -48,7 +49,6 @@ app.include_router(arvore_decisao.router, prefix="/classificador/treinamento", d
 app.include_router(regressao_logistica.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(svm.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(metricas_router, prefix="/classificador", dependencies=auth_dependency)
-app.include_router(toy_datasets.router, dependencies=auth_dependency)
 
 @app.get("/healthcheck")
 async def healthcheck():
