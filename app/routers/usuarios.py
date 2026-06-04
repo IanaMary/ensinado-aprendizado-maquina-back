@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.schemas.usuarios import UserCreate, UserOut, UserInvite, UserInviteResponse, UserActivate
-from app.security import get_senha_hash, verificar_senha
+from app.security import get_senha_hash, verificar_senha, get_usuario_atual
 from app.database import colecao_usuario, verificadores_professor
 
 router = APIRouter(prefix="/usuario", tags=["Usuários"])
@@ -101,7 +101,7 @@ def gerar_email_convite(nome: str, token: str) -> str:
 
 
 @router.post("/gerar-verificador")
-async def gerar_verificador(current_user=Depends(verificar_senha)):
+async def gerar_verificador(current_user=Depends(get_usuario_atual)):
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Apenas admins podem gerar verificadores")
 
@@ -155,7 +155,7 @@ async def create_user(user_data: UserCreate):
 
 
 @router.post("/convite", response_model=UserInviteResponse)
-async def criar_convite(convite_data: UserInvite, current_user=Depends(verificar_senha)):
+async def criar_convite(convite_data: UserInvite, current_user=Depends(get_usuario_atual)):
     """Cria um novo usuário e envia convite por email."""
     # Verificar se é admin
     if current_user["role"] != "admin":
@@ -270,7 +270,7 @@ async def ativar_conta(token: str, dados: UserActivate):
 
 
 @router.get("/", response_model=List[UserInviteResponse])
-async def listar_usuarios(current_user=Depends(verificar_senha)):
+async def listar_usuarios(current_user=Depends(get_usuario_atual)):
     """Lista todos os usuários (apenas admin)."""
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Apenas admins podem listar usuários")
@@ -293,7 +293,7 @@ async def listar_usuarios(current_user=Depends(verificar_senha)):
 
 
 @router.put("/{user_id}/status")
-async def alterar_status_usuario(user_id: str, novo_status: str, current_user=Depends(verificar_senha)):
+async def alterar_status_usuario(user_id: str, novo_status: str, current_user=Depends(get_usuario_atual)):
     """Altera o status de um usuário (apenas admin)."""
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Apenas admins podem alterar status")
@@ -318,7 +318,7 @@ async def alterar_status_usuario(user_id: str, novo_status: str, current_user=De
 
 
 @router.post("/{user_id}/reenviar-convite")
-async def reenviar_convite(user_id: str, current_user=Depends(verificar_senha)):
+async def reenviar_convite(user_id: str, current_user=Depends(get_usuario_atual)):
     """Reenvia o convite por email (apenas admin)."""
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Apenas admins podem reenviar convites")
@@ -363,7 +363,7 @@ async def reenviar_convite(user_id: str, current_user=Depends(verificar_senha)):
 
 
 @router.delete("/{user_id}")
-async def excluir_usuario(user_id: str, current_user=Depends(verificar_senha)):
+async def excluir_usuario(user_id: str, current_user=Depends(get_usuario_atual)):
     """Exclui um usuário (apenas admin)."""
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Apenas admins podem excluir usuários")
