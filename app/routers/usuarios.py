@@ -6,6 +6,10 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
+from dotenv import load_dotenv
+
+# Carregar variáveis de ambiente
+load_dotenv()
 
 from app.schemas.usuarios import UserCreate, UserOut, UserInvite, UserInviteResponse, UserActivate
 from app.security import get_senha_hash, verificar_senha
@@ -28,7 +32,7 @@ async def enviar_email(destinatario: str, assunto: str, corpo_html: str):
         if not SMTP_USER or not SMTP_PASSWORD:
             print(f"[DEV] Email não enviado (SMTP não configurado): {destinatario}")
             print(f"[DEV] Assunto: {assunto}")
-            return True
+            return False  # Retorna False para indicar que email não foi enviado
 
         msg = MIMEMultipart('alternative')
         msg['Subject'] = assunto
@@ -183,6 +187,7 @@ async def criar_convite(convite_data: UserInvite, current_user=Depends(verificar
     result = await colecao_usuario.insert_one(user_doc)
     
     # Enviar email de convite
+    link_convite = f"{FRONTEND_URL}/ativar-conta?token={token}"
     corpo_html = gerar_email_convite(convite_data.nome, token)
     email_enviado = await enviar_email(
         convite_data.email,
@@ -197,7 +202,8 @@ async def criar_convite(convite_data: UserInvite, current_user=Depends(verificar
         tipo=convite_data.tipo,
         status="pendente",
         data_convite=user_doc["data_convite"],
-        email_enviado=email_enviado
+        email_enviado=email_enviado,
+        link_convite=link_convite if not email_enviado else None
     )
 
 

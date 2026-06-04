@@ -62,6 +62,7 @@ class UserInviteResponse(BaseModel):
     data_ativacao: Optional[datetime] = None
     ultimo_acesso: Optional[datetime] = None
     email_enviado: bool = False
+    link_convite: Optional[str] = None  # Link para compartilhar manualmente
 
 class UserActivate(BaseModel):
     senha: str
