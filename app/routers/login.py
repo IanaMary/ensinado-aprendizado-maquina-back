@@ -33,7 +33,7 @@ _request_log = defaultdict(list)
 
 async def rate_limit(request: Request):
     """
-    Limita para 5 requisições por minuto por IP.
+    Limita para 20 requisições por minuto por IP.
     """
     # Obtém IP do request
     client_ip = request.client.host
@@ -43,7 +43,7 @@ async def rate_limit(request: Request):
     _request_log[client_ip] = [t for t in _request_log[client_ip] if now - t < 60]
     
     # Verifica limite
-    if len(_request_log[client_ip]) >= 5:
+    if len(_request_log[client_ip]) >= 20:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Muitas tentativas de login. Tente novamente em 1 minuto."
