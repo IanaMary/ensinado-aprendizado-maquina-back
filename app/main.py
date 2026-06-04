@@ -11,15 +11,8 @@ from app.routers import knn
 from app.routers import arvore_decisao
 from app.routers import regressao_logistica
 from app.routers import svm
-from app.routers import svm_linear
-from app.routers import random_forest
-from app.routers import adaboost
-from app.routers import naive_bayes
-from app.routers import mlp
-from app.routers import qda
 from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, configuracao_treinamento_router
 from app.metricas import router as metricas_router
-from app.routers import toy_datasets
 from app.security import get_usuario_atual
 
 app = FastAPI()
@@ -38,7 +31,6 @@ app.add_middleware(
 
 # Rotas públicas (sem autenticação)
 app.include_router(login.router)
-app.include_router(toy_datasets.router)
 app.include_router(convite.router)
 
 # Rotas protegidas (requer JWT)
@@ -52,18 +44,10 @@ app.include_router(coleta_dados_xlxs_router, prefix="/coleta_dados", dependencie
 app.include_router(coleta_dados_csv_router, prefix="/coleta_dados", dependencies=auth_dependency)
 app.include_router(configuracao_treinamento_router, prefix="/configurar_treinamento", dependencies=auth_dependency)
 
-# Classificadores
 app.include_router(knn.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(arvore_decisao.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(regressao_logistica.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(svm.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
-app.include_router(svm_linear.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
-app.include_router(random_forest.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
-app.include_router(adaboost.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
-app.include_router(naive_bayes.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
-app.include_router(mlp.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
-app.include_router(qda.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
-
 app.include_router(metricas_router, prefix="/classificador", dependencies=auth_dependency)
 
 @app.get("/healthcheck")

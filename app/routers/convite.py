@@ -1,9 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from datetime import datetime, timezone
 import secrets
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import os
 from dotenv import load_dotenv
 
@@ -14,13 +11,6 @@ from app.security import get_senha_hash
 from app.database import colecao_usuario
 
 router = APIRouter(prefix="/convite", tags=["Convite"])
-
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@iana.com")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://absapt.tk/h2ia/tutor")
 
 
 @router.get("/{token}")
@@ -37,6 +27,9 @@ async def verificar_convite(token: str):
     # Verificar se o convite expirou (7 dias)
     data_convite = user.get("data_convite")
     if data_convite:
+        # Make both timezone-aware or both naive
+        if data_convite.tzinfo is None:
+            data_convite = data_convite.replace(tzinfo=timezone.utc)
         dias_desde_convite = (datetime.now(timezone.utc) - data_convite).days
         if dias_desde_convite > 7:
             raise HTTPException(status_code=400, detail="Convite expirado")
@@ -63,6 +56,9 @@ async def ativar_conta(token: str, dados: UserActivate):
     # Verificar se o convite expirou (7 dias)
     data_convite = user.get("data_convite")
     if data_convite:
+        # Make both timezone-aware or both naive
+        if data_convite.tzinfo is None:
+            data_convite = data_convite.replace(tzinfo=timezone.utc)
         dias_desde_convite = (datetime.now(timezone.utc) - data_convite).days
         if dias_desde_convite > 7:
             raise HTTPException(status_code=400, detail="Convite expirado")
