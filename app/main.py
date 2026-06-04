@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import db, client
 from app.routers import usuarios
 from app.routers import login
+from app.routers import convite
 from app.routers import conf_pipeline
 from app.routers import tutor
 from app.routers import knn
@@ -38,6 +39,7 @@ app.add_middleware(
 # Rotas públicas (sem autenticação)
 app.include_router(login.router)
 app.include_router(toy_datasets.router)
+app.include_router(convite.router)
 
 # Rotas protegidas (requer JWT)
 auth_dependency = [Depends(get_usuario_atual)]
