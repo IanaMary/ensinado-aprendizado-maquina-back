@@ -17,6 +17,12 @@ class ContextoPipeColetaDados(BaseModel):
     atributos: Optional[str] = None
 
 
+# ---------------------- Pre-processamento ----------------------
+class ContextoPipePreProcessamento(BaseModel):
+    texto_pipe: str
+    explicacao: Optional[str] = None
+
+
 # ---------------------- Seleção de modelo ----------------------
 class Hiperparametro(BaseModel):
     nome: Optional[str] = None

@@ -1,6 +1,6 @@
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
-from app.schemas.tutor import AtualizarDescricaoRequest, ContextoPipeInicio, ContextoPipeColetaDados, ContextoPipeSelecaoModelo, ContextoPipeTreinamento, ContextoPipeSelecaoMetricas
+from app.schemas.tutor import AtualizarDescricaoRequest, ContextoPipeInicio, ContextoPipeColetaDados, ContextoPipePreProcessamento, ContextoPipeSelecaoModelo, ContextoPipeTreinamento, ContextoPipeSelecaoMetricas
 from app.funcoes_genericas.funcoes_genericas import serialize_doc, concatenar_campos
 from app.database import tutor
 from bson import ObjectId
@@ -22,6 +22,9 @@ async def buscar_tutor_descricao(
             texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
         elif(pipe == 'coleta-dado'):
             chaves = textos or list(ContextoPipeColetaDados.model_fields.keys())
+            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
+        elif(pipe == 'pre-processamento'):
+            chaves = textos or list(ContextoPipePreProcessamento.model_fields.keys())
             texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
         elif(pipe == 'selecao-modelo'):
             chaves = textos or list(ContextoPipeSelecaoModelo.model_fields.keys())
