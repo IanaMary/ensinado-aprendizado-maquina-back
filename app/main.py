@@ -11,6 +11,7 @@ from app.routers import knn
 from app.routers import arvore_decisao
 from app.routers import regressao_logistica
 from app.routers import svm
+from app.routers import toy_datasets
 from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, configuracao_treinamento_router
 from app.metricas import router as metricas_router
 from app.security import get_usuario_atual
@@ -31,6 +32,7 @@ app.add_middleware(
 
 # Rotas públicas (sem autenticação)
 app.include_router(login.router)
+app.include_router(toy_datasets.router)
 app.include_router(convite.router)
 
 # Rotas protegidas (requer JWT)
