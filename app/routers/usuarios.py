@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 # Carregar variáveis de ambiente
 load_dotenv()
 
-from app.schemas.usuarios import UserCreate, UserOut, UserInvite, UserInviteResponse, UserActivate
+from app.schemas.usuarios import UserCreate, UserOut, UserInvite, UserInviteResponse
 from app.security import get_senha_hash, verificar_senha, get_usuario_atual
 from app.database import colecao_usuario, verificadores_professor
 
@@ -207,68 +207,6 @@ async def criar_convite(convite_data: UserInvite, current_user=Depends(get_usuar
     )
 
 
-@router.get("/convite/{token}")
-async def verificar_convite(token: str):
-    """Verifica se um token de convite é válido."""
-    user = await colecao_usuario.find_one({
-        "token_convite": token,
-        "status": "pendente"
-    })
-    
-    if not user:
-        raise HTTPException(status_code=404, detail="Convite não encontrado ou já utilizado")
-    
-    # Verificar se o convite expirou (7 dias)
-    data_convite = user.get("data_convite")
-    if data_convite:
-        dias_desde_convite = (datetime.now(timezone.utc) - data_convite).days
-        if dias_desde_convite > 7:
-            raise HTTPException(status_code=400, detail="Convite expirado")
-    
-    return {
-        "nome": user["nome_usuario"],
-        "email": user["email"],
-        "tipo": user["role"],
-        "valido": True
-    }
-
-
-@router.post("/convite/{token}/ativar")
-async def ativar_conta(token: str, dados: UserActivate):
-    """Ativa a conta do usuário definindo a senha."""
-    user = await colecao_usuario.find_one({
-        "token_convite": token,
-        "status": "pendente"
-    })
-    
-    if not user:
-        raise HTTPException(status_code=404, detail="Convite não encontrado ou já utilizado")
-    
-    # Verificar se o convite expirou (7 dias)
-    data_convite = user.get("data_convite")
-    if data_convite:
-        dias_desde_convite = (datetime.now(timezone.utc) - data_convite).days
-        if dias_desde_convite > 7:
-            raise HTTPException(status_code=400, detail="Convite expirado")
-    
-    # Definir senha e ativar conta
-    senha_hash = get_senha_hash(dados.senha)
-    
-    await colecao_usuario.update_one(
-        {"_id": user["_id"]},
-        {
-            "$set": {
-                "senha": senha_hash,
-                "status": "ativo",
-                "data_ativacao": datetime.now(timezone.utc),
-                "token_convite": None  # Invalidar token
-            }
-        }
-    )
-    
-    return {"mensagem": "Conta ativada com sucesso", "email": user["email"]}
-
-
 @router.get("/", response_model=List[UserInviteResponse])
 async def listar_usuarios(current_user=Depends(get_usuario_atual)):
     """Lista todos os usuários (apenas admin)."""
@@ -319,42 +257,33 @@ async def alterar_status_usuario(user_id: str, novo_status: str, current_user=De
 
 @router.post("/{user_id}/reenviar-convite")
 async def reenviar_convite(user_id: str, current_user=Depends(get_usuario_atual)):
-    """Reenvia o convite por email (apenas admin)."""
+    """Reenvia o convite por email (apenas admin). Mantém o mesmo token e data_convite originais."""
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Apenas admins podem reenviar convites")
-    
+
     from bson import ObjectId
-    
+
     try:
         user = await colecao_usuario.find_one({"_id": ObjectId(user_id)})
-        
+
         if not user:
             raise HTTPException(status_code=404, detail="Usuário não encontrado")
-        
+
         if user.get("status") != "pendente":
             raise HTTPException(status_code=400, detail="Usuário já está ativo")
-        
-        # Gerar novo token
-        token = secrets.token_urlsafe(32)
-        
-        await colecao_usuario.update_one(
-            {"_id": user["_id"]},
-            {
-                "$set": {
-                    "token_convite": token,
-                    "data_convite": datetime.now(timezone.utc)
-                }
-            }
-        )
-        
-        # Enviar email
+
+        token = user.get("token_convite")
+        if not token:
+            raise HTTPException(status_code=400, detail="Token de convite não encontrado")
+
+        # Enviar email com o mesmo token (data_convite original é mantida)
         corpo_html = gerar_email_convite(user["nome_usuario"], token)
         email_enviado = await enviar_email(
             user["email"],
             "Convite para a plataforma Iana - Reenvio",
             corpo_html
         )
-        
+
         return {"mensagem": "Convite reenviado", "email_enviado": email_enviado}
     except Exception as e:
         if isinstance(e, HTTPException):
