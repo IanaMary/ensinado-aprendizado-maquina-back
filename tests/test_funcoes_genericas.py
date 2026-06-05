@@ -99,10 +99,14 @@ class TestGetNested:
         dados = {"a": "valor"}
         assert get_nested(dados, "b.c", default="padrao") == "padrao"
 
-    def test_caminho_inexistente_sem_default(self):
-        dados = {"a": "valor"}
-        with pytest.raises(KeyError):
-            get_nested(dados, "b.c")
+    def test_filtro_sem_match_sem_default(self):
+        dados = {"a": [{"id": "pca", "val": 1}]}
+        with pytest.raises(KeyError, match="Nenhum item corresponde ao filtro"):
+            get_nested(dados, "a[id=tsne].val")
+
+    def test_filtro_sem_match_com_default(self):
+        dados = {"a": [{"id": "pca", "val": 1}]}
+        assert get_nested(dados, "a[id=tsne].val", default="padrao") == "padrao"
 
 
 class TestBase64:

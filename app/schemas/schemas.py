@@ -20,10 +20,6 @@ class DatasetRequest(BaseModel):
     configuracao_id: str   
     modelo_id: str           
     
-class PrevisaoRequest(BaseModel):
-    dados: List[Dict[str, Any]]
-    modelo_nome: str
-
 class AvaliacaoRequest(BaseModel):
     dados_teste: List[Dict[str, Any]]
     target: str

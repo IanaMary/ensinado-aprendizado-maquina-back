@@ -1,5 +1,4 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
-from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 
 from typing import List, Tuple
@@ -11,6 +10,7 @@ from app.database import arquivos, configuracoes_treinamento
 from app.deps import train_test_split
 from app.schemas.schemas import ConfiguracaoColetaRequest
 from app.funcoes_genericas.funcoes_genericas import validar_xlsx, ler_excel, df_para_base64, gerar_colunas_detalhes, montar_resposta_coleta
+from app.utils.seed import get_sklearn_random_state
 
 
 router = APIRouter()
@@ -41,7 +41,7 @@ async def upload_xlsx(
 
         content_completo_b64 = df_para_base64(df)
 
-        df_treino, df_teste = train_test_split(df, test_size=test_size, random_state=42)
+        df_treino, df_teste = train_test_split(df, test_size=test_size, random_state=get_sklearn_random_state() or 42)
 
         content_treino_b64 = df_para_base64(df_treino)
         content_teste_b64 = df_para_base64(df_teste)
@@ -156,8 +156,13 @@ async def get_unique_values(
     raise HTTPException(404, "Coleta não encontrada")
 
   try:
-    content_bytes = base64.b64decode(doc["content_base64"])
+    content_completo_b64 = doc.get("content_completo_base64") or doc.get("content_treino_base64")
+    if not content_completo_b64:
+        raise HTTPException(400, "Conteúdo da coleta não encontrado")
+    content_bytes = base64.b64decode(content_completo_b64)
     df = pd.read_excel(BytesIO(content_bytes), engine='openpyxl')
+  except HTTPException:
+      raise
   except Exception as e:
     raise HTTPException(500, f"Erro ao processar dados: {e}")
 
@@ -169,9 +174,9 @@ async def get_unique_values(
 
   return {
     "id_coleta": id_coleta,
-    "filename": doc["filename"],
-    "num_linhas": doc["num_linhas"],
-    "num_colunas": doc["num_colunas"],
+    "filename": doc.get("arquivo_nome_treino", ""),
+    "num_linhas": doc.get("num_linhas_total", 0),
+    "num_colunas": doc.get("num_colunas", 0),
     "valores_unicos": valores_unicos
   }
 

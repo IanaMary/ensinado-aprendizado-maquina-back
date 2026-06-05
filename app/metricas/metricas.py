@@ -25,18 +25,15 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
 
         try:
             doc = await modelos_treinados.find_one({"_id": ObjectId(id_modelo)})
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"ID de modelo inválido: {id_modelo}")
 
             if not doc:
                 for metrica in request.metricas:
                     resultados_formatados[metrica.label][nome_modelo] = "Modelo não encontrado"
                 continue
 
-            # Validação de checksum
-            modelo_treinado_bytes = doc["modelo_treinado"]
-            if isinstance(modelo_treinado_bytes, bytes):
-                modelo_treinado_bytes = modelo_treinado_bytes
-            else:
-                modelo_treinado_bytes = bytes(modelo_treinado_bytes)
+            modelo_treinado_bytes = bytes(doc["modelo_treinado"])
 
             # Recupera o checksum esperado
             checksum_esperado = doc.get("checksum")

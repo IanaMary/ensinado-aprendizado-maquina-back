@@ -29,28 +29,30 @@ TOKEN_EXPIRE_MINUTES = int(
 # =========================
 # RATE LIMITING (Simples, em memória)
 # =========================
+import threading
 _request_log = defaultdict(list)
+_log_lock = threading.Lock()
 
 async def rate_limit(request: Request):
     """
     Limita para 20 requisições por minuto por IP.
     """
-    # Obtém IP do request
-    client_ip = request.client.host
+    client_ip = request.client.host if request.client else "unknown"
     now = time.time()
     
-    # Limpa registros antigos (> 60 segundos)
-    _request_log[client_ip] = [t for t in _request_log[client_ip] if now - t < 60]
-    
-    # Verifica limite
-    if len(_request_log[client_ip]) >= 20:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Muitas tentativas de login. Tente novamente em 1 minuto."
-        )
-    
-    # Registra a requisição
-    _request_log[client_ip].append(now)
+    with _log_lock:
+        # Limpa registros antigos (> 60 segundos)
+        _request_log[client_ip] = [t for t in _request_log[client_ip] if now - t < 60]
+        
+        # Verifica limite
+        if len(_request_log[client_ip]) >= 20:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Muitas tentativas de login. Tente novamente em 1 minuto."
+            )
+        
+        # Registra a requisição
+        _request_log[client_ip].append(now)
 
 # =========================
 # ROUTER

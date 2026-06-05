@@ -17,6 +17,8 @@ async def buscar_tutor_descricao(
         sep='<br>'
         texto = ''
         result = await tutor.find_one({"pipe": pipe})
+        if result is None:
+            raise HTTPException(status_code=404, detail="Documento do tutor não encontrado para o pipe informado.")
         if(pipe == 'inicio'):
             chaves = textos  or list(ContextoPipeInicio.model_fields.keys())
             texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
@@ -38,21 +40,6 @@ async def buscar_tutor_descricao(
         elif(pipe == 'avaliacao'):
             chaves = textos or list(ContextoPipeSelecaoMetricas.model_fields.keys())
             texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
-        elif(pipe == 'coleta-dado'):
-            chaves = textos or list(ContextoPipeColetaDados.model_fields.keys())
-            texto = concatenar_campos(result, chaves, sep=sep)
-        elif(pipe == 'selecao-modelo'):
-            chaves = textos or list(ContextoPipeSelecaoModelo.model_fields.keys())
-            texto = concatenar_campos(result, chaves, sep=sep)
-        elif(pipe == 'treinamento'):
-            chaves = textos  or list(ContextoPipeTreinamento.model_fields.keys())
-            texto = concatenar_campos(result, chaves, sep=sep)
-        elif(pipe == 'selecao-metricas'):
-            chaves = textos  or list(ContextoPipeSelecaoMetricas.model_fields.keys())
-            texto = concatenar_campos(result, chaves, sep=sep)
-        elif(pipe == 'avaliacao'):
-            chaves = textos  or list(ContextoPipeSelecaoMetricas.model_fields.keys())
-            texto = concatenar_campos(result, chaves, sep=sep)
         
         
         return {'descricao': texto, 'id': str(result['_id'])}

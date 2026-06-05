@@ -164,7 +164,7 @@ def get_nested(dados: Any, path: Union[str, Iterable[PathPart]], default: Any = 
                       return all(item.get(k) == v for k, v in parte.items())
                   return False
               atual = next((x for x in atual if _match(x)), default)
-              if atual is None and default is _SENTINEL:
+              if atual is _SENTINEL:
                   raise KeyError(f"Nenhum item corresponde ao filtro {parte} em {parts}")
           else:
               if default is not _SENTINEL:

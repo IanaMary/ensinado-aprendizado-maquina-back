@@ -8,8 +8,9 @@ from email.mime.multipart import MIMEMultipart
 import os
 from dotenv import load_dotenv
 
-# Carregar variáveis de ambiente
-load_dotenv()
+# Carregar variáveis de ambiente apenas em ambiente local
+if os.getenv("RENDER") is None:
+    load_dotenv()
 
 from app.schemas.usuarios import UserCreate, UserOut, UserInvite, UserInviteResponse
 from app.security import get_senha_hash, verificar_senha, get_usuario_atual

@@ -4,7 +4,9 @@ import secrets
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Carrega o .env apenas em ambiente local
+if os.getenv("RENDER") is None:
+    load_dotenv()
 
 from app.schemas.usuarios import UserActivate
 from app.security import get_senha_hash

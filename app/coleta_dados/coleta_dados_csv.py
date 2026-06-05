@@ -9,7 +9,8 @@ from io import StringIO, BytesIO
 from bson import ObjectId
 from app.database import arquivos, configuracoes_treinamento
 from app.deps import train_test_split
-from app.funcoes_genericas.funcoes_genericas import gerar_colunas_detalhes, df_para_base64, decode_excel_base64_df
+from app.funcoes_genericas.funcoes_genericas import gerar_colunas_detalhes, df_para_base64
+from app.utils.seed import get_sklearn_random_state
 
 router = APIRouter()
 
@@ -135,7 +136,7 @@ async def upload_csv(
 
     content_completo_b64 = content_b64
 
-    df_treino, df_teste = train_test_split(df, test_size=test_size or 0.2, random_state=42)
+    df_treino, df_teste = train_test_split(df, test_size=test_size or 0.2, random_state=get_sklearn_random_state() or 42)
 
     content_treino_b64 = df_para_base64(df_treino)
     content_teste_b64 = df_para_base64(df_teste)

@@ -82,6 +82,7 @@ def mock_db(mock_user):
     mock_config = _make_mock_collection()
     mock_modelos = _make_mock_collection()
     mock_verif = _make_mock_collection()
+    mock_pipeline = _make_mock_collection()
 
     # By default, return the test user for auth lookups
     mock_user_col.find_one = AsyncMock(return_value=mock_user)
@@ -105,6 +106,8 @@ def mock_db(mock_user):
         patch("app.coleta_dados.configuracao_treinamento.configuracoes_treinamento", mock_config),
         patch("app.metricas.metricas.modelos_treinados", mock_modelos),
         patch("app.metricas.metricas.arquivos", mock_arquivos),
+        patch("app.database.pipelines", mock_pipeline),
+        patch("app.routers.pipelines.pipelines", mock_pipeline),
     ]
 
     for p in patches:
@@ -117,6 +120,7 @@ def mock_db(mock_user):
         "configuracoes": mock_config,
         "modelos": mock_modelos,
         "verificadores": mock_verif,
+        "pipelines": mock_pipeline,
     }
 
     for p in patches:
