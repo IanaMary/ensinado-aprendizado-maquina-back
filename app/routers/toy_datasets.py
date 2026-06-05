@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 import pandas as pd
 
@@ -7,6 +7,9 @@ from app.models.dataset_config import (
     get_all_datasets, get_dataset_config, TOY_DATASETS, UCI_DATASETS
 )
 from app.utils.seed import seed_everything, get_seed
+from app.database import arquivos, configuracoes_treinamento
+from app.security import get_usuario_atual
+from app.funcoes_genericas.funcoes_genericas import df_para_base64
 
 router = APIRouter(prefix="/toy_datasets", tags=["Toy Datasets"])
 
@@ -34,7 +37,8 @@ async def listar_datasets(
 @router.get("/{dataset_name}")
 async def carregar_dataset(
     dataset_name: str,
-    seed: Optional[int] = Query(None, description="Seed para reprodutibilidade (opcional)")
+    seed: Optional[int] = Query(None, description="Seed para reprodutibilidade (opcional)"),
+    current_user: dict = Depends(get_usuario_atual),
 ):
     """Carrega um dataset e retorna no formato esperado pelo frontend."""
     ds = get_dataset_config(dataset_name)
@@ -84,8 +88,51 @@ async def carregar_dataset(
         tipo_target = None
         if target_col and target_col in df.columns:
             tipo_target = "Número" if df[target_col].dtype in ['int64', 'float64'] else "Texto"
-        
+
+        # Persistir no MongoDB para que o pipeline de treinamento encontre os IDs
+        # - Salva o dataframe completo em 'arquivos' (content_treino_base64/content_teste_base64)
+        # - Salva configuração inicial em 'configuracoes_treinamento'
+        content_treino_b64 = df_para_base64(df)
+        content_teste_b64 = df_para_base64(df.tail(max(1, len(df) // 4)))
+
+        atributos_iniciais = {c: True for c in colunas}
+        atributos_iniciais[target_col] = False
+
+        doc_arquivo = {
+            "arquivo_nome_treino": f"{ds.nome}.xlsx",
+            "arquivo_nome_teste": f"{ds.nome}_teste.xlsx",
+            "content_treino_base64": content_treino_b64,
+            "content_teste_base64": content_teste_b64,
+            "fonte": "toy_dataset",
+            "dataset_nome": ds.nome,
+            "num_linhas_total": len(df),
+            "num_linhas_treino": len(df),
+            "num_linhas_teste": max(1, len(df) // 4),
+            "num_colunas": len(colunas),
+            "atributos": atributos_iniciais,
+            "colunas_detalhes": colunas_detalhes,
+            "usuario_id": str(current_user.get("_id", "")),
+        }
+        result_arquivo = await arquivos.insert_one(doc_arquivo)
+        id_coleta = str(result_arquivo.inserted_id)
+
+        doc_config = {
+            "id_coleta": result_arquivo.inserted_id,
+            "test_size": 0.25,
+            "atributos": atributos_iniciais,
+            "tipo_target": tipo_target,
+            "target": target_col,
+            "prever_categoria": ds.tipo == DatasetType.CLASSIFICATION,
+            "dados_rotulados": target_col is not None,
+            "fonte": "toy_dataset",
+            "dataset_nome": ds.nome,
+        }
+        result_config = await configuracoes_treinamento.insert_one(doc_config)
+        id_configuracoes_treinamento = str(result_config.inserted_id)
+
         return {
+            "id_coleta": id_coleta,
+            "id_configuracoes_treinamento": id_configuracoes_treinamento,
             "nome_dataset": ds.nome,
             "fonte": ds.fonte,
             "colunas": colunas,
