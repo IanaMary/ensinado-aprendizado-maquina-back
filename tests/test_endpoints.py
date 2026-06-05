@@ -45,7 +45,7 @@ class TestConfiguracaoTreinamento:
             "tipo": "csv",
             "content_treino_base64": "",
             "content_teste_base64": "",
-            "colunas": {"col1": "number", "col2": "string"},
+            "colunas": {"col1": "Número", "col2": "Texto"},
             "colunas_detalhes": [],
         })
         response = await client.get(

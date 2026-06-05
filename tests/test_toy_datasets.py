@@ -104,7 +104,7 @@ class TestLoadToyDataset:
         assert response.status_code == 200
         data = response.json()
         assert data["prever_categoria"] is False  # regression
-        assert data["tipo_target"] == "number"
+        assert data["tipo_target"] == "Número"
 
     def test_load_nonexistent_dataset(self, client):
         """Should return 404 for non-existent dataset."""

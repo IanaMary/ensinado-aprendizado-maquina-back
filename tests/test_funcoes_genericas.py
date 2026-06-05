@@ -14,19 +14,19 @@ import pandas as pd
 
 class TestMapearTipo:
     def test_inteiro(self):
-        assert mapear_tipo("int64") == "number"
-        assert mapear_tipo("int32") == "number"
+        assert mapear_tipo("int64") == "Número"
+        assert mapear_tipo("int32") == "Número"
 
     def test_float(self):
-        assert mapear_tipo("float64") == "number"
-        assert mapear_tipo("float32") == "number"
+        assert mapear_tipo("float64") == "Número"
+        assert mapear_tipo("float32") == "Número"
 
     def test_boolean(self):
-        assert mapear_tipo("bool") == "boolean"
+        assert mapear_tipo("bool") == "Booleano"
 
     def test_string(self):
-        assert mapear_tipo("object") == "string"
-        assert mapear_tipo("string") == "string"
+        assert mapear_tipo("object") == "Texto"
+        assert mapear_tipo("string") == "Texto"
 
     def test_desconhecido(self):
         assert mapear_tipo("datetime64") == "datetime64"
@@ -121,6 +121,6 @@ class TestGerarColunasDetalhes:
         detalhes = gerar_colunas_detalhes(df)
         assert len(detalhes) == 2
         assert detalhes[0]["nome_coluna"] == "idade"
-        assert detalhes[0]["tipo_coluna"] == "number"
+        assert detalhes[0]["tipo_coluna"] == "Número"
         assert detalhes[1]["nome_coluna"] == "nome"
-        assert detalhes[1]["tipo_coluna"] == "string"
+        assert detalhes[1]["tipo_coluna"] == "Texto"

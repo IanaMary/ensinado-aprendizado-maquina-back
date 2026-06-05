@@ -24,7 +24,7 @@ class TestTreinamentoBase:
             "id_coleta": str(coleta_id),
             "target": "target",
             "atributos": {"f1": True, "f2": True},
-            "tipo_target": "number",
+            "tipo_target": "Número",
         })
         mock_db["arquivos"].find_one = AsyncMock(return_value={
             "_id": coleta_id,

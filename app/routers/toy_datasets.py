@@ -71,19 +71,19 @@ async def carregar_dataset(
         colunas = list(df.columns)
         colunas_detalhes = []
         for col in colunas:
-            tipo_col = "Numerico" if df[col].dtype in ['int64', 'float64'] else "Texto"
+            tipo_col = "Número" if df[col].dtype in ['int64', 'float64'] else "Texto"
             colunas_detalhes.append({
                 "nome_coluna": col,
                 "tipo_coluna": tipo_col
             })
-        
+
         # Dados para preview (limitar a 50 linhas)
         dados = df.head(50).to_dict(orient='records')
-        
+
         # Informacoes do target
         tipo_target = None
         if target_col and target_col in df.columns:
-            tipo_target = "number" if df[target_col].dtype in ['int64', 'float64'] else "string"
+            tipo_target = "Número" if df[target_col].dtype in ['int64', 'float64'] else "Texto"
         
         return {
             "nome_dataset": ds.nome,

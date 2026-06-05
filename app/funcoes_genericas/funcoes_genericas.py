@@ -12,12 +12,12 @@ import re
 
 def mapear_tipo(dtype_str: str) -> str:
     tipo = dtype_str.lower()
-    if tipo in ("int64", "int32", "float64", "float32"):
-        return "number"
-    elif tipo in ("bool", "boolean"):
-        return "boolean"
-    elif tipo in ("object", "string"):
-        return "string"
+    if tipo in ("int64", "int32", "float64", "float32", "number", "numerico", "número"):
+        return "Número"
+    elif tipo in ("bool", "boolean", "booleano"):
+        return "Booleano"
+    elif tipo in ("object", "string", "texto"):
+        return "Texto"
     return dtype_str  # fallback: retorna como está
 
 
