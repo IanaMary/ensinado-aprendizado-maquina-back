@@ -110,67 +110,67 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
             y_teste = df_teste[target]
             y_pred = modelo_treinado.predict(X_teste)
 
-                print(f"[PRINT] Modelo deserializado com sucesso")
-                logger.debug("Modelo deserializado com sucesso")
+            print(f"[PRINT] Modelo deserializado com sucesso")
+            logger.debug("Modelo deserializado com sucesso")
 
-                atributos = doc["atributos"]
-                target = doc["target"]
-                print(f"[PRINT] Atributos: {atributos}, Target: {target}")
-                logger.debug(f"Atributos: {atributos}, Target: {target}")
-                
-                print(f"[PRINT] About to process {len(request.metricas)} metricas")
-                
-                for metrica in request.metricas:
-                    print(f"[PRINT] Processing metrica: {metrica.label} ({metrica.valor})")
-                    nome_metrica = metrica.label
-                    func_key = metrica.valor
+            atributos = doc["atributos"]
+            target = doc["target"]
+            print(f"[PRINT] Atributos: {atributos}, Target: {target}")
+            logger.debug(f"Atributos: {atributos}, Target: {target}")
 
-                    try:
-                        if func_key == "confusion_matrix":
-                            print(f"[PRINT] Computing confusion_matrix")
-                            cm = confusion_matrix(y_teste, y_pred)
-                            classes = sorted(set(y_teste) | set(y_pred))
-                            valor = {
-                                "matriz": cm.tolist(),
-                                "classes": classes,
-                                "total": int(cm.sum())
-                            }
+            print(f"[PRINT] About to process {len(request.metricas)} metricas")
 
-                        elif func_key == "roc_auc_score":
-                            print(f"[PRINT] Computing roc_auc_score")
-                            func = metricas_disponiveis.get(func_key)
-                            if not func:
-                                resultados_formatados[nome_metrica][nome_modelo] = "Métrica não suportada"
-                                continue
-                            if len(set(y_teste)) != 2:
-                                resultados_formatados[nome_metrica][nome_modelo] = "ROC AUC requer problema binário"
-                                continue
-                            y_prob = modelo_treinado.predict_proba(X_teste)[:, 1]
-                            valor = func(y_teste, y_prob)
+            for metrica in request.metricas:
+                print(f"[PRINT] Processing metrica: {metrica.label} ({metrica.valor})")
+                nome_metrica = metrica.label
+                func_key = metrica.valor
 
+                try:
+                    if func_key == "confusion_matrix":
+                        print(f"[PRINT] Computing confusion_matrix")
+                        cm = confusion_matrix(y_teste, y_pred)
+                        classes = sorted(set(y_teste) | set(y_pred))
+                        valor = {
+                            "matriz": cm.tolist(),
+                            "classes": classes,
+                            "total": int(cm.sum())
+                        }
+
+                    elif func_key == "roc_auc_score":
+                        print(f"[PRINT] Computing roc_auc_score")
+                        func = metricas_disponiveis.get(func_key)
+                        if not func:
+                            resultados_formatados[nome_metrica][nome_modelo] = "Métrica não suportada"
+                            continue
+                        if len(set(y_teste)) != 2:
+                            resultados_formatados[nome_metrica][nome_modelo] = "ROC AUC requer problema binário"
+                            continue
+                        y_prob = modelo_treinado.predict_proba(X_teste)[:, 1]
+                        valor = func(y_teste, y_prob)
+
+                    else:
+                        print(f"[PRINT] Computing {func_key}")
+                        func = metricas_disponiveis.get(func_key)
+                        if not func:
+                            resultados_formatados[nome_metrica][nome_modelo] = "Métrica não suportada"
+                            continue
+
+                        if func_key in {"precision_score", "recall_score", "f1_score"}:
+                            valor = func(y_teste, y_pred, average="weighted", zero_division=0)
+                        elif func_key == "accuracy_score":
+                            valor = func(y_teste, y_pred)
                         else:
-                            print(f"[PRINT] Computing {func_key}")
-                            func = metricas_disponiveis.get(func_key)
-                            if not func:
-                                resultados_formatados[nome_metrica][nome_modelo] = "Métrica não suportada"
-                                continue
-
-                            if func_key in {"precision_score", "recall_score", "f1_score"}:
-                                valor = func(y_teste, y_pred, average="weighted", zero_division=0)
-                            elif func_key == "accuracy_score":
+                            try:
+                                valor = func(y_teste, y_pred, average="weighted")
+                            except TypeError:
                                 valor = func(y_teste, y_pred)
-                            else:
-                                try:
-                                    valor = func(y_teste, y_pred, average="weighted")
-                                except TypeError:
-                                    valor = func(y_teste, y_pred)
 
                         print(f"[PRINT] Metric {nome_metrica} for {nome_modelo}: {valor}")
                         resultados_formatados[nome_metrica][nome_modelo] = valor
 
-                    except Exception as e:
-                        print(f"[PRINT] Exception computing {nome_metrica} for {nome_modelo}: {e}")
-                        resultados_formatados[nome_metrica][nome_modelo] = f"Erro ao calcular: {str(e)}"
+                except Exception as e:
+                    print(f"[PRINT] Exception computing {nome_metrica} for {nome_modelo}: {e}")
+                    resultados_formatados[nome_metrica][nome_modelo] = f"Erro ao calcular: {str(e)}"
 
         except Exception as erro_geral:
             for metrica in request.metricas:
