@@ -26,12 +26,15 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
     }
 
     for modelo in request.modelos:
+        print(f"[PRINT] Processing modelo: {modelo}")
         id_modelo = modelo.id
         nome_modelo = modelo.label
+        print(f"[PRINT] id_modelo: {id_modelo}, nome_modelo: {nome_modelo}")
 
         try:
             doc = await modelos_treinados.find_one({"_id": ObjectId(id_modelo)})
-        except Exception:
+        except Exception as e:
+            print(f"[PRINT] Exception finding model: {e}")
             raise HTTPException(status_code=400, detail=f"ID de modelo inválido: {id_modelo}")
 
             if not doc:
