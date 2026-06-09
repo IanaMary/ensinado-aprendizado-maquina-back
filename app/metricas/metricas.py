@@ -50,13 +50,16 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
             
             # Busca o arquivo de teste pelo ID (separado do documento do modelo)
             arquivo_id = doc.get("arquivo_id")
-            if not arquivo_id:
-                base64_str = doc.get("arq_teste")
-            else:
+            base64_str = None
+            
+            if arquivo_id:
                 arquivo_doc = await arquivos.find_one({"_id": ObjectId(arquivo_id)})
-                if not arquivo_doc:
-                    raise HTTPException(status_code=404, detail="Arquivo de teste não encontrado.")
-                base64_str = arquivo_doc.get("content_teste_base64")
+                if arquivo_doc:
+                    base64_str = arquivo_doc.get("content_teste_base64")
+            
+            # Fallback: usa o arq_teste do próprio modelo se não encontrou no arquivo
+            if not base64_str:
+                base64_str = doc.get("arq_teste")
 
             if not base64_str:
                 raise HTTPException(status_code=400, detail="Conteúdo do arquivo de teste ausente.")
