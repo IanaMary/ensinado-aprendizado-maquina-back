@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 from fastapi import APIRouter, HTTPException
 from app.deps import pd, metricas_disponiveis
 from app.database import modelos_treinados, arquivos
@@ -64,23 +68,23 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
             if not base64_str:
                 raise HTTPException(status_code=400, detail="Conteúdo do arquivo de teste ausente.")
             
-            print(f"DEBUG: base64_str length: {len(base64_str) if base64_str else 0}")
+            logger.debug(f"DEBUG: base64_str length: {len(base64_str) if base64_str else 0}")
             
             arquivo_bytes = base64.b64decode(base64_str)
-            print(f"DEBUG: arquivo_bytes length: {len(arquivo_bytes)}")
+            logger.debug(f"DEBUG: arquivo_bytes length: {len(arquivo_bytes)}")
             
             try:
                 df_teste = pd.read_excel(io.BytesIO(arquivo_bytes), engine="openpyxl")
-                print(f"DEBUG: df_teste shape: {df_teste.shape}, columns: {list(df_teste.columns)}")
+                logger.debug(f"DEBUG: df_teste shape: {df_teste.shape}, columns: {list(df_teste.columns)}")
             except Exception as e:
-                print(f"DEBUG: Excel read error: {e}")
+                logger.debug(f"DEBUG: Excel read error: {e}")
                 try:
                     text = arquivo_bytes.decode("utf-8")
                 except UnicodeDecodeError:
                     text = arquivo_bytes.decode("latin-1")
                 sep = ";" if ";" in text.split("\n")[0] else ","
                 df_teste = pd.read_csv(pd.io.common.StringIO(text), sep=sep)
-                print(f"DEBUG: CSV df_teste shape: {df_teste.shape}, columns: {list(df_teste.columns)}")
+                logger.debug(f"DEBUG: CSV df_teste shape: {df_teste.shape}, columns: {list(df_teste.columns)}")
 
             X_teste = df_teste[atributos]
             y_teste = df_teste[target]
