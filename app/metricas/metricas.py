@@ -18,6 +18,7 @@ router = APIRouter()
 
 @router.post("/avaliar_modelos")
 async def avaliar_modelos(request: AvaliacaoModelosRequest):
+    logger.info(f"avaliar_modelos called with {len(request.modelos)} modelos and {len(request.metricas)} metricas")
     # estrutura: {nome_metrica: {label_modelo: valor}}
     resultados_formatados = {
         metrica.label: {} for metrica in request.metricas
@@ -33,24 +34,29 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
             raise HTTPException(status_code=400, detail=f"ID de modelo inválido: {id_modelo}")
 
             if not doc:
+                logger.warning(f"Modelo não encontrado: {id_modelo}")
                 for metrica in request.metricas:
                     resultados_formatados[metrica.label][nome_modelo] = "Modelo não encontrado"
                 continue
 
             modelo_treinado_bytes = bytes(doc["modelo_treinado"])
+            logger.debug(f"Modelo bytes length: {len(modelo_treinado_bytes)}")
 
             # Recupera o checksum esperado
             checksum_esperado = doc.get("checksum")
             if checksum_esperado:
                 checksum_atual = hashlib.sha256(modelo_treinado_bytes).hexdigest()
                 if checksum_atual != checksum_esperado:
+                    logger.error(f"Checksum mismatch for model {id_modelo}")
                     raise HTTPException(status_code=400, detail="Erro de integridade: checksum do modelo não corresponde.")
 
             # Desserializa o modelo com joblib
             modelo_treinado = joblib.load(io.BytesIO(modelo_treinado_bytes))
+            logger.debug("Modelo deserializado com sucesso")
 
             atributos = doc["atributos"]
             target = doc["target"]
+            logger.debug(f"Atributos: {atributos}, Target: {target}")
             
             # Busca o arquivo de teste pelo ID (separado do documento do modelo)
             arquivo_id = doc.get("arquivo_id")
