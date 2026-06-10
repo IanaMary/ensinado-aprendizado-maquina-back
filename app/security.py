@@ -61,6 +61,7 @@ def verificar_senha(
 async def get_usuario_atual(
     token: str = Depends(oauth2_scheme)
 ):
+    print(f"[PRINT] get_usuario_atual called with token: {token[:20]}...")
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Não foi possível validar as credenciais.",
@@ -73,20 +74,26 @@ async def get_usuario_atual(
             SECRET_KEY,
             algorithms=[ALGORITHM]
         )
+        print(f"[PRINT] JWT decoded successfully: {payload}")
 
         email: str | None = payload.get("sub")
+        print(f"[PRINT] Email from token: {email}")
 
         if email is None:
+            print("[PRINT] No email in token")
             raise credentials_exception
 
-    except PyJWTError:
+    except PyJWTError as e:
+        print(f"[PRINT] JWT decode error: {e}")
         raise credentials_exception
 
     user_doc = await colecao_usuario.find_one(
         {"email": email}
     )
+    print(f"[PRINT] User found: {user_doc is not None}")
 
     if user_doc is None:
+        print("[PRINT] User not found in database")
         raise credentials_exception
 
     return user_doc
