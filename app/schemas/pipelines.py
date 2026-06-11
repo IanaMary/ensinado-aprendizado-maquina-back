@@ -13,6 +13,10 @@ class PipelineCreate(BaseModel):
     resultadoTreinamento: Optional[Dict[str, Any]] = None
     resultadosDasAvaliacoes: Optional[Dict[str, Any]] = None
     status: Optional[str] = "rascunho"
+    is_public: Optional[bool] = False
+    dificuldade: Optional[str] = "iniciante"
+    tags: Optional[List[str]] = []
+    professor_id: Optional[str] = None
 
 
 class PipelineUpdate(BaseModel):
@@ -25,3 +29,6 @@ class PipelineUpdate(BaseModel):
     resultadoTreinamento: Optional[Dict[str, Any]] = None
     resultadosDasAvaliacoes: Optional[Dict[str, Any]] = None
     status: Optional[str] = None
+    is_public: Optional[bool] = None
+    dificuldade: Optional[str] = None
+    tags: Optional[List[str]] = None

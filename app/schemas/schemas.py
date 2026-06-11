@@ -19,6 +19,7 @@ class DatasetRequest(BaseModel):
     tipo_arquivo: str              
     configuracao_id: str   
     modelo_id: str           
+    hiperparametros: Optional[Dict[str, Any]] = {}           
     
 class AvaliacaoRequest(BaseModel):
     dados_teste: List[Dict[str, Any]]

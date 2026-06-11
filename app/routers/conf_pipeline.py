@@ -18,7 +18,7 @@ async def get_all_coleta(
     limite: int = Query(10, ge=1, le=100),
     pagina: int = Query(1, ge=1),
     ordenar: Optional[str] = Query(None, description="Campo para ordenar, ex: 'label', 'tipoItem'"),
-    direcao: Optional[str] = Query("asc", regex="^(asc|desc)$", description="Direção da ordenação: 'asc' ou 'desc'")
+    direcao: Optional[str] = Query("asc", pattern="^(asc|desc)$", description="Direção da ordenação: 'asc' ou 'desc'")
 ):
   skip = (pagina - 1) * limite
 
@@ -46,7 +46,7 @@ async def get_all_modelos(
     limite: int = Query(10, ge=1, le=100),
     pagina: int = Query(1, ge=1),
     ordenar: Optional[str] = Query(None, description="Campo para ordenar, ex: 'label', 'tipoItem'"),
-    direcao: Optional[str] = Query("asc", regex="^(asc|desc)$", description="Direção da ordenação: 'asc' ou 'desc'"),
+    direcao: Optional[str] = Query("asc", pattern="^(asc|desc)$", description="Direção da ordenação: 'asc' ou 'desc'"),
     prever_categoria: Optional[bool] = Query(None, description=""),
     dados_rotulados: Optional[bool] = Query(None, description="")
 ):
@@ -88,7 +88,7 @@ async def get_all_modelos(
     limite: int = Query(10, ge=1, le=100),
     pagina: int = Query(1, ge=1),
     ordenar: Optional[str] = Query(None, description="Campo para ordenar, ex: 'label', 'tipoItem'"),
-    direcao: Optional[str] = Query("asc", regex="^(asc|desc)$", description="Direção da ordenação: 'asc' ou 'desc'")
+    direcao: Optional[str] = Query("asc", pattern="^(asc|desc)$", description="Direção da ordenação: 'asc' ou 'desc'")
 ):
   skip = (pagina - 1) * limite
 

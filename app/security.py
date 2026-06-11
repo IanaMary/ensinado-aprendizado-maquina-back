@@ -7,6 +7,10 @@ from fastapi.security import OAuth2PasswordBearer
 from jwt import PyJWTError
 from passlib.context import CryptContext
 
+# Workaround para compatibilidade do passlib com bcrypt 4.0+ no Python 3.13
+import passlib.handlers.bcrypt
+passlib.handlers.bcrypt.detect_wrap_bug = lambda ident: False
+
 from app.database import colecao_usuario
 
 # Carrega o .env apenas em ambiente local

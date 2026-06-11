@@ -11,6 +11,7 @@ from app.deps import pd
 from app.schemas.schemas import DatasetRequest
 from app.database import configuracoes_treinamento, arquivos, opcoes_modelos, modelos_treinados
 from app.utils.seed import get_sklearn_random_state
+from app.funcoes_genericas.funcoes_genericas import converter_numpy
 
 
 HEX_24 = re.compile(r"^[0-9a-fA-F]{24}$")
@@ -33,6 +34,8 @@ async def treinar_modelo_generico(
     **kwargs_adicionais
 ) -> Dict[str, Any]:
     """Treina um modelo genérico e retorna o resultado."""
+    print(f"[PRINT] treinar_modelo_generico iniciado para {nome_modelo_label}")
+    print(f"[PRINT] Request: {request.model_dump()}")
     tipo = request.tipo_arquivo.lower()
 
     arquivo_oid = _validar_object_id(request.arquivo_id, "arquivo_id")
@@ -56,10 +59,13 @@ async def treinar_modelo_generico(
         for h in modelo_doc.get("hiperparametros", [])
     }
     
-    # Aplicar seed global se configurado
-    random_state = get_sklearn_random_state()
-    if random_state is not None:
-        hiperparametros["random_state"] = random_state
+    # Aplicar seed global se configurado (apenas se o modelo suportar)
+    import inspect
+    sig = inspect.signature(instancia_classe.__init__)
+    if "random_state" in sig.parameters:
+        random_state = get_sklearn_random_state()
+        if random_state is not None:
+            hiperparametros["random_state"] = random_state
     
     atributos: List[str] = [k for k, v in conf_doc.get("atributos", {}).items() if v]
     target: str = conf_doc.get("target")
@@ -109,6 +115,7 @@ async def treinar_modelo_generico(
             "hiperparametros": hiperparametros,
             "atributos": atributos,
             "target": target,
+            "classes": list(map(str, modelo.classes_)),
             "modelo_treinado": bson.Binary(modelo_bytes),
             "checksum": checksum,
             "modelo": modelo_doc.get('valor'),
@@ -117,9 +124,12 @@ async def treinar_modelo_generico(
         id_result = str(result.inserted_id)
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao treinar o modelo: {str(e)}")
+        print(f"[ERROR] treinar_modelo_generico failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Erro no treinamento: {str(e)}")
     
-    return {
+    return converter_numpy({
         "atributos": atributos,
         "target": target,
         "modelo_treinado": str(modelo),
@@ -130,4 +140,4 @@ async def treinar_modelo_generico(
         "modelo": nome_modelo_label.lower().replace(" ", "_"),
         "nome_modelo": modelo_doc.get('label'),
         "id": id_result
-    }
+    })

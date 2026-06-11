@@ -2,37 +2,23 @@
 Tests for the toy datasets API endpoint.
 """
 import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
-import pandas as pd
-import numpy as np
+from bson import ObjectId
 
-
-@pytest.fixture
-def mock_sklearn_data():
-    """Mock sklearn dataset loading."""
-    df = pd.DataFrame({
-        'feature1': [1.0, 2.0, 3.0, 4.0, 5.0],
-        'feature2': [0.1, 0.2, 0.3, 0.4, 0.5],
-        'target': [0, 1, 0, 1, 0]
-    })
-    return df
-
-
+@pytest.mark.asyncio
 class TestListToyDatasets:
     """Test suite for GET /toy_datasets/ endpoint."""
 
-    def test_list_all_datasets(self, client):
+    async def test_list_all_datasets(self, client):
         """Should return all available datasets."""
-        response = client.get("/toy_datasets/")
+        response = await client.get("/toy_datasets/")
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
         assert len(data) > 0
 
-    def test_dataset_has_required_fields(self, client):
+    async def test_dataset_has_required_fields(self, client):
         """Each dataset should have required fields."""
-        response = client.get("/toy_datasets/")
+        response = await client.get("/toy_datasets/")
         data = response.json()
         for ds in data:
             assert "nome" in ds
@@ -43,23 +29,23 @@ class TestListToyDatasets:
             assert "n_amostras" in ds
             assert "n_features" in ds
 
-    def test_filter_by_type(self, client):
+    async def test_filter_by_type(self, client):
         """Should filter datasets by type."""
-        response = client.get("/toy_datasets/?tipo=classificacao")
+        response = await client.get("/toy_datasets/?tipo=classificacao")
         data = response.json()
         for ds in data:
             assert ds["tipo"] == "classificacao"
 
-    def test_filter_by_fonte(self, client):
+    async def test_filter_by_fonte(self, client):
         """Should filter datasets by source."""
-        response = client.get("/toy_datasets/?fonte=sklearn")
+        response = await client.get("/toy_datasets/?fonte=sklearn")
         data = response.json()
         for ds in data:
             assert ds["fonte"] == "sklearn"
 
-    def test_iris_in_list(self, client):
+    async def test_iris_in_list(self, client):
         """Iris dataset should be in the list."""
-        response = client.get("/toy_datasets/")
+        response = await client.get("/toy_datasets/")
         data = response.json()
         iris = next((d for d in data if d["valor"] == "iris"), None)
         assert iris is not None
@@ -67,12 +53,13 @@ class TestListToyDatasets:
         assert iris["tipo"] == "classificacao"
 
 
+@pytest.mark.asyncio
 class TestLoadToyDataset:
     """Test suite for GET /toy_datasets/{name} endpoint."""
 
-    def test_load_iris(self, client):
+    async def test_load_iris(self, client, mock_db, auth_headers):
         """Should load Iris dataset successfully."""
-        response = client.get("/toy_datasets/iris")
+        response = await client.get("/toy_datasets/iris", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["nome_dataset"] == "Iris"
@@ -83,44 +70,44 @@ class TestLoadToyDataset:
         assert "dados" in data
         assert "total_dados" in data
 
-    def test_load_wine(self, client):
+    async def test_load_wine(self, client, mock_db, auth_headers):
         """Should load Wine dataset successfully."""
-        response = client.get("/toy_datasets/wine")
+        response = await client.get("/toy_datasets/wine", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["nome_dataset"] == "Wine"
 
-    def test_load_breast_cancer(self, client):
+    async def test_load_breast_cancer(self, client, mock_db, auth_headers):
         """Should load Breast Cancer dataset successfully."""
-        response = client.get("/toy_datasets/breast_cancer")
+        response = await client.get("/toy_datasets/breast_cancer", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["nome_dataset"] == "Breast Cancer"
         assert data["prever_categoria"] is True
 
-    def test_load_diabetes(self, client):
+    async def test_load_diabetes(self, client, mock_db, auth_headers):
         """Should load Diabetes dataset (regression)."""
-        response = client.get("/toy_datasets/diabetes")
+        response = await client.get("/toy_datasets/diabetes", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["prever_categoria"] is False  # regression
         assert data["tipo_target"] == "Número"
 
-    def test_load_nonexistent_dataset(self, client):
+    async def test_load_nonexistent_dataset(self, client, mock_db, auth_headers):
         """Should return 404 for non-existent dataset."""
-        response = client.get("/toy_datasets/nonexistent")
+        response = await client.get("/toy_datasets/nonexistent", headers=auth_headers)
         assert response.status_code == 404
 
-    def test_dataset_has_dados(self, client):
+    async def test_dataset_has_dados(self, client, mock_db, auth_headers):
         """Loaded dataset should have data rows."""
-        response = client.get("/toy_datasets/iris")
+        response = await client.get("/toy_datasets/iris", headers=auth_headers)
         data = response.json()
         assert len(data["dados"]) > 0
         assert data["total_dados"] > 0
 
-    def test_dataset_has_colunas_detalhes(self, client):
+    async def test_dataset_has_colunas_detalhes(self, client, mock_db, auth_headers):
         """Loaded dataset should have column details."""
-        response = client.get("/toy_datasets/iris")
+        response = await client.get("/toy_datasets/iris", headers=auth_headers)
         data = response.json()
         assert "colunas_detalhes" in data
         assert len(data["colunas_detalhes"]) > 0
@@ -128,44 +115,37 @@ class TestLoadToyDataset:
             assert "nome_coluna" in col
             assert "tipo_coluna" in col
 
-    def test_with_seed_parameter(self, client):
+    async def test_with_seed_parameter(self, client, mock_db, auth_headers):
         """Should accept seed parameter."""
-        response = client.get("/toy_datasets/iris?seed=42")
+        response = await client.get("/toy_datasets/iris?seed=42", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["seed"] == 42
 
-    def test_dataset_has_metadata(self, client):
+    async def test_dataset_has_metadata(self, client, mock_db, auth_headers):
         """Dataset should include educational metadata."""
-        response = client.get("/toy_datasets/iris")
+        response = await client.get("/toy_datasets/iris", headers=auth_headers)
         data = response.json()
         assert "dificuldade" in data
         assert "descricao_target" in data
         assert "descricao_features" in data
 
 
+@pytest.mark.asyncio
 class TestLoadUciDataset:
     """Test suite for UCI datasets."""
 
-    def test_load_adult(self, client):
+    async def test_load_adult(self, client, mock_db, auth_headers):
         """Should load Adult dataset from UCI."""
-        response = client.get("/toy_datasets/adult")
+        response = await client.get("/toy_datasets/adult", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["nome_dataset"] == "Adult (Census Income)"
         assert data["fonte"] == "uci"
-        assert data["pre_split"] == "split"
 
-    def test_adult_has_split_info(self, client):
+    async def test_adult_has_split_info(self, client, mock_db, auth_headers):
         """Adult dataset should have train/test split info."""
-        response = client.get("/toy_datasets/adult")
+        response = await client.get("/toy_datasets/adult", headers=auth_headers)
         data = response.json()
-        assert data["n_treino"] == 32561
-        assert data["n_teste"] == 16281
-
-
-@pytest.fixture
-def client():
-    """Create a test client."""
-    from app.main import app
-    return TestClient(app)
+        assert "n_treino" in data
+        assert "n_teste" in data

@@ -9,7 +9,7 @@ import base64
 from app.database import arquivos, configuracoes_treinamento
 from app.deps import train_test_split
 from app.schemas.schemas import ConfiguracaoColetaRequest
-from app.funcoes_genericas.funcoes_genericas import validar_xlsx, ler_excel, df_para_base64, gerar_colunas_detalhes, montar_resposta_coleta
+from app.funcoes_genericas.funcoes_genericas import validar_xlsx, ler_excel, df_para_base64, gerar_colunas_detalhes, montar_resposta_coleta, converter_numpy
 from app.utils.seed import get_sklearn_random_state
 
 
@@ -130,9 +130,9 @@ async def upload_xlsx(
             raise HTTPException(404, "Documento com id_coleta não encontrado")
 
     # Aqui retornamos a lista simples de nomes das colunas para o front
-    return montar_resposta_coleta(
+    return converter_numpy(montar_resposta_coleta(
         id_configuracoes_treinamento=id_configuracoes_treinamento,
-        id_coleta=id_coleta,
+        id_coleta=str(id_coleta),
         atributos={coluna: False for coluna in df_treino.columns},  # retorna dicionário com False  # RETORNO: lista simples
         tipo=tipo,
         arquivo_nome_treino=arquivo_nome_treino,
@@ -140,7 +140,7 @@ async def upload_xlsx(
         df_treino=df_treino,
         df_teste=df_teste,
         colunas_detalhes=colunas_detalhes
-    )
+    ))
 
     
 @router.get("/unique")

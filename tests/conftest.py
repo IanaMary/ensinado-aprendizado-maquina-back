@@ -4,6 +4,17 @@ import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock, patch, MagicMock
 from bson import ObjectId
+import bcrypt
+import pandas as pd
+
+# Monkeypatch bcrypt for passlib compatibility on Python 3.13
+original_hashpw = bcrypt.hashpw
+def mocked_hashpw(password, salt):
+    # Bcrypt 4.0+ on Python 3.13 has issues with passlib's long-password bug detection
+    if len(password) > 72:
+        password = password[:72]
+    return original_hashpw(password, salt)
+bcrypt.hashpw = mocked_hashpw
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only-32chars!")
 os.environ.setdefault("MONGO_URI", "mongodb://localhost:27017")
@@ -57,8 +68,18 @@ def auth_headers(valid_token):
 def _make_mock_collection():
     col = MagicMock()
     col.find_one = AsyncMock(return_value=None)
-    col.find = MagicMock(return_value=MagicMock(to_list=AsyncMock(return_value=[])))
+    
+    # Chainable mock for find().sort().skip().limit().to_list()
+    cursor = MagicMock()
+    cursor.sort.return_value = cursor
+    cursor.skip.return_value = cursor
+    cursor.limit.return_value = cursor
+    cursor.collation.return_value = cursor
+    cursor.to_list = AsyncMock(return_value=[])
+    
+    col.find = MagicMock(return_value=cursor)
     col.insert_one = AsyncMock(return_value=MagicMock(inserted_id=ObjectId()))
+    col.insert_many = AsyncMock(return_value=MagicMock(inserted_ids=[ObjectId()]))
     col.update_one = AsyncMock(return_value=MagicMock(matched_count=1, modified_count=1))
     col.delete_one = AsyncMock(return_value=MagicMock(deleted_count=1))
     col.aggregate = MagicMock(return_value=MagicMock(to_list=AsyncMock(return_value=[])))
@@ -94,20 +115,41 @@ def mock_db(mock_user):
         patch("app.database.configuracoes_treinamento", mock_config),
         patch("app.database.modelos_treinados", mock_modelos),
         patch("app.database.verificadores_professor", mock_verif),
+        patch("app.database.opcoes_coletas", mock_pipeline),
+        patch("app.database.opcoes_modelos", mock_modelos),
+        patch("app.database.opcoes_metricas", mock_pipeline),
+        patch("app.database.pipelines", mock_pipeline),
+
         patch("app.routers.login.colecao_usuario", mock_user_col),
         patch("app.routers.usuarios.colecao_usuario", mock_user_col),
         patch("app.routers.usuarios.verificadores_professor", mock_verif),
         patch("app.security.colecao_usuario", mock_user_col),
         patch("app.routers.tutor.tutor", mock_tutor),
+        
+        patch("app.routers.conf_pipeline.opcoes_coletas", mock_pipeline),
+        patch("app.routers.conf_pipeline.opcoes_modelos", mock_modelos),
+        patch("app.routers.conf_pipeline.opcoes_metricas", mock_pipeline),
+        
         patch("app.coleta_dados.coleta_dados_csv.arquivos", mock_arquivos),
+        patch("app.coleta_dados.coleta_dados_csv.configuracoes_treinamento", mock_config),
         patch("app.coleta_dados.coleta_dados_xlxs.arquivos", mock_arquivos),
         patch("app.coleta_dados.coleta_dados_xlxs.configuracoes_treinamento", mock_config),
         patch("app.coleta_dados.configuracao_treinamento.arquivos", mock_arquivos),
         patch("app.coleta_dados.configuracao_treinamento.configuracoes_treinamento", mock_config),
+        
         patch("app.metricas.metricas.modelos_treinados", mock_modelos),
         patch("app.metricas.metricas.arquivos", mock_arquivos),
-        patch("app.database.pipelines", mock_pipeline),
+        
         patch("app.routers.pipelines.pipelines", mock_pipeline),
+        patch("app.routers.treinamento_base.arquivos", mock_arquivos),
+        patch("app.routers.treinamento_base.configuracoes_treinamento", mock_config),
+        patch("app.routers.treinamento_base.opcoes_modelos", mock_modelos),
+        patch("app.routers.treinamento_base.modelos_treinados", mock_modelos),
+        patch("app.routers.toy_datasets.arquivos", mock_arquivos),
+        patch("app.routers.toy_datasets.configuracoes_treinamento", mock_config),
+        patch("ucimlrepo.fetch_ucirepo", MagicMock(return_value=MagicMock(
+            data=MagicMock(original=pd.DataFrame({"col1": [1, 2], "target": [0, 1]}))
+        ))),
     ]
 
     for p in patches:

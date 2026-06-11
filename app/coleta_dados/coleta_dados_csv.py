@@ -9,7 +9,7 @@ from io import StringIO, BytesIO
 from bson import ObjectId
 from app.database import arquivos, configuracoes_treinamento
 from app.deps import train_test_split
-from app.funcoes_genericas.funcoes_genericas import gerar_colunas_detalhes, df_para_base64
+from app.funcoes_genericas.funcoes_genericas import gerar_colunas_detalhes, df_para_base64, decode_excel_base64_df, converter_numpy
 from app.utils.seed import get_sklearn_random_state
 
 router = APIRouter()
@@ -109,17 +109,17 @@ async def upload_csv(
         atributos = doc.get("atributos", {})
         colunas_detalhes = doc.get("colunas_detalhes", [])
 
-        return {
-            "id_coleta": id_coleta,
+        return converter_numpy({
+            "id_coleta": str(id_coleta),
             "id_configuracoes_treinamento": str(config["_id"]) if config else None,
             "filename": file.filename,
             "arquivo_nome_treino": doc.get("arquivo_nome_treino"),
             "arquivo_nome_teste": file.filename,
             "tipo": tipo,
-            "num_linhas_total": df_treino.shape[0] + df_teste.shape[0],
-            "num_linhas_treino": df_treino.shape[0],
-            "num_linhas_teste": df_teste.shape[0],
-            "num_colunas": df.shape[1],
+            "num_linhas_total": int(df_treino.shape[0] + df_teste.shape[0]),
+            "num_linhas_treino": int(df_treino.shape[0]),
+            "num_linhas_teste": int(df_teste.shape[0]),
+            "num_colunas": int(df.shape[1]),
             "colunas": df.columns.tolist(),
             "colunas_detalhes": colunas_detalhes,
             "atributos": atributos,
@@ -129,7 +129,7 @@ async def upload_csv(
             "tipo_target": config.get("tipo_target") if config else None,
             "prever_categoria": config.get("prever_categoria", False) if config else False,
             "dados_rotulados": config.get("dados_rotulados", False) if config else False,
-        }
+        })
 
     colunas_detalhes = gerar_colunas_detalhes(df)
     atributos = {coluna: False for coluna in df.columns}
@@ -168,7 +168,7 @@ async def upload_csv(
     result_config = await configuracoes_treinamento.insert_one(doc_config)
     id_configuracoes_treinamento = str(result_config.inserted_id)
 
-    return {
+    return converter_numpy({
         "id_coleta": id_coleta_novo,
         "id_configuracoes_treinamento": id_configuracoes_treinamento,
         "filename": file.filename,
@@ -185,4 +185,4 @@ async def upload_csv(
         "preview_teste": df_teste.head(5).to_dict(orient="records"),
         "prever_categoria": False,
         "dados_rotulados": False,
-    }
+    })

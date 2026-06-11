@@ -1,7 +1,7 @@
 from fastapi import UploadFile, HTTPException
 from typing import Any, Dict, List, Optional, Tuple, Union, Iterable, Mapping
 import pandas as pd
-from io import BytesIO
+from io import BytesIO, StringIO
 import base64
 import re
 
@@ -16,7 +16,7 @@ def mapear_tipo(dtype_str: str) -> str:
         return "Número"
     elif tipo in ("bool", "boolean", "booleano"):
         return "Booleano"
-    elif tipo in ("object", "string", "texto"):
+    elif tipo in ("object", "string", "str", "texto"):
         return "Texto"
     return dtype_str  # fallback: retorna como está
 
@@ -38,10 +38,14 @@ async def ler_excel(file: UploadFile) -> Tuple[pd.DataFrame, bytes]:
 def decode_excel_base64_df(base64_string: str) -> pd.DataFrame:
     try:
         binary = base64.b64decode(base64_string)
-        df = pd.read_excel(BytesIO(binary))
-        return df
+        try:
+            return pd.read_excel(BytesIO(binary), engine="openpyxl")
+        except Exception:
+            text = binary.decode("utf-8")
+            sep = ";" in text.split("\n")[0] and ";" or ","
+            return pd.read_csv(StringIO(text), sep=sep)
     except Exception as e:
-        raise HTTPException(500, f"Erro ao decodificar Excel: {e}")
+        raise HTTPException(500, f"Erro ao decodificar dataframe: {e}")
 
 
 def df_para_base64(df: pd.DataFrame) -> str:
@@ -88,6 +92,16 @@ def montar_resposta_coleta(
         "preview_teste": df_teste.head(5).to_dict(orient="records"),
         "tipo_target": None,
     }
+
+
+def converter_numpy(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: converter_numpy(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [converter_numpy(i) for i in obj]
+    elif hasattr(obj, "dtype"):  # NumPy types
+        return obj.item()
+    return obj
 
 
 def serialize_doc(doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:

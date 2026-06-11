@@ -25,6 +25,10 @@ def _pipeline_doc(p: dict) -> dict:
         "dataCriacao": p.get("dataCriacao"),
         "dataModificacao": p.get("dataModificacao"),
         "status": p.get("status", "rascunho"),
+        "is_public": p.get("is_public", False),
+        "dificuldade": p.get("dificuldade", "iniciante"),
+        "tags": p.get("tags", []),
+        "professor_id": p.get("professor_id"),
     }
 
 
@@ -47,6 +51,10 @@ async def criar_pipeline(
         "resultadoTreinamento": body.resultadoTreinamento,
         "resultadosDasAvaliacoes": body.resultadosDasAvaliacoes,
         "status": body.status or "rascunho",
+        "is_public": body.is_public,
+        "dificuldade": body.dificuldade,
+        "tags": body.tags,
+        "professor_id": body.professor_id,
         "dataCriacao": agora,
         "dataModificacao": agora,
     }
@@ -67,7 +75,39 @@ async def listar_pipelines(
 
 @router.get("/galeria")
 async def listar_galeria():
-    return []
+    cursor = pipelines.find({"is_public": True}).sort("dataModificacao", -1)
+    docs = await cursor.to_list(length=100)
+    return [_pipeline_doc(d) for d in docs]
+
+
+@router.post("/{pipeline_id}/copiar")
+async def copiar_pipeline(
+    pipeline_id: str,
+    current_user: dict = Depends(get_usuario_atual),
+):
+    user_id = str(current_user["_id"])
+    try:
+        oid = ObjectId(pipeline_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="ID de pipeline inválido")
+
+    original = await pipelines.find_one({"_id": oid})
+    if not original:
+        raise HTTPException(status_code=404, detail="Pipeline original não encontrado")
+
+    agora = datetime.now(timezone.utc)
+    novo_doc = original.copy()
+    del novo_doc["_id"]
+    novo_doc["user_id"] = user_id
+    novo_doc["nome"] = f"Cópia de {original.get('nome')}"
+    novo_doc["status"] = "rascunho"
+    novo_doc["is_public"] = False
+    novo_doc["dataCriacao"] = agora
+    novo_doc["dataModificacao"] = agora
+
+    result = await pipelines.insert_one(novo_doc)
+    novo_doc["_id"] = result.inserted_id
+    return _pipeline_doc(novo_doc)
 
 
 @router.get("/{pipeline_id}")

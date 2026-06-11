@@ -54,6 +54,7 @@ class DatasetConfig:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
+            "valor": self.id, # Aliasing id to valor
             "nome": self.nome,
             "descricao": self.descricao,
             "fonte": self.fonte,

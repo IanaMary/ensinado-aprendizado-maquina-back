@@ -31,17 +31,25 @@ class TestTreinamentoBase:
             "content_treino_base64": b64,
             "content_teste_base64": b64,
         })
+        mock_db["modelos"].find_one = AsyncMock(return_value={
+            "_id": ObjectId(),
+            "hiperparametros": [
+                {"nomeHiperparametro": "n_neighbors", "valorPadrao": 5}
+            ]
+        })
 
         response = await client.post(
             "/classificador/treinamento/knn",
             headers=auth_headers,
             json={
-                "id_coleta": str(coleta_id),
+                "arquivo_id": str(coleta_id),
+                "tipo_arquivo": "excel",
                 "configuracao_id": str(config_id),
+                "modelo_id": str(ObjectId()),  # Mock modelo_id
                 "hiperparametros": {"n_neighbors": 3},
             },
         )
         assert response.status_code == 200
         data = response.json()
-        assert "modelo_id" in data
-        assert data["tipo_modelo"] == "knn"
+        assert "id" in data
+        assert data["modelo"] == "knn"
