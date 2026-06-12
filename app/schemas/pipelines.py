@@ -9,6 +9,7 @@ class PipelineCreate(BaseModel):
     resultadoColetaDado: Optional[Dict[str, Any]] = None
     modeloSelecionado: Optional[Dict[str, Any]] = None
     metricasSelecionadas: Optional[List[Any]] = None
+    mediaMetricas: Optional[str] = "weighted"
     preProcessamentoConfig: Optional[Dict[str, Any]] = None
     resultadoTreinamento: Optional[Dict[str, Any]] = None
     resultadosDasAvaliacoes: Optional[Dict[str, Any]] = None
@@ -25,6 +26,7 @@ class PipelineUpdate(BaseModel):
     resultadoColetaDado: Optional[Dict[str, Any]] = None
     modeloSelecionado: Optional[Dict[str, Any]] = None
     metricasSelecionadas: Optional[List[Any]] = None
+    mediaMetricas: Optional[str] = None
     preProcessamentoConfig: Optional[Dict[str, Any]] = None
     resultadoTreinamento: Optional[Dict[str, Any]] = None
     resultadosDasAvaliacoes: Optional[Dict[str, Any]] = None

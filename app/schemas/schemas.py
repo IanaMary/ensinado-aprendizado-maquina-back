@@ -8,6 +8,7 @@ class ModeloSelecionado(BaseModel):
 class MetricaSelecionada(BaseModel):
     label: str
     valor: str
+    average: Optional[str] = "weighted"
 
 class AvaliacaoModelosRequest(BaseModel):
     modelos: List[ModeloSelecionado]

@@ -71,10 +71,10 @@ class TestMetricas:
                 "modelos": [{"label": "KNN", "id": str(modelo_id)}],
                 "metricas": [
                     {"label": "Acurácia", "valor": "accuracy_score"},
-                    {"label": "F1-Score", "valor": "f1_score"},
+                    {"label": "F1-Score", "valor": "f1_score", "average": "macro"},
                     {"label": "Matriz de Confusão", "valor": "confusion_matrix"},
-                    {"label": "Precisão", "valor": "precision_score"},
-                    {"label": "Recall", "valor": "recall_score"},
+                    {"label": "Precisão", "valor": "precision_score", "average": "micro"},
+                    {"label": "Recall", "valor": "recall_score", "average": "weighted"},
                 ],
             },
         )

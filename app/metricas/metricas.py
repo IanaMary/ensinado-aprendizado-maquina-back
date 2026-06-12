@@ -11,14 +11,21 @@ import joblib
 import base64
 import io
 import hashlib
+from typing import Optional
 from sklearn.metrics import confusion_matrix
 
 router = APIRouter()
 
+AVERAGES_PERMITIDAS = {"micro", "macro", "weighted"}
 
-def calcular_metrica(metrica_valor: str, metrica_fn, y_test, y_pred) -> float:
+
+def normalizar_media_metrica(average: Optional[str]) -> str:
+    return average if average in AVERAGES_PERMITIDAS else "weighted"
+
+
+def calcular_metrica(metrica_valor: str, metrica_fn, y_test, y_pred, average: Optional[str] = None) -> float:
     if metrica_valor in {"precision_score", "recall_score", "f1_score"}:
-        return float(metrica_fn(y_test, y_pred, average="weighted", zero_division=0))
+        return float(metrica_fn(y_test, y_pred, average=normalizar_media_metrica(average), zero_division=0))
     return float(metrica_fn(y_test, y_pred))
 
 
@@ -158,7 +165,7 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
                     resultados_formatados[metrica.label][nome_modelo] = "Métrica não suportada"
                     continue
                 
-                valor_metrica = calcular_metrica(metrica.valor, metrica_fn, y_test, y_pred)
+                valor_metrica = calcular_metrica(metrica.valor, metrica_fn, y_test, y_pred, metrica.average)
                 resultados_formatados[metrica.label][nome_modelo] = valor_metrica
             except Exception as e:
                 print(f"[PRINT] Erro ao calcular métrica {metrica.label}: {e}")
