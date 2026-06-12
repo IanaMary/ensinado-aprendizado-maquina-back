@@ -22,17 +22,20 @@ def mapear_tipo(dtype_str: str) -> str:
 
 
 def validar_xlsx(file: UploadFile, nome: str):
-    if not file or not file.filename.endswith(".xlsx"):
-        raise HTTPException(400, f"Arquivo de {nome} deve ser .xlsx")
+    filename = (file.filename or "").lower() if file else ""
+    if not file or not filename.endswith((".xls", ".xlsx")):
+        raise HTTPException(400, f"Arquivo de {nome} deve ser .xls ou .xlsx")
 
 
 async def ler_excel(file: UploadFile) -> Tuple[pd.DataFrame, bytes]:
     try:
         content = await file.read()
-        df = pd.read_excel(BytesIO(content), engine="openpyxl")
+        filename = (file.filename or "").lower()
+        engine = "xlrd" if filename.endswith(".xls") else "openpyxl"
+        df = pd.read_excel(BytesIO(content), engine=engine)
         return df, content
     except Exception as e:
-        raise HTTPException(400, f"Erro ao ler XLSX: {e}")
+        raise HTTPException(400, f"Erro ao ler Excel: {e}")
 
 
 def decode_excel_base64_df(base64_string: str) -> pd.DataFrame:
@@ -41,9 +44,12 @@ def decode_excel_base64_df(base64_string: str) -> pd.DataFrame:
         try:
             return pd.read_excel(BytesIO(binary), engine="openpyxl")
         except Exception:
-            text = binary.decode("utf-8")
-            sep = ";" in text.split("\n")[0] and ";" or ","
-            return pd.read_csv(StringIO(text), sep=sep)
+            try:
+                return pd.read_excel(BytesIO(binary), engine="xlrd")
+            except Exception:
+                text = binary.decode("utf-8")
+                sep = ";" in text.split("\n")[0] and ";" or ","
+                return pd.read_csv(StringIO(text), sep=sep)
     except Exception as e:
         raise HTTPException(500, f"Erro ao decodificar dataframe: {e}")
 

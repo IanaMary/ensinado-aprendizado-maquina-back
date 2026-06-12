@@ -22,6 +22,19 @@ SEPARADORES = {
 }
 
 
+def _validar_csv_ou_tsv(file: UploadFile):
+    filename = (file.filename or "").lower()
+    if not filename.endswith((".csv", ".tsv")):
+        raise HTTPException(400, "Arquivo deve ser CSV ou TSV")
+
+
+def _resolver_separador(file: UploadFile, separador: str) -> str:
+    filename = (file.filename or "").lower()
+    if filename.endswith(".tsv") and separador == "virgula":
+        return "\t"
+    return SEPARADORES.get(separador, ",")
+
+
 @router.post("/csv/preview")
 async def preview_csv(
     file: Annotated[UploadFile, File()],
@@ -29,11 +42,10 @@ async def preview_csv(
     encoding: Annotated[str, Form()] = "utf-8",
     linhas: Annotated[int, Form()] = 10,
 ):
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(400, "Arquivo deve ser CSV")
+    _validar_csv_ou_tsv(file)
 
     content = await file.read()
-    sep = SEPARADORES.get(separador, ",")
+    sep = _resolver_separador(file, separador)
 
     try:
         text = content.decode(encoding)
@@ -74,11 +86,10 @@ async def upload_csv(
     separador: Annotated[str, Form()] = "virgula",
     encoding: Annotated[str, Form()] = "utf-8",
 ):
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(400, "Arquivo deve ser CSV")
+    _validar_csv_ou_tsv(file)
 
     content = await file.read()
-    sep = SEPARADORES.get(separador, ",")
+    sep = _resolver_separador(file, separador)
 
     try:
         text = content.decode(encoding)

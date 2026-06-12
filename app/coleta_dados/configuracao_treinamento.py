@@ -27,9 +27,13 @@ def decode_base64_df(base64_string: str) -> pd.DataFrame:
         try:
             return pd.read_excel(BytesIO(binary), engine="openpyxl")
         except Exception:
-            text = binary.decode("utf-8")
-            sep = ";" if ";" in text.split("\n")[0] else ","
-            return pd.read_csv(StringIO(text), sep=sep)
+            try:
+                return pd.read_excel(BytesIO(binary), engine="xlrd")
+            except Exception:
+                text = binary.decode("utf-8")
+                primeira_linha = text.split("\n")[0]
+                sep = "\t" if "\t" in primeira_linha else ";" if ";" in primeira_linha else ","
+                return pd.read_csv(StringIO(text), sep=sep)
     except Exception:
         return pd.DataFrame()
 

@@ -7,9 +7,11 @@ from app.funcoes_genericas.funcoes_genericas import (
     df_para_base64,
     decode_excel_base64_df,
     gerar_colunas_detalhes,
+    validar_xlsx,
 )
 from bson import ObjectId
 import pandas as pd
+from fastapi import HTTPException
 
 
 class TestMapearTipo:
@@ -117,6 +119,23 @@ class TestBase64:
         df_result = decode_excel_base64_df(b64)
         assert list(df_result.columns) == ["col1", "col2"]
         assert len(df_result) == 3
+
+
+class TestValidarExcel:
+    def test_aceita_xls_e_xlsx(self):
+        class FakeFile:
+            def __init__(self, filename):
+                self.filename = filename
+
+        validar_xlsx(FakeFile("dados.xls"), "treino")
+        validar_xlsx(FakeFile("dados.xlsx"), "treino")
+
+    def test_rejeita_extensao_invalida(self):
+        class FakeFile:
+            filename = "dados.csv"
+
+        with pytest.raises(HTTPException):
+            validar_xlsx(FakeFile(), "treino")
 
 
 class TestGerarColunasDetalhes:

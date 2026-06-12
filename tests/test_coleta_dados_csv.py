@@ -24,6 +24,21 @@ class TestUploadCSV:
         assert data["num_colunas"] == 2
 
     @pytest.mark.asyncio
+    async def test_upload_tsv_sucesso(self, client, mock_db, auth_headers):
+        tsv_content = b"col1\tcol2\n1\t2\n3\t4"
+        response = await client.post(
+            "/coleta_dados/csv",
+            headers=auth_headers,
+            data={"tipo": "treino"},
+            files={"file": ("dados.tsv", tsv_content, "text/tab-separated-values")},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["num_linhas_total"] == 2
+        assert data["num_colunas"] == 2
+        assert data["colunas"] == ["col1", "col2"]
+
+    @pytest.mark.asyncio
     async def test_upload_csv_com_test_size(self, client, mock_db, auth_headers):
         csv_content = b"col1,col2\n1,2\n3,4\n5,6\n7,8" # 4 rows
         response = await client.post(
