@@ -64,6 +64,48 @@ class TestPipelines:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
+    async def test_nao_copia_pipeline_privado_de_outro_usuario(self, client, mock_db, auth_headers):
+        oid = ObjectId()
+        mock_db["pipelines"].find_one = AsyncMock(return_value={
+            "_id": oid,
+            "user_id": str(ObjectId()),
+            "nome": "Privado",
+            "is_public": False,
+        })
+
+        response = await client.post(f"/pipelines/{oid}/copiar", headers=auth_headers)
+        assert response.status_code == 404
+        mock_db["pipelines"].insert_one.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_copia_pipeline_publico_de_outro_usuario(self, client, mock_db, auth_headers):
+        oid = ObjectId()
+        mock_db["pipelines"].find_one = AsyncMock(return_value={
+            "_id": oid,
+            "user_id": str(ObjectId()),
+            "nome": "Publico",
+            "is_public": True,
+        })
+
+        response = await client.post(f"/pipelines/{oid}/copiar", headers=auth_headers)
+        assert response.status_code == 200
+        assert response.json()["nome"] == "Cópia de Publico"
+
+    @pytest.mark.asyncio
+    async def test_copia_pipeline_do_proprio_usuario(self, client, mock_db, auth_headers, mock_user):
+        oid = ObjectId()
+        mock_db["pipelines"].find_one = AsyncMock(return_value={
+            "_id": oid,
+            "user_id": str(mock_user["_id"]),
+            "nome": "Meu pipeline",
+            "is_public": False,
+        })
+
+        response = await client.post(f"/pipelines/{oid}/copiar", headers=auth_headers)
+        assert response.status_code == 200
+        assert response.json()["nome"] == "Cópia de Meu pipeline"
+
+    @pytest.mark.asyncio
     async def test_galeria(self, client, mock_db, auth_headers):
         response = await client.get("/pipelines/galeria", headers=auth_headers)
         assert response.status_code == 200

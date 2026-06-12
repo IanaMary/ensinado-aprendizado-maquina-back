@@ -94,6 +94,8 @@ async def copiar_pipeline(
     original = await pipelines.find_one({"_id": oid})
     if not original:
         raise HTTPException(status_code=404, detail="Pipeline original não encontrado")
+    if original.get("user_id") != user_id and not original.get("is_public", False):
+        raise HTTPException(status_code=404, detail="Pipeline original não encontrado")
 
     agora = datetime.now(timezone.utc)
     novo_doc = original.copy()

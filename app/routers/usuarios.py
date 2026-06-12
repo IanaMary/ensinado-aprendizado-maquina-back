@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
 from typing import List, Optional
+from bson import ObjectId
 import secrets
 import smtplib
 from email.mime.text import MIMEText
@@ -25,6 +26,12 @@ SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@iana.com")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://absapt.tk/h2ia/tutor")
+
+
+def validar_object_id(user_id: str) -> ObjectId:
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(status_code=400, detail="ID inválido")
+    return ObjectId(user_id)
 
 
 async def enviar_email(destinatario: str, assunto: str, corpo_html: str):
@@ -240,20 +247,16 @@ async def alterar_status_usuario(user_id: str, novo_status: str, current_user=De
     if novo_status not in ["ativo", "inativo", "pendente"]:
         raise HTTPException(status_code=400, detail="Status inválido")
     
-    from bson import ObjectId
-    
-    try:
-        result = await colecao_usuario.update_one(
-            {"_id": ObjectId(user_id)},
-            {"$set": {"status": novo_status}}
-        )
-        
-        if result.modified_count == 0:
-            raise HTTPException(status_code=404, detail="Usuário não encontrado")
-        
-        return {"mensagem": f"Status alterado para {novo_status}"}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail="ID inválido")
+    user_oid = validar_object_id(user_id)
+    result = await colecao_usuario.update_one(
+        {"_id": user_oid},
+        {"$set": {"status": novo_status}}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    return {"mensagem": f"Status alterado para {novo_status}"}
 
 
 @router.post("/{user_id}/reenviar-convite")
@@ -262,34 +265,29 @@ async def reenviar_convite(user_id: str, current_user=Depends(get_usuario_atual)
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Apenas admins podem reenviar convites")
 
-    from bson import ObjectId
+    user_oid = validar_object_id(user_id)
 
-    try:
-        user = await colecao_usuario.find_one({"_id": ObjectId(user_id)})
+    user = await colecao_usuario.find_one({"_id": user_oid})
 
-        if not user:
-            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-        if user.get("status") != "pendente":
-            raise HTTPException(status_code=400, detail="Usuário já está ativo")
+    if user.get("status") != "pendente":
+        raise HTTPException(status_code=400, detail="Usuário já está ativo")
 
-        token = user.get("token_convite")
-        if not token:
-            raise HTTPException(status_code=400, detail="Token de convite não encontrado")
+    token = user.get("token_convite")
+    if not token:
+        raise HTTPException(status_code=400, detail="Token de convite não encontrado")
 
-        # Enviar email com o mesmo token (data_convite original é mantida)
-        corpo_html = gerar_email_convite(user["nome_usuario"], token)
-        email_enviado = await enviar_email(
-            user["email"],
-            "Convite para a plataforma Iana - Reenvio",
-            corpo_html
-        )
+    # Enviar email com o mesmo token (data_convite original é mantida)
+    corpo_html = gerar_email_convite(user["nome_usuario"], token)
+    email_enviado = await enviar_email(
+        user["email"],
+        "Convite para a plataforma Iana - Reenvio",
+        corpo_html
+    )
 
-        return {"mensagem": "Convite reenviado", "email_enviado": email_enviado}
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=400, detail="ID inválido")
+    return {"mensagem": "Convite reenviado", "email_enviado": email_enviado}
 
 
 @router.delete("/{user_id}")
@@ -298,16 +296,10 @@ async def excluir_usuario(user_id: str, current_user=Depends(get_usuario_atual))
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Apenas admins podem excluir usuários")
     
-    from bson import ObjectId
-    
-    try:
-        result = await colecao_usuario.delete_one({"_id": ObjectId(user_id)})
-        
-        if result.deleted_count == 0:
-            raise HTTPException(status_code=404, detail="Usuário não encontrado")
-        
-        return {"mensagem": "Usuário excluído com sucesso"}
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=400, detail="ID inválido")
+    user_oid = validar_object_id(user_id)
+    result = await colecao_usuario.delete_one({"_id": user_oid})
+
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    return {"mensagem": "Usuário excluído com sucesso"}

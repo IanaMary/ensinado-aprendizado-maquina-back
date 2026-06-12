@@ -73,3 +73,30 @@ class TestCriarUsuario:
             "verificador": "valid-code",
         })
         assert response.status_code == 200
+
+
+class TestGerenciarUsuarios:
+    @pytest.mark.asyncio
+    async def test_alterar_status_usuario_inexistente_retorna_404(self, client, mock_db, auth_headers):
+        mock_db["usuarios"].find_one = AsyncMock(return_value={
+            "_id": ObjectId(),
+            "email": "admin@test.com",
+            "role": "admin",
+        })
+        mock_db["usuarios"].update_one = AsyncMock(return_value=MagicMock(matched_count=0, modified_count=0))
+
+        response = await client.put(f"/usuario/{ObjectId()}/status?novo_status=ativo", headers=auth_headers)
+
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_alterar_status_usuario_id_invalido_retorna_400(self, client, mock_db, auth_headers):
+        mock_db["usuarios"].find_one = AsyncMock(return_value={
+            "_id": ObjectId(),
+            "email": "admin@test.com",
+            "role": "admin",
+        })
+
+        response = await client.put("/usuario/id-invalido/status?novo_status=ativo", headers=auth_headers)
+
+        assert response.status_code == 400

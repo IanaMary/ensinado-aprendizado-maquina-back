@@ -10,6 +10,12 @@ from io import BytesIO, StringIO
 router = APIRouter()
 
 
+def validar_object_id(valor: str) -> ObjectId:
+    if not ObjectId.is_valid(valor):
+        raise HTTPException(status_code=400, detail="ID inválido.")
+    return ObjectId(valor)
+
+
 def decode_base64_df(base64_string: str) -> pd.DataFrame:
     if not base64_string:
         return pd.DataFrame()
@@ -27,7 +33,8 @@ def decode_base64_df(base64_string: str) -> pd.DataFrame:
 
 @router.put("/{tipo}/{configurar_treinamento_id}")
 async def configurar_treinamento(configurar_treinamento_id: str, config: ConfiguracaoColetaRequest):
-    config_doc = await configuracoes_treinamento.find_one({"_id": ObjectId(configurar_treinamento_id)})
+    config_oid = validar_object_id(configurar_treinamento_id)
+    config_doc = await configuracoes_treinamento.find_one({"_id": config_oid})
 
     if not config_doc:
         raise HTTPException(status_code=404, detail="Configuração não encontrada.")
@@ -58,7 +65,7 @@ async def configurar_treinamento(configurar_treinamento_id: str, config: Configu
     }
 
     await configuracoes_treinamento.update_one(
-        {"_id": ObjectId(configurar_treinamento_id)},
+        {"_id": config_oid},
         {"$set": update_data}
     )
 
@@ -70,10 +77,8 @@ async def configurar_treinamento(configurar_treinamento_id: str, config: Configu
 
 @router.get("/{tipo}/{configurar_treinamento_id}")
 async def get_configuracoe(configurar_treinamento_id: str):
-    try:
-        config_doc = await configuracoes_treinamento.find_one({"_id": ObjectId(configurar_treinamento_id)})
-    except Exception:
-        raise HTTPException(status_code=400, detail="ID inválido.")
+    config_oid = validar_object_id(configurar_treinamento_id)
+    config_doc = await configuracoes_treinamento.find_one({"_id": config_oid})
 
     if not config_doc:
         raise HTTPException(status_code=404, detail="Configuração de treinamento não encontrada.")
