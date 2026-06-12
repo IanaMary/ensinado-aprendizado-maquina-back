@@ -11,12 +11,30 @@ import joblib
 import base64
 import io
 import hashlib
+import sys
+import types
 from typing import Optional
 from sklearn.metrics import confusion_matrix
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+try:
+    from setuptools._distutils.version import LooseVersion
+    distutils_module = types.ModuleType("distutils")
+    version_module = types.ModuleType("distutils.version")
+    version_module.LooseVersion = LooseVersion
+    sys.modules.setdefault("distutils", distutils_module)
+    sys.modules.setdefault("distutils.version", version_module)
+except Exception:
+    pass
+from yellowbrick.classifier import ClassificationReport, ClassPredictionError, ConfusionMatrix
+from yellowbrick.target import ClassBalance
 
 router = APIRouter()
 
 AVERAGES_PERMITIDAS = {"micro", "macro", "weighted"}
+VISUALIZACOES_KEY = "_visualizacoes"
 
 
 def normalizar_media_metrica(average: Optional[str]) -> str:
@@ -27,6 +45,50 @@ def calcular_metrica(metrica_valor: str, metrica_fn, y_test, y_pred, average: Op
     if metrica_valor in {"precision_score", "recall_score", "f1_score"}:
         return float(metrica_fn(y_test, y_pred, average=normalizar_media_metrica(average), zero_division=0))
     return float(metrica_fn(y_test, y_pred))
+
+
+def _figura_para_base64(fig) -> str:
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format="png", bbox_inches="tight", dpi=120)
+    plt.close(fig)
+    buffer.seek(0)
+    return base64.b64encode(buffer.read()).decode("utf-8")
+
+
+def _renderizar_visualizacao(nome: str, factory) -> Optional[dict]:
+    try:
+        fig, ax = plt.subplots(figsize=(7, 4.5))
+        factory(ax)
+        return {
+            "titulo": nome,
+            "mime": "image/png",
+            "base64": _figura_para_base64(fig),
+        }
+    except Exception as e:
+        logger.warning("Falha ao gerar visualização Yellowbrick '%s': %s", nome, e)
+        plt.close("all")
+        return None
+
+
+def gerar_visualizacoes_classificacao(modelo_treinado, X_test, y_test, classes) -> list[dict]:
+    classes_str = [str(c) for c in classes]
+    if not getattr(modelo_treinado, "_estimator_type", None):
+        modelo_treinado._estimator_type = "classifier"
+    visualizacoes = []
+
+    visualizadores = [
+        ("Matriz de confusão", lambda ax: ConfusionMatrix(modelo_treinado, classes=classes_str, ax=ax).score(X_test, y_test)),
+        ("Relatório de classificação", lambda ax: ClassificationReport(modelo_treinado, classes=classes_str, support=True, ax=ax).score(X_test, y_test)),
+        ("Erros de predição por classe", lambda ax: ClassPredictionError(modelo_treinado, classes=classes_str, ax=ax).score(X_test, y_test)),
+        ("Balanceamento das classes", lambda ax: ClassBalance(labels=classes_str, ax=ax).fit(y_test)),
+    ]
+
+    for titulo, factory in visualizadores:
+        visualizacao = _renderizar_visualizacao(titulo, factory)
+        if visualizacao:
+            visualizacoes.append(visualizacao)
+
+    return visualizacoes
 
 
 @router.post("/avaliar_modelos")
@@ -42,6 +104,7 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
     resultados_formatados = {
         metrica.label: {} for metrica in request.metricas
     }
+    resultados_formatados[VISUALIZACOES_KEY] = {}
 
     for modelo in request.modelos:
         print(f"[PRINT] Processing modelo: {modelo}")
@@ -140,18 +203,26 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
         y_pred = modelo_treinado.predict(X_test)
         print(f"[PRINT] Predições realizadas: {len(y_pred)}")
 
+        classes_doc = doc.get("classes")
+        if not classes_doc:
+            try:
+                classes_doc = [str(c) for c in modelo_treinado.classes_]
+            except:
+                classes_doc = [str(c) for c in sorted(list(set(y_test) | set(y_pred)))]
+
+        if hasattr(modelo_treinado, "classes_"):
+            resultados_formatados[VISUALIZACOES_KEY][nome_modelo] = gerar_visualizacoes_classificacao(
+                modelo_treinado,
+                X_test,
+                y_test,
+                classes_doc,
+            )
+
         for metrica in request.metricas:
             try:
                 # Trata matriz de confusão separadamente
                 if metrica.valor == "confusion_matrix":
                     cm = confusion_matrix(y_test, y_pred)
-                    classes_doc = doc.get("classes")
-                    if not classes_doc:
-                        # Tenta obter do modelo se possível, ou inferir
-                        try:
-                            classes_doc = [str(c) for c in modelo_treinado.classes_]
-                        except:
-                            classes_doc = [str(c) for c in sorted(list(set(y_test) | set(y_pred)))]
                     
                     resultados_formatados[metrica.label][nome_modelo] = {
                         "matriz": cm.tolist(),

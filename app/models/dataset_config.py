@@ -50,6 +50,11 @@ class DatasetConfig:
     dificuldade: str = "iniciante"   # iniciante, intermediario, avancado
     descricao_target: str = ""       # O que o target representa
     descricao_features: str = ""     # O que as features representam
+    pergunta_guia: str = ""
+    modelo_recomendado: str = ""
+    metrica_recomendada: str = ""
+    visualizacao_recomendada: str = ""
+    reflexao_final: str = ""
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -69,6 +74,13 @@ class DatasetConfig:
             "dificuldade": self.dificuldade,
             "descricao_target": self.descricao_target,
             "descricao_features": self.descricao_features,
+            "missao": {
+                "pergunta": self.pergunta_guia,
+                "modelo_recomendado": self.modelo_recomendado,
+                "metrica_recomendada": self.metrica_recomendada,
+                "visualizacao_recomendada": self.visualizacao_recomendada,
+                "reflexao_final": self.reflexao_final,
+            } if self.pergunta_guia else None,
         }
 
 
@@ -90,6 +102,11 @@ TOY_DATASETS: Dict[str, DatasetConfig] = {
         dificuldade="iniciante",
         descricao_target="Espécie da flor Iris (setosa, versicolor ou virginica)",
         descricao_features="Comprimento e largura das sépalas e pétalas em centímetros",
+        pergunta_guia="Será que medidas simples de uma flor bastam para descobrir sua espécie?",
+        modelo_recomendado="Árvore de Decisão",
+        metrica_recomendada="Acurácia e Matriz de Confusão",
+        visualizacao_recomendada="ConfusionMatrix",
+        reflexao_final="Qual espécie o modelo confundiu mais? Que medida ajudou nessa decisão?",
     ),
     "wine": DatasetConfig(
         id="wine",
@@ -104,6 +121,11 @@ TOY_DATASETS: Dict[str, DatasetConfig] = {
         dificuldade="intermediario",
         descricao_target="Cultivar do vinho (classe 0, 1 ou 2)",
         descricao_features="13 atributos químicos: álcool, ácido málico, cinzas, alcalinidade das cinzas, magnésio, fenóis totais, flavonoides, etc.",
+        pergunta_guia="A composição química consegue indicar o tipo de vinho?",
+        modelo_recomendado="Random Forest",
+        metrica_recomendada="F1-Score",
+        visualizacao_recomendada="FeatureImportances",
+        reflexao_final="Quais características químicas parecem pesar mais na decisão?",
     ),
     "breast_cancer": DatasetConfig(
         id="breast_cancer",
@@ -118,6 +140,11 @@ TOY_DATASETS: Dict[str, DatasetConfig] = {
         dificuldade="intermediario",
         descricao_target="Diagnóstico: maligno (M) ou benigno (B)",
         descricao_features="30 características calculadas: média, erro padrão e pior valor de raio, textura, perímetro, área, suavidade, compacidade, concavidade, pontos côncavos, simetria e dimensão fractal",
+        pergunta_guia="Quais medidas ajudam um modelo a separar casos benignos e malignos?",
+        modelo_recomendado="Regressão Logística",
+        metrica_recomendada="Recall e Matriz de Confusão",
+        visualizacao_recomendada="ClassificationReport",
+        reflexao_final="Que tipo de erro seria mais preocupante nesse problema?",
     ),
     "digits": DatasetConfig(
         id="digits",
@@ -132,6 +159,11 @@ TOY_DATASETS: Dict[str, DatasetConfig] = {
         dificuldade="intermediario",
         descricao_target="Dígito escrito (0 a 9)",
         descricao_features="64 valores de intensidade de pixel (0-16) de uma imagem 8x8",
+        pergunta_guia="Um modelo consegue reconhecer números escritos a partir dos pixels?",
+        modelo_recomendado="k-NN",
+        metrica_recomendada="Acurácia",
+        visualizacao_recomendada="ClassPredictionError",
+        reflexao_final="Quais dígitos parecem mais fáceis de confundir?",
     ),
     "diabetes": DatasetConfig(
         id="diabetes",
@@ -146,6 +178,11 @@ TOY_DATASETS: Dict[str, DatasetConfig] = {
         dificuldade="intermediario",
         descricao_target="Medida quantitativa da progressão do diabetes após 1 ano",
         descricao_features="10 variáveis: idade, sexo, IMC, pressão arterial, e 6 medidas sanguíneas (s1-s6)",
+        pergunta_guia="Podemos prever um valor de progressão da doença usando medidas biométricas?",
+        modelo_recomendado="Regressão Linear",
+        metrica_recomendada="Erro de predição",
+        visualizacao_recomendada="PredictionError",
+        reflexao_final="As previsões ficaram perto dos valores reais ou erraram mais em alguma faixa?",
     ),
     "california_housing": DatasetConfig(
         id="california_housing",

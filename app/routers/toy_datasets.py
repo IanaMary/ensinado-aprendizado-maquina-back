@@ -151,6 +151,7 @@ async def carregar_dataset(
             "dificuldade": ds.dificuldade,
             "descricao_target": ds.descricao_target,
             "descricao_features": ds.descricao_features,
+            "missao": ds.to_dict().get("missao"),
             "seed": get_seed()
         }
     

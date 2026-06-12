@@ -87,6 +87,12 @@ class TestMetricas:
         assert data["Recall"]["KNN"] == 1.0
         assert data["Matriz de Confusão"]["KNN"]["classes"] == list(model.classes_)
         assert data["Matriz de Confusão"]["KNN"]["total"] == len(df)
+        assert "_visualizacoes" in data
+        assert "KNN" in data["_visualizacoes"]
+        assert len(data["_visualizacoes"]["KNN"]) >= 3
+        primeira_visualizacao = data["_visualizacoes"]["KNN"][0]
+        assert primeira_visualizacao["mime"] == "image/png"
+        assert len(base64.b64decode(primeira_visualizacao["base64"])) > 1000
 
 
 class TestConfiguracaoTreinamento:

@@ -51,6 +51,7 @@ class TestListToyDatasets:
         assert iris is not None
         assert iris["nome"] == "Iris"
         assert iris["tipo"] == "classificacao"
+        assert iris["missao"]["modelo_recomendado"] == "Árvore de Decisão"
 
 
 @pytest.mark.asyncio
@@ -69,6 +70,7 @@ class TestLoadToyDataset:
         assert "colunas" in data
         assert "dados" in data
         assert "total_dados" in data
+        assert data["missao"]["pergunta"].startswith("Será que")
 
     async def test_load_wine(self, client, mock_db, auth_headers):
         """Should load Wine dataset successfully."""
