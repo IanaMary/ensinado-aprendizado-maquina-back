@@ -16,6 +16,12 @@ from sklearn.metrics import confusion_matrix
 router = APIRouter()
 
 
+def calcular_metrica(metrica_valor: str, metrica_fn, y_test, y_pred) -> float:
+    if metrica_valor in {"precision_score", "recall_score", "f1_score"}:
+        return float(metrica_fn(y_test, y_pred, average="weighted", zero_division=0))
+    return float(metrica_fn(y_test, y_pred))
+
+
 @router.post("/avaliar_modelos")
 async def avaliar_modelos(request: AvaliacaoModelosRequest):
     print(f"[PRINT] avaliar_modelos called with {len(request.modelos)} modelos and {len(request.metricas)} metricas")
@@ -129,11 +135,6 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
 
         for metrica in request.metricas:
             try:
-                metrica_fn = metricas_disponiveis.get(metrica.valor)
-                if not metrica_fn:
-                    resultados_formatados[metrica.label][nome_modelo] = "Métrica não suportada"
-                    continue
-                
                 # Trata matriz de confusão separadamente
                 if metrica.valor == "confusion_matrix":
                     cm = confusion_matrix(y_test, y_pred)
@@ -150,9 +151,15 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
                         "classes": classes_doc,
                         "total": int(len(y_test))
                     }
-                else:
-                    valor_metrica = metrica_fn(y_test, y_pred)
-                    resultados_formatados[metrica.label][nome_modelo] = float(valor_metrica)
+                    continue
+
+                metrica_fn = metricas_disponiveis.get(metrica.valor)
+                if not metrica_fn:
+                    resultados_formatados[metrica.label][nome_modelo] = "Métrica não suportada"
+                    continue
+                
+                valor_metrica = calcular_metrica(metrica.valor, metrica_fn, y_test, y_pred)
+                resultados_formatados[metrica.label][nome_modelo] = valor_metrica
             except Exception as e:
                 print(f"[PRINT] Erro ao calcular métrica {metrica.label}: {e}")
                 resultados_formatados[metrica.label][nome_modelo] = f"Erro: {str(e)}"
