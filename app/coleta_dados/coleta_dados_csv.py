@@ -67,6 +67,9 @@ async def upload_csv(
     tipo: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
     test_size: Optional[float] = Form(0.2),
+    shuffle: bool = Form(True),
+    stratify: bool = Form(False),
+    stratify_column: Optional[str] = Form(None),
     id_coleta: Optional[str] = Form(None),
     separador: Annotated[str, Form()] = "virgula",
     encoding: Annotated[str, Form()] = "utf-8",
@@ -136,7 +139,14 @@ async def upload_csv(
 
     content_completo_b64 = content_b64
 
-    df_treino, df_teste = train_test_split(df, test_size=test_size or 0.2, random_state=get_sklearn_random_state() or 42)
+    stratify_values = df[stratify_column] if stratify and stratify_column in df.columns and shuffle else None
+    df_treino, df_teste = train_test_split(
+        df,
+        test_size=test_size or 0.2,
+        random_state=get_sklearn_random_state() or 42,
+        shuffle=shuffle,
+        stratify=stratify_values,
+    )
 
     content_treino_b64 = df_para_base64(df_treino)
     content_teste_b64 = df_para_base64(df_teste)
@@ -158,6 +168,8 @@ async def upload_csv(
     doc_config = {
         "id_coleta": ObjectId(id_coleta_novo),
         "test_size": test_size or 0.2,
+        "shuffle": shuffle,
+        "stratify": stratify,
         "atributos": atributos,
         "tipo_target": None,
         "target": None,
@@ -185,4 +197,6 @@ async def upload_csv(
         "preview_teste": df_teste.head(5).to_dict(orient="records"),
         "prever_categoria": False,
         "dados_rotulados": False,
+        "shuffle": shuffle,
+        "stratify": stratify,
     })

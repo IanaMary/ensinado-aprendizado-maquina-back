@@ -39,6 +39,15 @@ class ConfiguracaoColetaRequest(BaseModel):
     prever_categoria: bool
     dados_rotulados: bool
     target: Optional[str]  = None
+    shuffle: Optional[bool] = True
+    stratify: Optional[bool] = False
+
+
+class ReDivisaoColetaRequest(BaseModel):
+    test_size: float = 0.2
+    shuffle: bool = True
+    stratify: bool = False
+    target: Optional[str] = None
     
 class Config:
     allow_population_by_field_name = True

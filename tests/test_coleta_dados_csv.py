@@ -38,6 +38,32 @@ class TestUploadCSV:
         assert data["num_linhas_teste"] == 2
 
     @pytest.mark.asyncio
+    async def test_upload_csv_com_shuffle_e_estratificacao(self, client, mock_db, auth_headers):
+        csv_content = (
+            b"valor,classe\n"
+            b"1,A\n2,A\n3,A\n4,A\n"
+            b"5,B\n6,B\n7,B\n8,B\n"
+        )
+        response = await client.post(
+            "/coleta_dados/csv",
+            headers=auth_headers,
+            data={
+                "tipo": "treino",
+                "test_size": 0.5,
+                "shuffle": "true",
+                "stratify": "true",
+                "stratify_column": "classe",
+            },
+            files={"file": ("dados.csv", csv_content, "text/csv")},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["num_linhas_treino"] == 4
+        assert data["num_linhas_teste"] == 4
+        assert sorted(row["classe"] for row in data["preview_treino"]) == ["A", "A", "B", "B"]
+        assert sorted(row["classe"] for row in data["preview_teste"]) == ["A", "A", "B", "B"]
+
+    @pytest.mark.asyncio
     async def test_upload_csv_com_id_coleta(self, client, mock_db, auth_headers):
         csv_content = b"col1,col2\n1,2\n3,4"
         coleta_id = ObjectId()

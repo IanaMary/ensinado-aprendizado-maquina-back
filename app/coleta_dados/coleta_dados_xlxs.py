@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
 from bson import ObjectId
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import pandas as pd
 from io import BytesIO
 import base64
@@ -19,6 +19,9 @@ router = APIRouter()
 async def upload_xlsx(
     tipo: str = Form(...),
     test_size: float = Form(0.2),
+    shuffle: bool = Form(True),
+    stratify: bool = Form(False),
+    stratify_column: Optional[str] = Form(None),
     file: UploadFile = File(None),
     file_treino: UploadFile = File(None),
     file_teste: UploadFile = File(None),
@@ -41,7 +44,14 @@ async def upload_xlsx(
 
         content_completo_b64 = df_para_base64(df)
 
-        df_treino, df_teste = train_test_split(df, test_size=test_size, random_state=get_sklearn_random_state() or 42)
+        stratify_values = df[stratify_column] if stratify and stratify_column in df.columns and shuffle else None
+        df_treino, df_teste = train_test_split(
+            df,
+            test_size=test_size,
+            random_state=get_sklearn_random_state() or 42,
+            shuffle=shuffle,
+            stratify=stratify_values,
+        )
 
         content_treino_b64 = df_para_base64(df_treino)
         content_teste_b64 = df_para_base64(df_teste)
@@ -67,6 +77,8 @@ async def upload_xlsx(
         doc_configuracoes_treinamento = {
             "id_coleta" : ObjectId(result.inserted_id),
             "test_size": test_size,
+            "shuffle": shuffle,
+            "stratify": stratify,
             "atributos": atributos,
             "tipo_target": None,
             "target": None
@@ -179,5 +191,3 @@ async def get_unique_values(
     "num_colunas": doc.get("num_colunas", 0),
     "valores_unicos": valores_unicos
   }
-
-
