@@ -136,6 +136,41 @@ class TestAvaliarModelos:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
+    async def test_avaliar_regressao_calcula_metricas(self, client, mock_db, auth_headers):
+        """Modelo de regressão calcula R²/MSE/RMSE/MAE, ignora métricas de classificação e gera visualizações."""
+        df = pd.DataFrame({
+            "f1": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "f2": [2.0, 4.0, 6.0, 8.0, 10.0, 12.0],
+            "alvo": [3.0, 5.0, 7.0, 9.0, 11.0, 13.0],
+        })
+        modelo = LinearRegression().fit(df[["f1", "f2"]], df["alvo"])
+        buffer = io.BytesIO()
+        joblib.dump(modelo, buffer)
+        model_bytes = buffer.getvalue()
+
+        doc = _doc_modelo(model_bytes, df, classes=[])
+        mock_db["modelos"].find_one = AsyncMock(return_value=doc)
+
+        metricas = [
+            {"label": "R²", "valor": "r2_score"},
+            {"label": "MSE", "valor": "mean_squared_error"},
+            {"label": "RMSE", "valor": "root_mean_squared_error"},
+            {"label": "MAE", "valor": "mean_absolute_error"},
+            {"label": "Acurácia", "valor": "accuracy_score"},
+        ]
+        response = await client.post(
+            "/classificador/avaliar_modelos",
+            headers=auth_headers,
+            json={"modelos": [{"label": "Regressão Linear", "id": str(doc["_id"])}], "metricas": metricas},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        for label in ["R²", "MSE", "RMSE", "MAE"]:
+            assert isinstance(data[label]["Regressão Linear"], float)
+        assert data["Acurácia"]["Regressão Linear"] == "N/A para regressão"
+        assert len(data["_visualizacoes"]["Regressão Linear"]) >= 1
+
+    @pytest.mark.asyncio
     async def test_resultado_json_nativo(self, client, mock_db, auth_headers):
         """Regressão converter_numpy: valores retornados devem ser tipos JSON nativos."""
         df, _, model_bytes = _treinar_knn()

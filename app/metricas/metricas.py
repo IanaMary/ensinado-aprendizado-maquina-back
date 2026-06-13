@@ -15,7 +15,8 @@ import hashlib
 import sys
 import types
 from typing import Optional
-from sklearn.metrics import confusion_matrix, silhouette_score, calinski_harabasz_score, davies_bouldin_score
+from sklearn.metrics import confusion_matrix, silhouette_score, calinski_harabasz_score, davies_bouldin_score, mean_squared_error
+from sklearn.base import is_regressor
 
 import matplotlib
 matplotlib.use("Agg")
@@ -111,6 +112,41 @@ def gerar_visualizacoes_clustering(modelo_treinado, X_test) -> list[dict]:
     ]
 
     for titulo, factory in visualizadores:
+        visualizacao = _renderizar_visualizacao(titulo, factory)
+        if visualizacao:
+            visualizacoes.append(visualizacao)
+
+    return visualizacoes
+
+
+REGRESSION_METRICS = {"r2_score", "mean_squared_error", "root_mean_squared_error", "mean_absolute_error"}
+
+
+def gerar_visualizacoes_regressao(modelo_treinado, X_test, y_test) -> list[dict]:
+    import numpy as np
+
+    y_real = np.asarray(y_test, dtype=float).ravel()
+    y_pred = np.asarray(modelo_treinado.predict(X_test), dtype=float).ravel()
+    residuos = y_real - y_pred
+
+    def _previsto_vs_real(ax):
+        ax.scatter(y_real, y_pred, alpha=0.6, color="#6c4ed9", edgecolors="none")
+        lim_min = float(min(y_real.min(), y_pred.min()))
+        lim_max = float(max(y_real.max(), y_pred.max()))
+        ax.plot([lim_min, lim_max], [lim_min, lim_max], "--", color="#999999", linewidth=1)
+        ax.set_xlabel("Valor real")
+        ax.set_ylabel("Valor previsto")
+        ax.set_title("Quanto mais perto da linha tracejada, melhor a previsão")
+
+    def _residuos(ax):
+        ax.scatter(y_pred, residuos, alpha=0.6, color="#6c4ed9", edgecolors="none")
+        ax.axhline(0, linestyle="--", color="#999999", linewidth=1)
+        ax.set_xlabel("Valor previsto")
+        ax.set_ylabel("Resíduo (real - previsto)")
+        ax.set_title("Resíduos: o ideal é ficarem espalhados perto do zero")
+
+    visualizacoes = []
+    for titulo, factory in [("Previsto vs. Real", _previsto_vs_real), ("Resíduos", _residuos)]:
         visualizacao = _renderizar_visualizacao(titulo, factory)
         if visualizacao:
             visualizacoes.append(visualizacao)
@@ -249,6 +285,34 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
                         )
                     else:
                         resultados_formatados[metrica.label][nome_modelo] = "N/A para agrupamento"
+                except Exception as e:
+                    logger.warning(f"Erro ao calcular métrica {metrica.label}: {e}")
+                    resultados_formatados[metrica.label][nome_modelo] = f"Erro: {str(e)}"
+        elif is_regressor(modelo_treinado):
+            # Avaliação de regressão
+            y_test = df_teste[target]
+            y_pred = modelo_treinado.predict(X_test)
+
+            resultados_formatados[VISUALIZACOES_KEY][nome_modelo] = gerar_visualizacoes_regressao(
+                modelo_treinado, X_test, y_test
+            )
+
+            for metrica in request.metricas:
+                try:
+                    if metrica.valor not in REGRESSION_METRICS:
+                        resultados_formatados[metrica.label][nome_modelo] = "N/A para regressão"
+                        continue
+
+                    if metrica.valor == "root_mean_squared_error":
+                        valor_metrica = float(mean_squared_error(y_test, y_pred) ** 0.5)
+                    else:
+                        metrica_fn = metricas_disponiveis.get(metrica.valor)
+                        if not metrica_fn:
+                            resultados_formatados[metrica.label][nome_modelo] = "Métrica não suportada"
+                            continue
+                        valor_metrica = float(metrica_fn(y_test, y_pred))
+
+                    resultados_formatados[metrica.label][nome_modelo] = valor_metrica
                 except Exception as e:
                     logger.warning(f"Erro ao calcular métrica {metrica.label}: {e}")
                     resultados_formatados[metrica.label][nome_modelo] = f"Erro: {str(e)}"

@@ -12,7 +12,10 @@ from sklearn.metrics import (
     roc_auc_score,
     silhouette_score,
     calinski_harabasz_score,
-    davies_bouldin_score
+    davies_bouldin_score,
+    r2_score,
+    mean_squared_error,
+    mean_absolute_error
 )
 
 # Bibliotecas compartilhadas
@@ -33,5 +36,8 @@ metricas_disponiveis = {
   'roc_auc_score': roc_auc_score,
   'silhouette_score': silhouette_score,
   'calinski_harabasz_score': calinski_harabasz_score,
-  'davies_bouldin_score': davies_bouldin_score
+  'davies_bouldin_score': davies_bouldin_score,
+  'r2_score': r2_score,
+  'mean_squared_error': mean_squared_error,
+  'mean_absolute_error': mean_absolute_error
 }

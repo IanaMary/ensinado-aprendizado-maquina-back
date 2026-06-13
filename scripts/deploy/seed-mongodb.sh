@@ -140,7 +140,8 @@ db.modelos.insertMany([
         icon: "metrica",
         prever_categoria: false,
         dados_rotulados: true,
-        resumo: "Linear Regression"
+        resumo: "Linear Regression",
+        metricas: ["r2_score", "mean_squared_error", "root_mean_squared_error", "mean_absolute_error"]
     },
     {
         label: "K-means",
@@ -353,6 +354,50 @@ db.metricas.insertMany([
         icon: "metrica",
         resumo: "Similaridade média entre clusters (quanto menor, melhor)",
         explicacao: "Para cada cluster, calcula o quão parecido ele é com o cluster mais próximo. A média desses valores é o Davies-Bouldin. Zero significaria clusters perfeitamente separados. Valores baixos indicam boa separação."
+    },
+    {
+        label: "R² (Coef. de Determinação)",
+        valor: "r2_score",
+        tipoItem: "metrica",
+        grupo: "regressao",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        resumo: "Quanto da variação o modelo explica (0 a 1)",
+        explicacao: "Indica o quanto o modelo explica a variação dos valores reais. R² = 1 é uma previsão perfeita; R² = 0 equivale a sempre chutar a média dos valores. Pode ser negativo quando o modelo é pior do que esse chute."
+    },
+    {
+        label: "Erro Quadrático Médio (MSE)",
+        valor: "mean_squared_error",
+        tipoItem: "metrica",
+        grupo: "regressao",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        resumo: "Média dos erros ao quadrado (quanto menor, melhor)",
+        explicacao: "Eleva cada erro ao quadrado e tira a média. Como eleva ao quadrado, pune mais os erros grandes. Fica na unidade ao quadrado do alvo, por isso costuma ser difícil de interpretar diretamente."
+    },
+    {
+        label: "Raiz do Erro Quadrático (RMSE)",
+        valor: "root_mean_squared_error",
+        tipoItem: "metrica",
+        grupo: "regressao",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        resumo: "Erro típico na mesma unidade do alvo (menor é melhor)",
+        explicacao: "É a raiz quadrada do MSE, então volta para a mesma unidade do valor previsto. Se você prevê preços em reais, o RMSE também fica em reais — fácil de ler como o erro típico do modelo."
+    },
+    {
+        label: "Erro Absoluto Médio (MAE)",
+        valor: "mean_absolute_error",
+        tipoItem: "metrica",
+        grupo: "regressao",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        resumo: "Média do tamanho dos erros (quanto menor, melhor)",
+        explicacao: "Tira a média do tamanho dos erros, sem elevar ao quadrado. É menos sensível a erros muito grandes do que o RMSE. Se o MAE é 5, em média o modelo erra 5 unidades para cima ou para baixo."
     }
 ]);
 print("  -> metricas: OK (" + db.metricas.countDocuments({}) + " documentos)");
