@@ -310,6 +310,33 @@ db.metricas.insertMany([
         movido: false,
         icon: "metrica",
         resumo: "Matriz de verdadeiros/falsos positivos e negativos"
+    },
+    {
+        label: "Silhouette Score",
+        valor: "silhouette_score",
+        tipoItem: "metrica",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        resumo: "Mede quão similar cada ponto é ao seu próprio cluster comparado a outros clusters. Varia de -1 a 1 (quanto maior, melhor)."
+    },
+    {
+        label: "Calinski-Harabasz",
+        valor: "calinski_harabasz_score",
+        tipoItem: "metrica",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        resumo: "Razão entre dispersão inter-cluster e intra-cluster. Quanto maior, melhor definidos os clusters."
+    },
+    {
+        label: "Davies-Bouldin",
+        valor: "davies_bouldin_score",
+        tipoItem: "metrica",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        resumo: "Mede a similaridade média entre cada cluster e seu mais similar. Quanto menor, melhor (0 = clusters perfeitos)."
     }
 ]);
 print("  -> metricas: OK (" + db.metricas.countDocuments({}) + " documentos)");

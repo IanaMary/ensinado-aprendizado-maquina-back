@@ -15,7 +15,7 @@ import hashlib
 import sys
 import types
 from typing import Optional
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, silhouette_score, calinski_harabasz_score, davies_bouldin_score
 
 import matplotlib
 matplotlib.use("Agg")
@@ -31,6 +31,7 @@ except Exception:
     pass
 from yellowbrick.classifier import ClassificationReport, ClassPredictionError, ConfusionMatrix
 from yellowbrick.target import ClassBalance
+from yellowbrick.cluster import SilhouetteVisualizer, InterclusterDistance, KElbowVisualizer
 
 router = APIRouter()
 
@@ -90,6 +91,51 @@ def gerar_visualizacoes_classificacao(modelo_treinado, X_test, y_test, classes) 
             visualizacoes.append(visualizacao)
 
     return visualizacoes
+
+
+CLUSTERING_METRICS = {"silhouette_score", "calinski_harabasz_score", "davies_bouldin_score"}
+
+
+def gerar_visualizacoes_clustering(modelo_treinado, X_test) -> list[dict]:
+    visualizacoes = []
+
+    n_clusters = getattr(modelo_treinado, 'n_clusters', None)
+    n_unique = len(set(getattr(modelo_treinado, 'labels_', [])))
+    max_k = min(10, len(X_test) // 5) if len(X_test) > 50 else max(n_unique, 3)
+    max_k = max(max_k, 2)
+
+    visualizadores = [
+        ("Silhouette", lambda ax: SilhouetteVisualizer(modelo_treinado, ax=ax).fit(X_test)),
+        ("Distância entre Clusters", lambda ax: InterclusterDistance(modelo_treinado, ax=ax).fit(X_test)),
+        ("Método do Cotovelo", lambda ax: KElbowVisualizer(modelo_treinado, k=(2, max_k), ax=ax, timings=False).fit(X_test)),
+    ]
+
+    for titulo, factory in visualizadores:
+        visualizacao = _renderizar_visualizacao(titulo, factory)
+        if visualizacao:
+            visualizacoes.append(visualizacao)
+
+    return visualizacoes
+
+
+def calcular_metricas_clustering(X_test, labels) -> dict:
+    resultados = {}
+    try:
+        resultados["Silhouette Score"] = float(silhouette_score(X_test, labels))
+    except Exception as e:
+        logger.warning("Erro ao calcular silhouette_score: %s", e)
+        resultados["Silhouette Score"] = f"Erro: {e}"
+    try:
+        resultados["Calinski-Harabasz"] = float(calinski_harabasz_score(X_test, labels))
+    except Exception as e:
+        logger.warning("Erro ao calcular calinski_harabasz_score: %s", e)
+        resultados["Calinski-Harabasz"] = f"Erro: {e}"
+    try:
+        resultados["Davies-Bouldin"] = float(davies_bouldin_score(X_test, labels))
+    except Exception as e:
+        logger.warning("Erro ao calcular davies_bouldin_score: %s", e)
+        resultados["Davies-Bouldin"] = f"Erro: {e}"
+    return resultados
 
 
 @router.post("/avaliar_modelos")
@@ -176,56 +222,74 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
                 raise HTTPException(status_code=400, detail=f"Erro ao processar arquivo de teste: {e} | {e2}")
 
         # Valida colunas
-        for col in atributos + [target]:
+        colunas_necessarias = atributos.copy()
+        if target:
+            colunas_necessarias.append(target)
+        for col in colunas_necessarias:
             if col not in df_teste.columns:
                 raise HTTPException(status_code=400, detail=f"Coluna '{col}' não encontrada no arquivo de teste.")
 
         X_test = df_teste[atributos]
-        y_test = df_teste[target]
+        is_clustering = not target or target == ""
 
-        y_pred = modelo_treinado.predict(X_test)
+        if is_clustering:
+            # Avaliação de clustering
+            labels = modelo_treinado.predict(X_test)
 
-        classes_doc = doc.get("classes")
-        if not classes_doc:
-            try:
-                classes_doc = [str(c) for c in modelo_treinado.classes_]
-            except AttributeError:
-                classes_doc = [str(c) for c in sorted(list(set(y_test) | set(y_pred)))]
-
-        if hasattr(modelo_treinado, "classes_"):
-            resultados_formatados[VISUALIZACOES_KEY][nome_modelo] = gerar_visualizacoes_classificacao(
-                modelo_treinado,
-                X_test,
-                y_test,
-                classes_doc,
+            resultados_formatados[VISUALIZACOES_KEY][nome_modelo] = gerar_visualizacoes_clustering(
+                modelo_treinado, X_test
             )
 
-        for metrica in request.metricas:
-            try:
-                # Trata matriz de confusão separadamente
-                if metrica.valor == "confusion_matrix":
-                    # Usar todas as classes conhecidas para garantir que a matriz
-                    # sempre tenha dimensão completa, mesmo que o teste contenha
-                    # apenas uma classe
-                    labels_cm = classes_doc if classes_doc else sorted(list(set(y_test) | set(y_pred)))
-                    cm = confusion_matrix(y_test, y_pred, labels=labels_cm)
-                    
-                    resultados_formatados[metrica.label][nome_modelo] = {
-                        "matriz": cm.tolist(),
-                        "classes": labels_cm,
-                        "total": int(len(y_test))
-                    }
-                    continue
+            clustering_vals = calcular_metricas_clustering(X_test, labels)
+            for metrica in request.metricas:
+                try:
+                    if metrica.valor in CLUSTERING_METRICS:
+                        resultados_formatados[metrica.label][nome_modelo] = clustering_vals.get(
+                            metrica.label, "Métrica não calculada"
+                        )
+                    else:
+                        resultados_formatados[metrica.label][nome_modelo] = "N/A para agrupamento"
+                except Exception as e:
+                    logger.warning(f"Erro ao calcular métrica {metrica.label}: {e}")
+                    resultados_formatados[metrica.label][nome_modelo] = f"Erro: {str(e)}"
+        else:
+            # Avaliação de classificação
+            y_test = df_teste[target]
+            y_pred = modelo_treinado.predict(X_test)
 
-                metrica_fn = metricas_disponiveis.get(metrica.valor)
-                if not metrica_fn:
-                    resultados_formatados[metrica.label][nome_modelo] = "Métrica não suportada"
-                    continue
-                
-                valor_metrica = calcular_metrica(metrica.valor, metrica_fn, y_test, y_pred, metrica.average)
-                resultados_formatados[metrica.label][nome_modelo] = valor_metrica
-            except Exception as e:
-                logger.warning(f"Erro ao calcular métrica {metrica.label}: {e}")
-                resultados_formatados[metrica.label][nome_modelo] = f"Erro: {str(e)}"
+            classes_doc = doc.get("classes")
+            if not classes_doc:
+                try:
+                    classes_doc = [str(c) for c in modelo_treinado.classes_]
+                except AttributeError:
+                    classes_doc = [str(c) for c in sorted(list(set(y_test) | set(y_pred)))]
+
+            if hasattr(modelo_treinado, "classes_"):
+                resultados_formatados[VISUALIZACOES_KEY][nome_modelo] = gerar_visualizacoes_classificacao(
+                    modelo_treinado, X_test, y_test, classes_doc
+                )
+
+            for metrica in request.metricas:
+                try:
+                    if metrica.valor == "confusion_matrix":
+                        labels_cm = classes_doc if classes_doc else sorted(list(set(y_test) | set(y_pred)))
+                        cm = confusion_matrix(y_test, y_pred, labels=labels_cm)
+                        resultados_formatados[metrica.label][nome_modelo] = {
+                            "matriz": cm.tolist(),
+                            "classes": labels_cm,
+                            "total": int(len(y_test))
+                        }
+                        continue
+
+                    metrica_fn = metricas_disponiveis.get(metrica.valor)
+                    if not metrica_fn:
+                        resultados_formatados[metrica.label][nome_modelo] = "Métrica não suportada"
+                        continue
+
+                    valor_metrica = calcular_metrica(metrica.valor, metrica_fn, y_test, y_pred, metrica.average)
+                    resultados_formatados[metrica.label][nome_modelo] = valor_metrica
+                except Exception as e:
+                    logger.warning(f"Erro ao calcular métrica {metrica.label}: {e}")
+                    resultados_formatados[metrica.label][nome_modelo] = f"Erro: {str(e)}"
 
     return resultados_formatados

@@ -9,7 +9,10 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     f1_score,
-    roc_auc_score
+    roc_auc_score,
+    silhouette_score,
+    calinski_harabasz_score,
+    davies_bouldin_score
 )
 
 # Bibliotecas compartilhadas
@@ -27,5 +30,8 @@ metricas_disponiveis = {
   'precision_score': precision_score,
   'recall_score': recall_score,
   'f1_score': f1_score,
-  'roc_auc_score': roc_auc_score
+  'roc_auc_score': roc_auc_score,
+  'silhouette_score': silhouette_score,
+  'calinski_harabasz_score': calinski_harabasz_score,
+  'davies_bouldin_score': davies_bouldin_score
 }
