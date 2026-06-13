@@ -116,6 +116,38 @@ class TestUploadCSV:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
+    async def test_upload_csv_test_size_invalido_retorna_400(self, client, mock_db, auth_headers):
+        """Regressão: test_size fora de (0, 1) deve falhar com 400, não estourar no sklearn."""
+        csv_content = b"col1,col2\n1,2\n3,4"
+        response = await client.post(
+            "/coleta_dados/csv",
+            headers=auth_headers,
+            data={"tipo": "treino", "test_size": 1.5},
+            files={"file": ("dados.csv", csv_content, "text/csv")},
+        )
+        assert response.status_code == 400
+        assert "test_size" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_upload_csv_estratificacao_classe_unica_retorna_400(self, client, mock_db, auth_headers):
+        """Regressão: estratificar com classe de 1 exemplo retornava 500 do sklearn."""
+        csv_content = b"valor,classe\n1,A\n2,A\n3,A\n4,B\n"
+        response = await client.post(
+            "/coleta_dados/csv",
+            headers=auth_headers,
+            data={
+                "tipo": "treino",
+                "test_size": 0.5,
+                "shuffle": "true",
+                "stratify": "true",
+                "stratify_column": "classe",
+            },
+            files={"file": ("dados.csv", csv_content, "text/csv")},
+        )
+        assert response.status_code == 400
+        assert "estratificar" in response.json()["detail"]
+
+    @pytest.mark.asyncio
     async def test_upload_csv_conteudo_preview(self, client, mock_db, auth_headers):
         csv_content = b"nome,idade\nAna,25\nBob,30\nCarlos,35\nDiego,40\nElisa,45" # 5 rows
         response = await client.post(

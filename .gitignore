@@ -32,8 +32,11 @@ dist/
 .idea/
 
 # Arquivos de configuração e segredos locais
+.env
 *.env
 .env.*
+# Mantém o template versionável (sem segredos reais)
+!.env.example
 *.db
 *.sqlite3
 config.yaml

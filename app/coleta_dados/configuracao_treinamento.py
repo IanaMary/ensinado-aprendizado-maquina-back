@@ -6,17 +6,12 @@ from app.deps import train_test_split
 from app.funcoes_genericas.funcoes_genericas import df_para_base64, converter_numpy
 from app.schemas.schemas import ConfiguracaoColetaRequest, ReDivisaoColetaRequest
 from app.utils.seed import get_sklearn_random_state
+from app.funcoes_genericas.validacao import validar_object_id
 import pandas as pd
 import base64
 from io import BytesIO, StringIO
 
 router = APIRouter()
-
-
-def validar_object_id(valor: str) -> ObjectId:
-    if not ObjectId.is_valid(valor):
-        raise HTTPException(status_code=400, detail="ID inválido.")
-    return ObjectId(valor)
 
 
 def decode_base64_df(base64_string: str) -> pd.DataFrame:

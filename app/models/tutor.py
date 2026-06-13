@@ -2,10 +2,13 @@ from pydantic import BaseModel
 from fastapi import HTTPException
 from typing import List
 
+import logging
 import re
 from simpleeval import simple_eval
 
 from app.database import tutor
+
+logger = logging.getLogger(__name__)
 
 async def obter_arvore():
     arvore = await tutor.find_one()
@@ -107,7 +110,7 @@ def avaliar_condicoes(lista_condicoes, contexto):
                     return descricao
 
         except Exception as e:
-            print(f"Erro ao avaliar condição '{cond}': {e}")
+            logger.warning(f"Erro ao avaliar condição '{cond}': {e}")
             continue
 
     return "Nenhuma condição satisfeita"

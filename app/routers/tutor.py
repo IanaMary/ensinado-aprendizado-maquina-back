@@ -89,7 +89,7 @@ async def atualizar_descricao(
     except Exception:
         raise HTTPException(status_code=400, detail="ID inválido")
 
-    update_data = request.contexto.dict(exclude_none=True)
+    update_data = request.contexto.model_dump(exclude_none=True)
     set_data = {}
 
     if modelos and len(modelos) == 2:
@@ -127,7 +127,7 @@ async def atualizar_modelos(id: str, request: AtualizarDescricaoRequest):
     except Exception:
         raise HTTPException(status_code=400, detail="ID inválido")
 
-    update_data = request.contexto.dict(exclude_none=True)
+    update_data = request.contexto.model_dump(exclude_none=True)
     set_data = {}
 
     # supervisionado

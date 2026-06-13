@@ -1,6 +1,4 @@
 import os
-import asyncio
-import functools
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -29,9 +27,13 @@ TOKEN_EXPIRE_MINUTES = int(
 # =========================
 # RATE LIMITING (Simples, em memória)
 # =========================
-import threading
+# Estado por processo: cada worker uvicorn mantém sua própria contagem.
+# Atrás de múltiplos workers o limite efetivo é multiplicado pelo número de
+# workers; para um limite global use um backend compartilhado (ex.: Redis).
+# Não há lock: a seção crítica abaixo não tem await, então roda de forma
+# atômica dentro do event loop de um worker.
 _request_log = defaultdict(list)
-_log_lock = threading.Lock()
+
 
 async def rate_limit(request: Request):
     """
@@ -39,20 +41,22 @@ async def rate_limit(request: Request):
     """
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
-    
-    with _log_lock:
-        # Limpa registros antigos (> 60 segundos)
-        _request_log[client_ip] = [t for t in _request_log[client_ip] if now - t < 60]
-        
-        # Verifica limite
-        if len(_request_log[client_ip]) >= 20:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Muitas tentativas de login. Tente novamente em 1 minuto."
-            )
-        
-        # Registra a requisição
-        _request_log[client_ip].append(now)
+
+    # Limpa registros antigos (> 60 segundos). Usa .get para não criar
+    # uma entrada vazia só por consultar um IP novo.
+    recentes = [t for t in _request_log.get(client_ip, []) if now - t < 60]
+
+    # Verifica limite
+    if len(recentes) >= 20:
+        _request_log[client_ip] = recentes
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Muitas tentativas de login. Tente novamente em 1 minuto."
+        )
+
+    # Registra a requisição
+    recentes.append(now)
+    _request_log[client_ip] = recentes
 
 # =========================
 # ROUTER

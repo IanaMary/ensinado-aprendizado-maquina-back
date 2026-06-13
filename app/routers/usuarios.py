@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
 from typing import List, Optional
 from bson import ObjectId
+import asyncio
+import logging
 import secrets
 import smtplib
 from email.mime.text import MIMEText
@@ -16,6 +18,9 @@ if os.getenv("RENDER") is None:
 from app.schemas.usuarios import UserCreate, UserOut, UserInvite, UserInviteResponse
 from app.security import get_senha_hash, verificar_senha, get_usuario_atual
 from app.database import colecao_usuario, verificadores_professor
+from app.funcoes_genericas.validacao import validar_object_id
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/usuario", tags=["Usuários"])
 
@@ -28,18 +33,19 @@ EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@iana.com")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://absapt.tk/h2ia/tutor")
 
 
-def validar_object_id(user_id: str) -> ObjectId:
-    if not ObjectId.is_valid(user_id):
-        raise HTTPException(status_code=400, detail="ID inválido")
-    return ObjectId(user_id)
+def _enviar_smtp(msg: MIMEMultipart):
+    """Envio SMTP síncrono; executado fora do event loop via asyncio.to_thread."""
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        server.starttls()
+        server.login(SMTP_USER, SMTP_PASSWORD)
+        server.send_message(msg)
 
 
 async def enviar_email(destinatario: str, assunto: str, corpo_html: str):
     """Envia email usando SMTP."""
     try:
         if not SMTP_USER or not SMTP_PASSWORD:
-            print(f"[DEV] Email não enviado (SMTP não configurado): {destinatario}")
-            print(f"[DEV] Assunto: {assunto}")
+            logger.info(f"Email não enviado (SMTP não configurado): {destinatario} | Assunto: {assunto}")
             return False  # Retorna False para indicar que email não foi enviado
 
         msg = MIMEMultipart('alternative')
@@ -50,14 +56,11 @@ async def enviar_email(destinatario: str, assunto: str, corpo_html: str):
         html_part = MIMEText(corpo_html, 'html')
         msg.attach(html_part)
 
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.send_message(msg)
+        await asyncio.to_thread(_enviar_smtp, msg)
 
         return True
     except Exception as e:
-        print(f"Erro ao enviar email: {e}")
+        logger.warning(f"Erro ao enviar email: {e}")
         return False
 
 

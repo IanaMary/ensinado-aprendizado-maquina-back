@@ -10,6 +10,7 @@ from bson import ObjectId
 from app.database import arquivos, configuracoes_treinamento
 from app.deps import train_test_split
 from app.funcoes_genericas.funcoes_genericas import gerar_colunas_detalhes, df_para_base64, decode_excel_base64_df, converter_numpy
+from app.funcoes_genericas.validacao import validar_object_id
 from app.utils.seed import get_sklearn_random_state
 
 router = APIRouter()
@@ -106,16 +107,19 @@ async def upload_csv(
     content_b64 = base64.b64encode(content).decode("utf-8")
 
     if tipo == "teste" and id_coleta:
+        coleta_oid = validar_object_id(id_coleta, "id_coleta")
         await arquivos.update_one(
-            {"_id": ObjectId(id_coleta)},
+            {"_id": coleta_oid},
             {"$set": {
                 "arquivo_nome_teste": file.filename,
                 "content_teste_base64": content_b64,
             }}
         )
 
-        doc = await arquivos.find_one({"_id": ObjectId(id_coleta)})
-        config = await configuracoes_treinamento.find_one({"id_coleta": ObjectId(id_coleta)})
+        doc = await arquivos.find_one({"_id": coleta_oid})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Coleta não encontrada.")
+        config = await configuracoes_treinamento.find_one({"id_coleta": coleta_oid})
 
         df_treino = decode_excel_base64_df(doc.get("content_treino_base64", ""))
         df_teste = df
@@ -150,10 +154,20 @@ async def upload_csv(
 
     content_completo_b64 = content_b64
 
+    test_size = test_size or 0.2
+    if not 0 < test_size < 1:
+        raise HTTPException(status_code=400, detail="test_size deve estar entre 0 e 1.")
+
     stratify_values = df[stratify_column] if stratify and stratify_column in df.columns and shuffle else None
+    if stratify_values is not None and stratify_values.value_counts().min() < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="Não é possível estratificar: cada classe precisa de ao menos 2 exemplos para estratificar."
+        )
+
     df_treino, df_teste = train_test_split(
         df,
-        test_size=test_size or 0.2,
+        test_size=test_size,
         random_state=get_sklearn_random_state() or 42,
         shuffle=shuffle,
         stratify=stratify_values,

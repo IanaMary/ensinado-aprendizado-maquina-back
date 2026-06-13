@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.database import pipelines
 from app.schemas.pipelines import PipelineCreate, PipelineUpdate
@@ -68,10 +68,18 @@ async def criar_pipeline(
 @router.get("/")
 async def listar_pipelines(
     current_user: dict = Depends(get_usuario_atual),
+    limite: int = Query(200, ge=1, le=200),
+    pagina: int = Query(1, ge=1),
 ):
     user_id = str(current_user["_id"])
-    cursor = pipelines.find({"user_id": user_id}).sort("dataModificacao", -1)
-    docs = await cursor.to_list(length=200)
+    skip = (pagina - 1) * limite
+    cursor = (
+        pipelines.find({"user_id": user_id})
+        .sort("dataModificacao", -1)
+        .skip(skip)
+        .limit(limite)
+    )
+    docs = await cursor.to_list(length=limite)
     return [_pipeline_doc(d) for d in docs]
 
 

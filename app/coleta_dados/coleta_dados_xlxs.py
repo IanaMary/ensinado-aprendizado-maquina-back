@@ -44,7 +44,16 @@ async def upload_xlsx(
 
         content_completo_b64 = df_para_base64(df)
 
+        if not 0 < test_size < 1:
+            raise HTTPException(status_code=400, detail="test_size deve estar entre 0 e 1.")
+
         stratify_values = df[stratify_column] if stratify and stratify_column in df.columns and shuffle else None
+        if stratify_values is not None and stratify_values.value_counts().min() < 2:
+            raise HTTPException(
+                status_code=400,
+                detail="Não é possível estratificar: cada classe precisa de ao menos 2 exemplos para estratificar."
+            )
+
         df_treino, df_teste = train_test_split(
             df,
             test_size=test_size,

@@ -17,17 +17,17 @@ class AvaliacaoModelosRequest(BaseModel):
 # Modelos Pydantic
 class DatasetRequest(BaseModel):
     arquivo_id: str
-    tipo_arquivo: str              
-    configuracao_id: str   
-    modelo_id: str           
-    hiperparametros: Optional[Dict[str, Any]] = {}           
-    
+    tipo_arquivo: str
+    configuracao_id: str
+    modelo_id: str
+    hiperparametros: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
 class AvaliacaoRequest(BaseModel):
     dados_teste: List[Dict[str, Any]]
     target: str
     atributos: List[str]
-    metricas: Optional[List[str]] = []
-    modelo_nome: Optional[Any]
+    metricas: Optional[List[str]] = Field(default_factory=list)
+    modelo_nome: Optional[Any] = None
     mlflow_run_id_modelo: str
 class PrevisaoRequest(BaseModel):
     dados: List[Dict[str, Any]]
@@ -48,11 +48,8 @@ class ReDivisaoColetaRequest(BaseModel):
     shuffle: bool = True
     stratify: bool = False
     target: Optional[str] = None
-    
-class Config:
-    allow_population_by_field_name = True
-    
+
 class KnnRequestById(BaseModel):
     id_coleta: str
-    hiperparametros: Optional[Dict[str, Any]] = {}
+    hiperparametros: Optional[Dict[str, Any]] = Field(default_factory=dict)
     

@@ -4,10 +4,13 @@ from bson import ObjectId
 
 
 def _mock_pipeline_find(return_value=None):
-    to_list = AsyncMock(return_value=return_value or [])
-    m = MagicMock()
-    m.to_list = to_list
-    return m
+    """Cursor encadeável: find().sort().skip().limit().to_list()."""
+    cursor = MagicMock()
+    cursor.sort.return_value = cursor
+    cursor.skip.return_value = cursor
+    cursor.limit.return_value = cursor
+    cursor.to_list = AsyncMock(return_value=return_value or [])
+    return cursor
 
 
 class TestPipelines:
@@ -40,9 +43,7 @@ class TestPipelines:
         mock_db["tutor"].aggregate = MagicMock(return_value=MagicMock(
             to_list=AsyncMock(return_value=[])
         ))
-        mock_db["pipelines"].find = MagicMock(return_value=MagicMock(
-            sort=MagicMock(return_value=_mock_pipeline_find([]))
-        ))
+        mock_db["pipelines"].find = MagicMock(return_value=_mock_pipeline_find([]))
 
         response = await client.get("/pipelines/", headers=auth_headers)
         assert response.status_code == 200
@@ -104,6 +105,30 @@ class TestPipelines:
         response = await client.post(f"/pipelines/{oid}/copiar", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["nome"] == "Cópia de Meu pipeline"
+
+    @pytest.mark.asyncio
+    async def test_listagem_default_limita_em_200(self, client, mock_db, auth_headers):
+        """Por padrão a listagem traz a primeira página de até 200 pipelines."""
+        cursor = _mock_pipeline_find([])
+        mock_db["pipelines"].find = MagicMock(return_value=cursor)
+
+        response = await client.get("/pipelines/", headers=auth_headers)
+        assert response.status_code == 200
+        cursor.skip.assert_called_once_with(0)
+        cursor.limit.assert_called_once_with(200)
+        cursor.to_list.assert_awaited_once_with(length=200)
+
+    @pytest.mark.asyncio
+    async def test_listagem_pagina_com_skip(self, client, mock_db, auth_headers):
+        """Paginação: limite/pagina traduzem para skip e limit corretos."""
+        cursor = _mock_pipeline_find([])
+        mock_db["pipelines"].find = MagicMock(return_value=cursor)
+
+        response = await client.get("/pipelines/?limite=10&pagina=3", headers=auth_headers)
+        assert response.status_code == 200
+        cursor.skip.assert_called_once_with(20)
+        cursor.limit.assert_called_once_with(10)
+        cursor.to_list.assert_awaited_once_with(length=10)
 
     @pytest.mark.asyncio
     async def test_galeria(self, client, mock_db, auth_headers):

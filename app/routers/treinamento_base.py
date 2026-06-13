@@ -1,9 +1,8 @@
 import base64
 import hashlib
-import re
+import logging
 from io import BytesIO
 from typing import Callable, Dict, Any, List
-from bson.objectid import ObjectId
 import bson.json_util as bson
 import joblib
 from fastapi import APIRouter, HTTPException
@@ -12,19 +11,9 @@ from app.schemas.schemas import DatasetRequest
 from app.database import configuracoes_treinamento, arquivos, opcoes_modelos, modelos_treinados
 from app.utils.seed import get_sklearn_random_state
 from app.funcoes_genericas.funcoes_genericas import converter_numpy
+from app.funcoes_genericas.validacao import validar_object_id, MAX_ARQUIVO_BASE64
 
-
-HEX_24 = re.compile(r"^[0-9a-fA-F]{24}$")
-
-
-def _validar_object_id(valor: str, nome_campo: str) -> ObjectId:
-    """Valida e converte uma string em ObjectId, retornando 400 em vez de 500 quando inválida."""
-    if not valor or not isinstance(valor, str) or not HEX_24.match(valor):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Identificador inválido para '{nome_campo}'. É necessário um ObjectId de 24 caracteres hexadecimais."
-        )
-    return ObjectId(valor)
+logger = logging.getLogger(__name__)
 
 
 async def treinar_modelo_generico(
@@ -34,13 +23,13 @@ async def treinar_modelo_generico(
     **kwargs_adicionais
 ) -> Dict[str, Any]:
     """Treina um modelo genérico e retorna o resultado."""
-    print(f"[PRINT] treinar_modelo_generico iniciado para {nome_modelo_label}")
-    print(f"[PRINT] Request: {request.model_dump()}")
+    logger.info(f"treinar_modelo_generico iniciado para {nome_modelo_label}")
+    logger.debug(f"Request: {request.model_dump()}")
     tipo = request.tipo_arquivo.lower()
 
-    arquivo_oid = _validar_object_id(request.arquivo_id, "arquivo_id")
-    configuracao_oid = _validar_object_id(request.configuracao_id, "configuracao_id")
-    modelo_oid = _validar_object_id(request.modelo_id, "modelo_id")
+    arquivo_oid = validar_object_id(request.arquivo_id, "arquivo_id")
+    configuracao_oid = validar_object_id(request.configuracao_id, "configuracao_id")
+    modelo_oid = validar_object_id(request.modelo_id, "modelo_id")
 
     arquivo_doc = await arquivos.find_one({"_id": arquivo_oid})
     if not arquivo_doc:
@@ -73,7 +62,10 @@ async def treinar_modelo_generico(
     conteudo_base64 = arquivo_doc.get("content_treino_base64")
     if not conteudo_base64:
         raise HTTPException(status_code=400, detail="Conteúdo do arquivo ausente ou mal formatado.")
-    
+
+    if len(conteudo_base64) > MAX_ARQUIVO_BASE64:
+        raise HTTPException(status_code=413, detail="Arquivo de treino muito grande. O limite é de 50 MB.")
+
     try:
         conteudo_bytes = base64.b64decode(conteudo_base64)
         # Tenta Excel primeiro, depois CSV
@@ -95,7 +87,15 @@ async def treinar_modelo_generico(
     
     X_train = df[atributos]
     y_train = df[target]
-    
+
+    if X_train.isnull().any().any() or y_train.isnull().any():
+        raise HTTPException(
+            status_code=400,
+            detail="Os dados de treino contêm valores ausentes. Remova ou preencha os valores vazios antes de treinar."
+        )
+    if y_train.nunique() < 2:
+        raise HTTPException(status_code=400, detail="O alvo precisa de pelo menos duas classes para treinar o modelo.")
+
     try:
         hiperparametros.update(kwargs_adicionais)
         modelo = instancia_classe(**hiperparametros)
@@ -124,9 +124,7 @@ async def treinar_modelo_generico(
         id_result = str(result.inserted_id)
         
     except Exception as e:
-        print(f"[ERROR] treinar_modelo_generico failed: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception(f"treinar_modelo_generico falhou: {e}")
         raise HTTPException(status_code=500, detail=f"Erro no treinamento: {str(e)}")
     
     return converter_numpy({

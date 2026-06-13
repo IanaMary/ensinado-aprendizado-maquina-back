@@ -9,7 +9,7 @@ router = APIRouter(prefix="/conf_pipeline", tags=["Configuração Pipeline"])
 
 @router.post("/itens_coleta_dados/multiplos")
 async def itens_coleta_dados(itens: List[ItemColeta]):
-  documentos = [item.dict() for item in itens]
+  documentos = [item.model_dump() for item in itens]
   resultado = await opcoes_coletas.insert_many(documentos)
   return {"ids_inseridos": [str(_id) for _id in resultado.inserted_ids]}
 
@@ -84,7 +84,7 @@ async def get_all_modelos(
   ]
   
 @router.get("/metricas/todos", response_model=List)
-async def get_all_modelos(
+async def get_all_metricas(
     limite: int = Query(10, ge=1, le=100),
     pagina: int = Query(1, ge=1),
     ordenar: Optional[str] = Query(None, description="Campo para ordenar, ex: 'label', 'tipoItem'"),

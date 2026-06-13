@@ -75,6 +75,60 @@ class TestCriarUsuario:
         assert response.status_code == 200
 
 
+class TestConviteEmail:
+    @pytest.mark.asyncio
+    async def test_convite_com_smtp_ok(self, client, mock_db, auth_headers):
+        """O envio SMTP roda via asyncio.to_thread; sucesso → email_enviado=True."""
+        mock_db["usuarios"].find_one = AsyncMock(side_effect=[
+            {"_id": ObjectId(), "email": "admin@test.com", "role": "admin", "nome_usuario": "admin"},  # auth
+            None,  # duplicate check
+        ])
+        smtp_mock = MagicMock()
+        with patch("app.routers.usuarios.SMTP_USER", "user"), \
+             patch("app.routers.usuarios.SMTP_PASSWORD", "pass"), \
+             patch("app.routers.usuarios._enviar_smtp", smtp_mock):
+            response = await client.post("/usuario/convite", headers=auth_headers, json={
+                "nome": "Novo Aluno",
+                "email": "aluno@test.com",
+                "tipo": "aluno",
+            })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email_enviado"] is True
+        assert data["link_convite"] is None
+        smtp_mock.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_convite_com_falha_smtp_retorna_link(self, client, mock_db, auth_headers):
+        """Regressão: falha no SMTP não derruba o endpoint; retorna link_convite manual."""
+        mock_db["usuarios"].find_one = AsyncMock(side_effect=[
+            {"_id": ObjectId(), "email": "admin@test.com", "role": "admin", "nome_usuario": "admin"},  # auth
+            None,  # duplicate check
+        ])
+        with patch("app.routers.usuarios.SMTP_USER", "user"), \
+             patch("app.routers.usuarios.SMTP_PASSWORD", "pass"), \
+             patch("app.routers.usuarios._enviar_smtp", MagicMock(side_effect=ConnectionError("smtp down"))):
+            response = await client.post("/usuario/convite", headers=auth_headers, json={
+                "nome": "Novo Aluno",
+                "email": "aluno@test.com",
+                "tipo": "aluno",
+            })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email_enviado"] is False
+        assert data["link_convite"] is not None
+
+    @pytest.mark.asyncio
+    async def test_convite_nao_admin_retorna_403(self, client, mock_db, auth_headers):
+        mock_db["usuarios"].find_one = AsyncMock(return_value={
+            "_id": ObjectId(), "email": "aluno@test.com", "role": "aluno", "nome_usuario": "aluno",
+        })
+        response = await client.post("/usuario/convite", headers=auth_headers, json={
+            "nome": "X", "email": "x@test.com", "tipo": "aluno",
+        })
+        assert response.status_code == 403
+
+
 class TestGerenciarUsuarios:
     @pytest.mark.asyncio
     async def test_alterar_status_usuario_inexistente_retorna_404(self, client, mock_db, auth_headers):

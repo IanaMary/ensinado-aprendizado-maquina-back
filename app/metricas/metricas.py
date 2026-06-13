@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from app.deps import pd, metricas_disponiveis
 from app.database import modelos_treinados, arquivos
 from app.schemas.schemas import AvaliacaoModelosRequest
+from app.funcoes_genericas.validacao import validar_object_id, MAX_ARQUIVO_BASE64
 from bson import ObjectId
 import joblib
 import base64
@@ -93,11 +94,9 @@ def gerar_visualizacoes_classificacao(modelo_treinado, X_test, y_test, classes) 
 
 @router.post("/avaliar_modelos")
 async def avaliar_modelos(request: AvaliacaoModelosRequest):
-    print(f"[PRINT] avaliar_modelos called with {len(request.modelos)} modelos and {len(request.metricas)} metricas")
     logger.info(f"avaliar_modelos called with {len(request.modelos)} modelos and {len(request.metricas)} metricas")
 
     if not request.modelos:
-        print("[WARN] avaliar_modelos called with empty modelos list")
         logger.warning("avaliar_modelos called with empty modelos list")
     
     # estrutura: {nome_metrica: {label_modelo: valor}}
@@ -107,26 +106,20 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
     resultados_formatados[VISUALIZACOES_KEY] = {}
 
     for modelo in request.modelos:
-        print(f"[PRINT] Processing modelo: {modelo}")
         id_modelo = modelo.id
         nome_modelo = modelo.label
-        print(f"[PRINT] id_modelo: {id_modelo}, nome_modelo: {nome_modelo}")
+        logger.debug(f"Processando modelo {nome_modelo} (id {id_modelo})")
 
-        try:
-            doc = await modelos_treinados.find_one({"_id": ObjectId(id_modelo)})
-        except Exception as e:
-            print(f"[PRINT] Exception finding model: {e}")
-            raise HTTPException(status_code=400, detail=f"ID de modelo inválido: {id_modelo}")
+        modelo_oid = validar_object_id(id_modelo, "id_modelo")
+        doc = await modelos_treinados.find_one({"_id": modelo_oid})
 
         if not doc:
-            print(f"[PRINT] Modelo não encontrado: {id_modelo}")
             logger.warning(f"Modelo não encontrado: {id_modelo}")
             for metrica in request.metricas:
                 resultados_formatados[metrica.label][nome_modelo] = "Modelo não encontrado"
             continue
 
         modelo_treinado_bytes = bytes(doc["modelo_treinado"])
-        print(f"[PRINT] Modelo bytes length: {len(modelo_treinado_bytes)}")
         logger.debug(f"Modelo bytes length: {len(modelo_treinado_bytes)}")
 
         # Recupera o checksum esperado
@@ -134,80 +127,69 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
         if checksum_esperado:
             checksum_atual = hashlib.sha256(modelo_treinado_bytes).hexdigest()
             if checksum_atual != checksum_esperado:
-                print(f"[PRINT] Checksum mismatch for model {id_modelo}")
                 logger.error(f"Checksum mismatch for model {id_modelo}")
                 raise HTTPException(status_code=400, detail="Erro de integridade: checksum do modelo não corresponde.")
 
         # Desserializa o modelo com joblib
         modelo_treinado = joblib.load(io.BytesIO(modelo_treinado_bytes))
-        print("[PRINT] Modelo deserializado com sucesso")
         logger.debug("Modelo deserializado com sucesso")
 
         atributos = doc["atributos"]
         target = doc["target"]
-        print(f"[PRINT] Atributos: {atributos}, Target: {target}")
         logger.debug(f"Atributos: {atributos}, Target: {target}")
-        
+
         # Busca o arquivo de teste pelo ID (separado do documento do modelo)
         arquivo_id = doc.get("arquivo_id")
         base64_str = None
-        
-        print(f"[PRINT] arquivo_id: {arquivo_id}")
-        
+
         if arquivo_id:
-            try:
-                arquivo_doc = await arquivos.find_one({"_id": ObjectId(arquivo_id)})
-                print(f"[PRINT] arquivo_doc found: {arquivo_doc is not None}")
+            if ObjectId.is_valid(str(arquivo_id)):
+                arquivo_doc = await arquivos.find_one({"_id": ObjectId(str(arquivo_id))})
                 if arquivo_doc:
                     base64_str = arquivo_doc.get("content_teste_base64")
-                    print(f"[PRINT] content_teste_base64 from arquivo: {base64_str is not None}")
-            except Exception as e:
-                print(f"[PRINT] Erro ao buscar arquivo_id {arquivo_id}: {e}")
+            else:
+                logger.warning(f"arquivo_id inválido no modelo {id_modelo}: {arquivo_id}")
         
         # Fallback: usa o arq_teste do próprio modelo se não encontrou no arquivo
         if not base64_str:
             base64_str = doc.get("arq_teste")
-            print(f"[PRINT] Using arq_teste from model: {base64_str is not None}")
-        
+
         if not base64_str:
             raise HTTPException(status_code=400, detail="Conteúdo do arquivo de teste ausente.")
-        
-        print(f"[PRINT] base64_str length: {len(base64_str) if base64_str else 0}")
-        
+
+        if len(base64_str) > MAX_ARQUIVO_BASE64:
+            raise HTTPException(status_code=413, detail="Arquivo de teste muito grande. O limite é de 50 MB.")
+
         arquivo_bytes = base64.b64decode(base64_str)
-        print(f"[PRINT] arquivo_bytes length: {len(arquivo_bytes)}")
-        
+
         try:
             df_teste = pd.read_excel(io.BytesIO(arquivo_bytes), engine="openpyxl")
-            print(f"[PRINT] df_teste shape: {df_teste.shape}, columns: {list(df_teste.columns)}")
         except Exception as e:
-            print(f"[PRINT] Excel read error: {e}")
+            logger.debug(f"Falha ao ler arquivo de teste como Excel: {e}")
             try:
                 # Tenta CSV se falhar Excel
                 text = arquivo_bytes.decode("utf-8")
                 sep = ";" in text.split("\n")[0] and ";" or ","
                 df_teste = pd.read_csv(io.StringIO(text), sep=sep)
             except Exception as e2:
-                print(f"[PRINT] CSV read error: {e2}")
+                logger.warning(f"Falha ao ler arquivo de teste como CSV: {e2}")
                 raise HTTPException(status_code=400, detail=f"Erro ao processar arquivo de teste: {e} | {e2}")
 
         # Valida colunas
         for col in atributos + [target]:
             if col not in df_teste.columns:
-                print(f"[PRINT] Coluna ausente: {col}")
                 raise HTTPException(status_code=400, detail=f"Coluna '{col}' não encontrada no arquivo de teste.")
 
         X_test = df_teste[atributos]
         y_test = df_teste[target]
 
         y_pred = modelo_treinado.predict(X_test)
-        print(f"[PRINT] Predições realizadas: {len(y_pred)}")
 
         classes_doc = doc.get("classes")
         if not classes_doc:
             try:
                 classes_doc = [str(c) for c in modelo_treinado.classes_]
-            except:
+            except AttributeError:
                 classes_doc = [str(c) for c in sorted(list(set(y_test) | set(y_pred)))]
 
         if hasattr(modelo_treinado, "classes_"):
@@ -239,7 +221,7 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
                 valor_metrica = calcular_metrica(metrica.valor, metrica_fn, y_test, y_pred, metrica.average)
                 resultados_formatados[metrica.label][nome_modelo] = valor_metrica
             except Exception as e:
-                print(f"[PRINT] Erro ao calcular métrica {metrica.label}: {e}")
+                logger.warning(f"Erro ao calcular métrica {metrica.label}: {e}")
                 resultados_formatados[metrica.label][nome_modelo] = f"Erro: {str(e)}"
 
     return resultados_formatados
