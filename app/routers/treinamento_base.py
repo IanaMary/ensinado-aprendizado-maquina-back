@@ -127,12 +127,32 @@ async def treinar_modelo_generico(
         logger.exception(f"treinar_modelo_generico falhou: {e}")
         raise HTTPException(status_code=500, detail=f"Erro no treinamento: {str(e)}")
     
+    # Calcular total de amostras de teste se disponível
+    total_amostras_teste = 0
+    conteudo_teste_base64 = arquivo_doc.get("content_teste_base64")
+    if conteudo_teste_base64:
+        try:
+            teste_bytes = base64.b64decode(conteudo_teste_base64)
+            try:
+                df_teste = pd.read_excel(BytesIO(teste_bytes), engine="openpyxl")
+            except Exception:
+                try:
+                    text_teste = teste_bytes.decode("utf-8")
+                except UnicodeDecodeError:
+                    text_teste = teste_bytes.decode("latin-1")
+                sep_teste = ";" in text_teste.split("\n")[0] and ";" or ","
+                df_teste = pd.read_csv(pd.io.common.StringIO(text_teste), sep=sep_teste)
+            total_amostras_teste = len(df_teste)
+        except Exception as e:
+            logger.warning(f"Erro ao contar amostras de teste: {e}")
+    
     return converter_numpy({
         "atributos": atributos,
         "target": target,
         "modelo_treinado": str(modelo),
         "status": f"modelo {nome_modelo_label} treinado com sucesso",
         "total_amostras_treino": len(X_train),
+        "total_amostras_teste": total_amostras_teste,
         "hiperparametros": modelo.get_params(),
         "classes": list(modelo.classes_),
         "modelo": nome_modelo_label.lower().replace(" ", "_"),
