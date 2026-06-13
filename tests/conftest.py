@@ -1,4 +1,5 @@
 import os
+import tempfile
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
@@ -19,6 +20,8 @@ bcrypt.hashpw = mocked_hashpw
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only-32chars!")
 os.environ.setdefault("MONGO_URI", "mongodb://localhost:27017")
 os.environ.setdefault("MONGO_DB", "test_db")
+# Isola o cache de datasets em um diretorio temporario para nao ler/gravar o cache real.
+os.environ.setdefault("DATASET_CACHE_DIR", tempfile.mkdtemp(prefix="dataset_cache_test_"))
 
 TEST_USER_ID = ObjectId()
 TEST_USER_EMAIL = "test@test.com"

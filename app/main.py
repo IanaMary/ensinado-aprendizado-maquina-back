@@ -58,6 +58,16 @@ app.include_router(metricas_router, prefix="/classificador", dependencies=auth_d
 app.include_router(pipelines.router, dependencies=auth_dependency)
 app.include_router(visualizacao.router, prefix="/visualizacao", dependencies=auth_dependency)
 
+@app.on_event("startup")
+def prewarm_datasets():
+    # Pre-baixa os datasets UCI para o cache em disco em background, sem bloquear
+    # o boot. Na primeira execucao baixa tudo; nos restarts seguintes e no-op.
+    import threading
+    threading.Thread(
+        target=toy_datasets.prewarm_uci_cache, daemon=True, name="prewarm-uci-cache"
+    ).start()
+
+
 @app.get("/healthcheck")
 async def healthcheck():
     try:

@@ -1,5 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
+from pathlib import Path
+import os
+import logging
 import pandas as pd
 
 from app.models.dataset_config import (
@@ -10,6 +13,30 @@ from app.utils.seed import seed_everything, get_seed
 from app.database import arquivos, configuracoes_treinamento
 from app.security import get_usuario_atual
 from app.funcoes_genericas.funcoes_genericas import df_para_base64
+
+logger = logging.getLogger("uvicorn")
+
+# Cache em disco dos datasets UCI (ucimlrepo nao faz cache proprio).
+# Fica na raiz do backend; sobrevive a restarts e ao git pull (nao versionado).
+# Sobrescrevivel via DATASET_CACHE_DIR (usado nos testes para isolar o cache).
+CACHE_DIR = Path(os.getenv("DATASET_CACHE_DIR") or (Path(__file__).resolve().parents[2] / "dataset_cache"))
+
+# Mapeamento de dataset ID -> UCI ID
+UCI_IDS = {
+    "adult": 2,
+    "wine_quality": 186,
+    "heart_disease": 45,
+    "titanic": 597,
+    "abalone": 1,
+    "housing": 601,
+    "car_evaluation": 19,
+    "mushroom": 73,
+    # Datasets de Clustering
+    "wholesale_customers": 292,
+    "obesity_levels": 544,
+    "online_shoppers": 468,
+    "heart_failure": 519,
+}
 
 router = APIRouter(prefix="/toy_datasets", tags=["Toy Datasets"])
 
@@ -134,6 +161,7 @@ async def carregar_dataset(
         return {
             "id_coleta": id_coleta,
             "id_configuracoes_treinamento": id_configuracoes_treinamento,
+            "id": ds.id,
             "nome_dataset": ds.nome,
             "fonte": ds.fonte,
             "colunas": colunas,
@@ -195,32 +223,47 @@ def _carregar_sklearn(dataset_name: str):
     return None, None
 
 
-def _carregar_uci(dataset_name: str, ds: DatasetConfig):
-    """Carrega um dataset do UCI via ucimlrepo."""
-    from ucimlrepo import fetch_ucirepo
-    
-    # Mapeamento de dataset ID para UCI ID
-    uci_ids = {
-        "adult": 2,
-        "wine_quality": 186,
-        "heart_disease": 45,
-        "titanic": 597,
-        "abalone": 1,
-        "housing": 601,
-        "car_evaluation": 19,
-        "mushroom": 73,
-        # Datasets de Clustering
-        "wholesale_customers": 292,
-        "obesity_levels": 544,
-        "online_shoppers": 468,
-        "heart_failure": 519,
-    }
-    
-    uci_id = uci_ids.get(dataset_name)
+def _carregar_uci(dataset_name: str, ds: DatasetConfig = None):
+    """Carrega um dataset do UCI via ucimlrepo, com cache em disco."""
+    uci_id = UCI_IDS.get(dataset_name)
     if uci_id is None:
         raise HTTPException(status_code=400, detail=f"Dataset UCI '{dataset_name}' nao configurado")
-    
+
+    cache_path = CACHE_DIR / f"{dataset_name}.pkl"
+    if cache_path.exists():
+        try:
+            return pd.read_pickle(cache_path)
+        except Exception:
+            # Cache corrompido: ignora e rebaixa abaixo.
+            pass
+
+    from ucimlrepo import fetch_ucirepo
     dataset = fetch_ucirepo(id=uci_id)
     df = dataset.data.original
-    
+
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        df.to_pickle(cache_path)
+    except Exception:
+        # Falha ao gravar cache nao deve quebrar o request.
+        pass
+
     return df
+
+
+def prewarm_uci_cache():
+    """Pre-baixa todos os datasets UCI para o cache em disco.
+
+    Pensado para rodar no startup do servidor: na primeira execucao baixa tudo;
+    nos restarts seguintes vira no-op rapido (cache ja em disco). Failsafe: uma
+    falha de rede em um dataset apenas registra log e segue para o proximo.
+    """
+    for nome in UCI_IDS:
+        cache_path = CACHE_DIR / f"{nome}.pkl"
+        if cache_path.exists():
+            continue
+        try:
+            _carregar_uci(nome)
+            logger.info("[cache UCI] dataset baixado para o cache: %s", nome)
+        except Exception as exc:
+            logger.warning("[cache UCI] falha ao pre-baixar '%s': %s", nome, exc)
