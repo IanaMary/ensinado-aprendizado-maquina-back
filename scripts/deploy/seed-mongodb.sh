@@ -81,7 +81,8 @@ db.modelos.insertMany([
             { nomeHiperparametro: "n_neighbors", valorPadrao: 5 },
             { nomeHiperparametro: "weights", valorPadrao: "uniform" },
             { nomeHiperparametro: "algorithm", valorPadrao: "auto" }
-        ]
+        ],
+        metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
     },
     {
         label: "Árvore de Decisão",
@@ -97,7 +98,8 @@ db.modelos.insertMany([
             { nomeHiperparametro: "criterion", valorPadrao: "gini" },
             { nomeHiperparametro: "max_depth", valorPadrao: null },
             { nomeHiperparametro: "min_samples_split", valorPadrao: 2 }
-        ]
+        ],
+        metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
     },
     {
         label: "SVM",
@@ -113,7 +115,8 @@ db.modelos.insertMany([
             { nomeHiperparametro: "C", valorPadrao: 1.0 },
             { nomeHiperparametro: "kernel", valorPadrao: "rbf" },
             { nomeHiperparametro: "gamma", valorPadrao: "scale" }
-        ]
+        ],
+        metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
     },
     {
         label: "Regressão Logística",
@@ -129,7 +132,8 @@ db.modelos.insertMany([
             { nomeHiperparametro: "C", valorPadrao: 1.0 },
             { nomeHiperparametro: "solver", valorPadrao: "lbfgs" },
             { nomeHiperparametro: "max_iter", valorPadrao: 100 }
-        ]
+        ],
+        metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
     },
     {
         label: "Regressão Linear",
@@ -157,7 +161,8 @@ db.modelos.insertMany([
             { nomeHiperparametro: "n_clusters", valorPadrao: 3 },
             { nomeHiperparametro: "init", valorPadrao: "k-means++" },
             { nomeHiperparametro: "max_iter", valorPadrao: 300 }
-        ]
+        ],
+        metricas: ["silhouette_score", "calinski_harabasz_score", "davies_bouldin_score"]
     },
     {
         label: "PCA",
@@ -171,7 +176,8 @@ db.modelos.insertMany([
         resumo: "Principal Component Analysis",
         hiperparametros: [
             { nomeHiperparametro: "n_components", valorPadrao: 2 }
-        ]
+        ],
+        metricas: ["silhouette_score", "calinski_harabasz_score", "davies_bouldin_score"]
     },
     {
         label: "SVM Linear",
@@ -185,7 +191,8 @@ db.modelos.insertMany([
         resumo: "SVM com kernel linear. Mais rápido para dados linearmente separáveis.",
         hiperparametros: [
             { nomeHiperparametro: "C", valorPadrao: 1.0 }
-        ]
+        ],
+        metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
     },
     {
         label: "Random Forest",
@@ -201,7 +208,8 @@ db.modelos.insertMany([
             { nomeHiperparametro: "n_estimators", valorPadrao: 100 },
             { nomeHiperparametro: "max_depth", valorPadrao: null },
             { nomeHiperparametro: "criterion", valorPadrao: "gini" }
-        ]
+        ],
+        metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
     },
     {
         label: "AdaBoost",
@@ -216,7 +224,8 @@ db.modelos.insertMany([
         hiperparametros: [
             { nomeHiperparametro: "n_estimators", valorPadrao: 50 },
             { nomeHiperparametro: "learning_rate", valorPadrao: 1.0 }
-        ]
+        ],
+        metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
     },
     {
         label: "Naive Bayes",
@@ -228,7 +237,8 @@ db.modelos.insertMany([
         prever_categoria: true,
         dados_rotulados: true,
         resumo: "Classificador probabilístico baseado no Teorema de Bayes.",
-        hiperparametros: []
+        hiperparametros: [],
+        metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
     },
     {
         label: "Rede Neural (MLP)",
@@ -244,7 +254,8 @@ db.modelos.insertMany([
             { nomeHiperparametro: "hidden_layer_sizes", valorPadrao: "100" },
             { nomeHiperparametro: "max_iter", valorPadrao: 500 },
             { nomeHiperparametro: "activation", valorPadrao: "relu" }
-        ]
+        ],
+        metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
     },
     {
         label: "QDA",
@@ -256,7 +267,8 @@ db.modelos.insertMany([
         prever_categoria: true,
         dados_rotulados: true,
         resumo: "Quadratic Discriminant Analysis: assume covariância diferente por classe.",
-        hiperparametros: []
+        hiperparametros: [],
+        metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
     }
 ]);
 print("  -> modelos: OK (" + db.modelos.countDocuments({}) + " documentos)");

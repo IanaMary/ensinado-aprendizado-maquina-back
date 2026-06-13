@@ -33,6 +33,7 @@ except Exception:
 from yellowbrick.classifier import ClassificationReport, ClassPredictionError, ConfusionMatrix
 from yellowbrick.target import ClassBalance
 from yellowbrick.cluster import SilhouetteVisualizer, InterclusterDistance, KElbowVisualizer
+from yellowbrick.regressor import ResidualsPlot, PredictionError
 
 router = APIRouter()
 
@@ -123,30 +124,16 @@ REGRESSION_METRICS = {"r2_score", "mean_squared_error", "root_mean_squared_error
 
 
 def gerar_visualizacoes_regressao(modelo_treinado, X_test, y_test) -> list[dict]:
-    import numpy as np
-
-    y_real = np.asarray(y_test, dtype=float).ravel()
-    y_pred = np.asarray(modelo_treinado.predict(X_test), dtype=float).ravel()
-    residuos = y_real - y_pred
-
-    def _previsto_vs_real(ax):
-        ax.scatter(y_real, y_pred, alpha=0.6, color="#6c4ed9", edgecolors="none")
-        lim_min = float(min(y_real.min(), y_pred.min()))
-        lim_max = float(max(y_real.max(), y_pred.max()))
-        ax.plot([lim_min, lim_max], [lim_min, lim_max], "--", color="#999999", linewidth=1)
-        ax.set_xlabel("Valor real")
-        ax.set_ylabel("Valor previsto")
-        ax.set_title("Quanto mais perto da linha tracejada, melhor a previsão")
-
-    def _residuos(ax):
-        ax.scatter(y_pred, residuos, alpha=0.6, color="#6c4ed9", edgecolors="none")
-        ax.axhline(0, linestyle="--", color="#999999", linewidth=1)
-        ax.set_xlabel("Valor previsto")
-        ax.set_ylabel("Resíduo (real - previsto)")
-        ax.set_title("Resíduos: o ideal é ficarem espalhados perto do zero")
-
+    if not getattr(modelo_treinado, "_estimator_type", None):
+        modelo_treinado._estimator_type = "regressor"
     visualizacoes = []
-    for titulo, factory in [("Previsto vs. Real", _previsto_vs_real), ("Resíduos", _residuos)]:
+
+    visualizadores = [
+        ("Prediction Error", lambda ax: PredictionError(modelo_treinado, ax=ax).fit(X_test, y_test).score(X_test, y_test)),
+        ("Residuals Plot", lambda ax: ResidualsPlot(modelo_treinado, ax=ax).fit(X_test, y_test).score(X_test, y_test)),
+    ]
+
+    for titulo, factory in visualizadores:
         visualizacao = _renderizar_visualizacao(titulo, factory)
         if visualizacao:
             visualizacoes.append(visualizacao)
