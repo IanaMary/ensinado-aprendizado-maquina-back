@@ -146,6 +146,12 @@ async def treinar_modelo_generico(
         except Exception as e:
             logger.warning(f"Erro ao contar amostras de teste: {e}")
     
+    # Construir dicionário de valores padrão dos hiperparâmetros
+    hiperparametros_padrao = {
+        h["nomeHiperparametro"]: h["valorPadrao"]
+        for h in modelo_doc.get("hiperparametros", [])
+    }
+    
     return converter_numpy({
         "atributos": atributos,
         "target": target,
@@ -154,6 +160,7 @@ async def treinar_modelo_generico(
         "total_amostras_treino": len(X_train),
         "total_amostras_teste": total_amostras_teste,
         "hiperparametros": modelo.get_params(),
+        "hiperparametros_padrao": hiperparametros_padrao,
         "classes": list(modelo.classes_),
         "modelo": nome_modelo_label.lower().replace(" ", "_"),
         "nome_modelo": modelo_doc.get('label'),

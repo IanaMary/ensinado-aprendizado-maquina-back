@@ -90,6 +90,7 @@ reportlab>=4.1.0
 requests>=2.32.5
 rsa>=4.9.1
 scikit-learn==1.4.2
+seaborn>=0.13.0
 setuptools==80.9.0
 yellowbrick==1.5
 scipy==1.13.0
