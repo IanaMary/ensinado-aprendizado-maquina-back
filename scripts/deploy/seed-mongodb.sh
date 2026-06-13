@@ -346,7 +346,7 @@ db.tutor.insertMany([
         nao_supervisionado: {
             explicacao: "Aprendizado não supervisionado encontra padrões sem rótulos.",
             reducao_dimensionalidade: { explicacao: "Reduz dimensionalidade preservando informação.", modelos: ["pca"] },
-            agrupamento: { explicacao: "Agrupa dados similares.", modelos: ["kmeans"] }
+            agrupamento: { explicacao: "Agrupa dados similares.", modelos: ["k_means"] }
         }
     },
     {
