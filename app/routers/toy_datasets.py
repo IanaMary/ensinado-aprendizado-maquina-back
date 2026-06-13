@@ -208,6 +208,11 @@ def _carregar_uci(dataset_name: str, ds: DatasetConfig):
         "housing": 601,
         "car_evaluation": 19,
         "mushroom": 73,
+        # Datasets de Clustering
+        "wholesale_customers": 292,
+        "obesity_levels": 544,
+        "online_shoppers": 468,
+        "heart_failure": 519,
     }
     
     uci_id = uci_ids.get(dataset_name)
