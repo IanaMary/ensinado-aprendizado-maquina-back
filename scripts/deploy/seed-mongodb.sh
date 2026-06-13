@@ -144,7 +144,7 @@ db.modelos.insertMany([
     },
     {
         label: "K-means",
-        valor: "kmeans",
+        valor: "k_means",
         tipoItem: "treino-validacao-teste",
         habilitado: true,
         movido: false,

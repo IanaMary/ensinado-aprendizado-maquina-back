@@ -5,7 +5,7 @@ from app.schemas.schemas import DatasetRequest
 
 router = APIRouter()
 
-@router.post("/kmeans")
+@router.post("/k_means")
 async def treinar_kmeans(request: DatasetRequest):
     return await treinar_modelo_generico(
         request,
