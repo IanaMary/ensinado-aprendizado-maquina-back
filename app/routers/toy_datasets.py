@@ -96,7 +96,8 @@ async def carregar_dataset(
         content_teste_b64 = df_para_base64(df.tail(max(1, len(df) // 4)))
 
         atributos_iniciais = {c: True for c in colunas}
-        atributos_iniciais[target_col] = False
+        if target_col and target_col in colunas:
+            atributos_iniciais[target_col] = False
 
         doc_arquivo = {
             "arquivo_nome_treino": f"{ds.nome}.xlsx",
