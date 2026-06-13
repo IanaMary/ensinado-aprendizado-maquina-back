@@ -270,73 +270,89 @@ db.metricas.insertMany([
         label: "Acurácia",
         valor: "accuracy_score",
         tipoItem: "metrica",
+        grupo: "classificacao",
         habilitado: true,
         movido: false,
         icon: "metrica",
-        resumo: "Proporção de previsões corretas"
+        resumo: "Proporção de previsões corretas",
+        explicacao: "Das 100 amostras de teste, quantas o modelo acertou? É a métrica mais simples: acertos dividido pelo total. Pode enganar quando as classes são desbalanceadas — um modelo que sempre prevê a classe majoritária pode ter acurácia alta sem ser útil."
     },
     {
         label: "Precisão",
         valor: "precision_score",
         tipoItem: "metrica",
+        grupo: "classificacao",
         habilitado: true,
         movido: false,
         icon: "metrica",
-        resumo: "Proporção de positivos corretos"
+        resumo: "Das previsões positivas, quantas estavam corretas",
+        explicacao: "Se o modelo disse \"é spam\" 10 vezes e 8 realmente eram spam, a precisão é 80%. Importante quando o custo de um falso positivo é alto — por exemplo, marcar um e-mail legítimo como spam."
     },
     {
         label: "Recall",
         valor: "recall_score",
         tipoItem: "metrica",
+        grupo: "classificacao",
         habilitado: true,
         movido: false,
         icon: "metrica",
-        resumo: "Proporção de positivos detectados"
+        resumo: "Dos positivos reais, quantos o modelo detectou",
+        explicacao: "Se existem 100 e-mails spam e o modelo detectou 70, o recall é 70%. Importante quando o custo de um falso negativo é alto — por exemplo, deixar passar um spam perigoso ou não detectar uma doença."
     },
     {
         label: "F1-Score",
         valor: "f1_score",
         tipoItem: "metrica",
+        grupo: "classificacao",
         habilitado: true,
         movido: false,
         icon: "metrica",
-        resumo: "Média harmônica entre precisão e recall"
+        resumo: "Média harmônica entre precisão e recall",
+        explicacao: "Resume precisão e recall em um único número. Se um dos dois for baixo, o F1 cai bastante. Útil quando as classes estão desbalanceadas e você precisa equilibrar os dois tipos de erro."
     },
     {
         label: "Matriz de Confusão",
         valor: "confusion_matrix",
         tipoItem: "metrica",
+        grupo: "classificacao",
         habilitado: true,
         movido: false,
         icon: "metrica",
-        resumo: "Matriz de verdadeiros/falsos positivos e negativos"
+        resumo: "Tabela de acertos e erros por classe",
+        explicacao: "Mostra exatamente onde o modelo acerta e onde erra. A diagonal principal mostra os acertos; os números fora da diagonal mostram os erros — por exemplo, quantos gatos foram confundidos com cachorros."
     },
     {
         label: "Silhouette Score",
         valor: "silhouette_score",
         tipoItem: "metrica",
+        grupo: "agrupamento",
         habilitado: true,
         movido: false,
         icon: "metrica",
-        resumo: "Mede quão similar cada ponto é ao seu próprio cluster comparado a outros clusters. Varia de -1 a 1 (quanto maior, melhor)."
+        resumo: "Quão bem definidos estão os clusters (-1 a 1)",
+        explicacao: "Mede o quão parecido cada ponto é com seu próprio cluster comparado aos outros clusters. Valores próximos de 1 indicam clusters bem separados; próximos de 0 indicam sobreposição; negativos indicam pontos possivelmente no cluster errado."
     },
     {
         label: "Calinski-Harabasz",
         valor: "calinski_harabasz_score",
         tipoItem: "metrica",
+        grupo: "agrupamento",
         habilitado: true,
         movido: false,
         icon: "metrica",
-        resumo: "Razão entre dispersão inter-cluster e intra-cluster. Quanto maior, melhor definidos os clusters."
+        resumo: "Razão entre separação e coesão dos clusters",
+        explicacao: "Compara a dispersão entre os clusters (quão distantes estão entre si) com a dispersão dentro de cada cluster (quão compactos são). Valores maiores indicam clusters mais definidos e separados."
     },
     {
         label: "Davies-Bouldin",
         valor: "davies_bouldin_score",
         tipoItem: "metrica",
+        grupo: "agrupamento",
         habilitado: true,
         movido: false,
         icon: "metrica",
-        resumo: "Mede a similaridade média entre cada cluster e seu mais similar. Quanto menor, melhor (0 = clusters perfeitos)."
+        resumo: "Similaridade média entre clusters (quanto menor, melhor)",
+        explicacao: "Para cada cluster, calcula o quão parecido ele é com o cluster mais próximo. A média desses valores é o Davies-Bouldin. Zero significaria clusters perfeitamente separados. Valores baixos indicam boa separação."
     }
 ]);
 print("  -> metricas: OK (" + db.metricas.countDocuments({}) + " documentos)");
