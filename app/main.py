@@ -11,8 +11,10 @@ from app.routers import knn
 from app.routers import arvore_decisao
 from app.routers import regressao_logistica
 from app.routers import svm
+from app.routers import kmeans
 from app.routers import toy_datasets
 from app.routers import pipelines
+from app.routers import visualizacao
 from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, configuracao_treinamento_router
 from app.metricas import router as metricas_router
 from app.security import get_usuario_atual
@@ -51,8 +53,10 @@ app.include_router(knn.router, prefix="/classificador/treinamento", dependencies
 app.include_router(arvore_decisao.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(regressao_logistica.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(svm.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(kmeans.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(metricas_router, prefix="/classificador", dependencies=auth_dependency)
 app.include_router(pipelines.router, dependencies=auth_dependency)
+app.include_router(visualizacao.router, prefix="/visualizacao", dependencies=auth_dependency)
 
 @app.get("/healthcheck")
 async def healthcheck():

@@ -59,6 +59,9 @@ async def treinar_modelo_generico(
     atributos: List[str] = [k for k, v in conf_doc.get("atributos", {}).items() if v]
     target: str = conf_doc.get("target")
     
+    # Verificar se é clustering (sem target)
+    is_clustering = target is None or target == ""
+    
     conteudo_base64 = arquivo_doc.get("content_treino_base64")
     if not conteudo_base64:
         raise HTTPException(status_code=400, detail="Conteúdo do arquivo ausente ou mal formatado.")
@@ -81,25 +84,44 @@ async def treinar_modelo_generico(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erro ao processar o arquivo: {str(e)}")
     
-    for col in atributos + [target]:
+    # Validar colunas
+    colunas_necessarias = atributos.copy()
+    if not is_clustering and target:
+        colunas_necessarias.append(target)
+    
+    for col in colunas_necessarias:
         if col not in df.columns:
             raise HTTPException(status_code=400, detail=f"Coluna '{col}' não encontrada nos dados de treino.")
     
     X_train = df[atributos]
-    y_train = df[target]
-
-    if X_train.isnull().any().any() or y_train.isnull().any():
+    
+    # Verificar valores ausentes
+    if X_train.isnull().any().any():
         raise HTTPException(
             status_code=400,
             detail="Os dados de treino contêm valores ausentes. Remova ou preencha os valores vazios antes de treinar."
         )
-    if y_train.nunique() < 2:
-        raise HTTPException(status_code=400, detail="O alvo precisa de pelo menos duas classes para treinar o modelo.")
+    
+    # Para modelos supervisionados, verificar target
+    if not is_clustering:
+        y_train = df[target]
+        if y_train.isnull().any():
+            raise HTTPException(
+                status_code=400,
+                detail="Os dados de treino contêm valores ausentes no target. Remova ou preencha os valores vazios antes de treinar."
+            )
+        if y_train.nunique() < 2:
+            raise HTTPException(status_code=400, detail="O alvo precisa de pelo menos duas classes para treinar o modelo.")
 
     try:
         hiperparametros.update(kwargs_adicionais)
         modelo = instancia_classe(**hiperparametros)
-        modelo.fit(X_train, y_train)
+        
+        # Treinar modelo (clustering usa apenas X_train)
+        if is_clustering:
+            modelo.fit(X_train)
+        else:
+            modelo.fit(X_train, y_train)
         
         # Serializa com joblib (seguro e eficiente)
         buffer = BytesIO()
@@ -109,13 +131,20 @@ async def treinar_modelo_generico(
         # Calcula checksum de validação
         checksum = hashlib.sha256(modelo_bytes).hexdigest()
         
+        # Para clustering, não há classes
+        classes = []
+        if hasattr(modelo, 'classes_'):
+            classes = list(map(str, modelo.classes_))
+        elif hasattr(modelo, 'labels_'):
+            classes = list(map(str, sorted(set(modelo.labels_))))
+        
         result = await modelos_treinados.insert_one({
             "arquivo_id": request.arquivo_id,
             "arq_teste": arquivo_doc.get("content_teste_base64"),
             "hiperparametros": hiperparametros,
             "atributos": atributos,
             "target": target,
-            "classes": list(map(str, modelo.classes_)),
+            "classes": classes,
             "modelo_treinado": bson.Binary(modelo_bytes),
             "checksum": checksum,
             "modelo": modelo_doc.get('valor'),
@@ -152,6 +181,13 @@ async def treinar_modelo_generico(
         for h in modelo_doc.get("hiperparametros", [])
     }
     
+    # Para clustering, não há classes
+    classes = []
+    if hasattr(modelo, 'classes_'):
+        classes = list(modelo.classes_)
+    elif hasattr(modelo, 'labels_'):
+        classes = list(sorted(set(modelo.labels_)))
+    
     return converter_numpy({
         "atributos": atributos,
         "target": target,
@@ -161,7 +197,7 @@ async def treinar_modelo_generico(
         "total_amostras_teste": total_amostras_teste,
         "hiperparametros": modelo.get_params(),
         "hiperparametros_padrao": hiperparametros_padrao,
-        "classes": list(modelo.classes_),
+        "classes": classes,
         "modelo": nome_modelo_label.lower().replace(" ", "_"),
         "nome_modelo": modelo_doc.get('label'),
         "id": id_result
