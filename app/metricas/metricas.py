@@ -204,11 +204,15 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
             try:
                 # Trata matriz de confusão separadamente
                 if metrica.valor == "confusion_matrix":
-                    cm = confusion_matrix(y_test, y_pred)
+                    # Usar todas as classes conhecidas para garantir que a matriz
+                    # sempre tenha dimensão completa, mesmo que o teste contenha
+                    # apenas uma classe
+                    labels_cm = classes_doc if classes_doc else sorted(list(set(y_test) | set(y_pred)))
+                    cm = confusion_matrix(y_test, y_pred, labels=labels_cm)
                     
                     resultados_formatados[metrica.label][nome_modelo] = {
                         "matriz": cm.tolist(),
-                        "classes": classes_doc,
+                        "classes": labels_cm,
                         "total": int(len(y_test))
                     }
                     continue
