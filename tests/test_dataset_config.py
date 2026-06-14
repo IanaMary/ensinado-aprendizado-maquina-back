@@ -4,7 +4,7 @@ Tests for the dataset configuration model.
 import pytest
 from app.models.dataset_config import (
     DatasetConfig, DatasetType, PreSplitStatus,
-    get_all_datasets, get_dataset_config, TOY_DATASETS, UCI_DATASETS
+    get_all_datasets, get_dataset_config, TOY_DATASETS, UCI_DATASETS, GENERATED_DATASETS
 )
 
 
@@ -143,7 +143,7 @@ class TestGetAllDatasets:
     def test_returns_all_datasets(self):
         """Should return both toy and UCI datasets."""
         all_ds = get_all_datasets()
-        assert len(all_ds) == len(TOY_DATASETS) + len(UCI_DATASETS)
+        assert len(all_ds) == len(TOY_DATASETS) + len(UCI_DATASETS) + len(GENERATED_DATASETS)
 
     def test_includes_toy_datasets(self):
         """Should include all toy datasets."""

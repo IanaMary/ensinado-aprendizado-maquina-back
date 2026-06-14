@@ -9,7 +9,7 @@ from app.models.dataset_config import (
     DatasetConfig, DatasetType, PreSplitStatus,
     get_all_datasets, get_dataset_config, TOY_DATASETS, UCI_DATASETS
 )
-from app.utils.seed import seed_everything, get_seed
+from app.utils.seed import seed_everything, get_seed, get_sklearn_random_state
 from app.database import arquivos, configuracoes_treinamento
 from app.security import get_usuario_atual
 from app.funcoes_genericas.funcoes_genericas import df_para_base64
@@ -65,26 +65,35 @@ async def listar_datasets(
 async def carregar_dataset(
     dataset_name: str,
     seed: Optional[int] = Query(None, description="Seed para reprodutibilidade (opcional)"),
+    n_amostras: Optional[int] = Query(None, ge=10, le=5000, description="(geradores) número de amostras"),
+    n_features: Optional[int] = Query(None, ge=1, le=50, description="(geradores) número de atributos"),
+    ruido: Optional[float] = Query(None, ge=0.0, le=10.0, description="(geradores) nível de ruído"),
+    n_classes: Optional[int] = Query(None, ge=2, le=10, description="(geradores) número de classes"),
+    n_clusters: Optional[int] = Query(None, ge=2, le=10, description="(geradores) número de grupos"),
     current_user: dict = Depends(get_usuario_atual),
 ):
     """Carrega um dataset e retorna no formato esperado pelo frontend."""
     ds = get_dataset_config(dataset_name)
     if ds is None:
         raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' nao encontrado")
-    
+
     # Aplicar seed se fornecido
     if seed is not None:
         seed_everything(seed)
-    
+
     try:
         df = None
         target_names = None
-        
+
         # Carregar baseado na fonte
         if ds.fonte == "sklearn":
             df, target_names = _carregar_sklearn(dataset_name)
         elif ds.fonte == "uci":
             df = _carregar_uci(dataset_name, ds)
+        elif ds.fonte == "gerador":
+            df, target_names = _carregar_gerador(
+                dataset_name, ds, n_amostras, n_features, ruido, n_classes, n_clusters
+            )
         
         if df is None:
             raise HTTPException(status_code=500, detail="Erro ao carregar dataset")
@@ -190,6 +199,53 @@ async def carregar_dataset(
         raise HTTPException(status_code=500, detail=f"Biblioteca nao instalada: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao carregar dataset: {str(e)}")
+
+
+def _carregar_gerador(dataset_name, ds, n_amostras, n_features, ruido, n_classes, n_clusters):
+    """Gera um dataset sintetico com os make_* do sklearn. Retorna (df, target_names)."""
+    from sklearn.datasets import (
+        make_classification, make_blobs, make_moons, make_circles, make_regression
+    )
+    rs = get_sklearn_random_state()
+    n = n_amostras or ds.n_amostras
+
+    if dataset_name == "gen_classification":
+        import math
+        nf = n_features or ds.n_features
+        nc = n_classes or 2
+        # n_clusters_per_class=1 e n_informative suficiente p/ separar nc classes (2**n_inf >= nc).
+        n_inf = min(nf, max(2, nf // 2, math.ceil(math.log2(nc))))
+        X, y = make_classification(
+            n_samples=n, n_features=nf, n_informative=n_inf, n_redundant=0,
+            n_classes=nc, n_clusters_per_class=1, random_state=rs,
+        )
+        cols = [f"atributo_{i + 1}" for i in range(nf)]
+    elif dataset_name == "gen_blobs":
+        nf = n_features or 2
+        X, y = make_blobs(n_samples=n, n_features=nf, centers=n_clusters or 3, random_state=rs)
+        cols = [f"atributo_{i + 1}" for i in range(nf)]
+    elif dataset_name == "gen_moons":
+        X, y = make_moons(n_samples=n, noise=ruido if ruido is not None else 0.1, random_state=rs)
+        cols = ["atributo_1", "atributo_2"]
+    elif dataset_name == "gen_circles":
+        X, y = make_circles(
+            n_samples=n, noise=ruido if ruido is not None else 0.05, factor=0.5, random_state=rs
+        )
+        cols = ["atributo_1", "atributo_2"]
+    elif dataset_name == "gen_regression":
+        nf = n_features or ds.n_features
+        X, y = make_regression(
+            n_samples=n, n_features=nf, noise=ruido if ruido is not None else 10.0, random_state=rs
+        )
+        cols = [f"atributo_{i + 1}" for i in range(nf)]
+    else:
+        return None, None
+
+    df = pd.DataFrame(X, columns=cols)
+    # Clustering (blobs) nao expoe target; os demais sim.
+    if ds.tipo != DatasetType.CLUSTERING:
+        df["target"] = y
+    return df, None
 
 
 def _carregar_sklearn(dataset_name: str):

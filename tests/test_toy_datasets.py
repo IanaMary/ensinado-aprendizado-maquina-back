@@ -79,6 +79,27 @@ class TestLoadToyDataset:
         data = response.json()
         assert data["nome_dataset"] == "Wine"
 
+    async def test_gerar_classificacao(self, client, mock_db, auth_headers):
+        """Gerador de classificacao retorna dataset com target e parametros aplicados."""
+        response = await client.get(
+            "/toy_datasets/gen_classification?n_amostras=120&n_features=5&n_classes=3",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["fonte"] == "gerador"
+        assert data["prever_categoria"] is True
+        assert data["total_dados"] == 120
+        assert "target" in data["colunas"]
+
+    async def test_gerar_blobs_sem_target(self, client, mock_db, auth_headers):
+        """Gerador de blobs e clustering: sem target, dados nao rotulados."""
+        response = await client.get("/toy_datasets/gen_blobs?n_clusters=4", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["dados_rotulados"] is False
+        assert "target" not in data["colunas"]
+
     async def test_load_breast_cancer(self, client, mock_db, auth_headers):
         """Should load Breast Cancer dataset successfully."""
         response = await client.get("/toy_datasets/breast_cancer", headers=auth_headers)

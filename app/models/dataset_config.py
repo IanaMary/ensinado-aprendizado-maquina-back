@@ -386,11 +386,74 @@ UCI_DATASETS: Dict[str, DatasetConfig] = {
 }
 
 
+# ============================================================
+# Datasets GERADOS (sklearn make_*) — sinteticos e parametrizaveis
+# ============================================================
+GENERATED_DATASETS: Dict[str, DatasetConfig] = {
+    "gen_classification": DatasetConfig(
+        id="gen_classification", nome="Classificação gerada", fonte="gerador",
+        descricao="Dataset sintético de classificação criado com make_classification. Bom para experimentar e ver o efeito dos hiperparâmetros.",
+        tipo=DatasetType.CLASSIFICATION, n_amostras=300, n_features=4, target="target",
+        pre_split=PreSplitStatus.SINGLE, dificuldade="iniciante",
+        descricao_target="Classe gerada artificialmente.",
+        descricao_features="Atributos numéricos sintéticos (alguns informativos).",
+        pergunta_guia="O modelo consegue separar as classes geradas?",
+        modelo_recomendado="Árvore de Decisão", metrica_recomendada="Acurácia",
+        visualizacao_recomendada="Matriz de Confusão",
+    ),
+    "gen_blobs": DatasetConfig(
+        id="gen_blobs", nome="Agrupamentos (blobs) gerados", fonte="gerador",
+        descricao="Nuvens de pontos bem separadas criadas com make_blobs. Ideal para entender agrupamento (clustering).",
+        tipo=DatasetType.CLUSTERING, n_amostras=300, n_features=2, target=None,
+        pre_split=PreSplitStatus.SINGLE, dificuldade="iniciante",
+        descricao_target="Sem target (agrupamento não supervisionado).",
+        descricao_features="Duas coordenadas numéricas (x, y).",
+        pergunta_guia="Quantos grupos o K-Means encontra nas nuvens de pontos?",
+        modelo_recomendado="K-means", metrica_recomendada="Silhouette Score",
+        visualizacao_recomendada="Silhouette",
+    ),
+    "gen_moons": DatasetConfig(
+        id="gen_moons", nome="Duas luas (moons) geradas", fonte="gerador",
+        descricao="Duas meias-luas entrelaçadas (make_moons): um problema de classificação não-linear clássico.",
+        tipo=DatasetType.CLASSIFICATION, n_amostras=300, n_features=2, target="target",
+        pre_split=PreSplitStatus.SINGLE, dificuldade="intermediario",
+        descricao_target="Classe 0 ou 1 (cada lua é uma classe).",
+        descricao_features="Duas coordenadas numéricas (x, y).",
+        pergunta_guia="Quais modelos conseguem separar duas luas que não são linearmente separáveis?",
+        modelo_recomendado="SVM", metrica_recomendada="Acurácia",
+        visualizacao_recomendada="Matriz de Confusão",
+    ),
+    "gen_circles": DatasetConfig(
+        id="gen_circles", nome="Círculos concêntricos gerados", fonte="gerador",
+        descricao="Um círculo dentro do outro (make_circles): outro problema de classificação não-linear.",
+        tipo=DatasetType.CLASSIFICATION, n_amostras=300, n_features=2, target="target",
+        pre_split=PreSplitStatus.SINGLE, dificuldade="intermediario",
+        descricao_target="Classe 0 (círculo interno) ou 1 (externo).",
+        descricao_features="Duas coordenadas numéricas (x, y).",
+        pergunta_guia="Por que um modelo linear falha aqui e o SVM com kernel rbf funciona?",
+        modelo_recomendado="SVM", metrica_recomendada="Acurácia",
+        visualizacao_recomendada="Matriz de Confusão",
+    ),
+    "gen_regression": DatasetConfig(
+        id="gen_regression", nome="Regressão gerada", fonte="gerador",
+        descricao="Dataset sintético de regressão criado com make_regression. Útil para ver R², RMSE e resíduos.",
+        tipo=DatasetType.REGRESSION, n_amostras=300, n_features=3, target="target",
+        pre_split=PreSplitStatus.SINGLE, dificuldade="iniciante",
+        descricao_target="Valor contínuo gerado a partir dos atributos.",
+        descricao_features="Atributos numéricos sintéticos.",
+        pergunta_guia="Quão bem o modelo prevê o valor contínuo gerado?",
+        modelo_recomendado="Regressão Linear", metrica_recomendada="R² (Coef. de Determinação)",
+        visualizacao_recomendada="Prediction Error",
+    ),
+}
+
+
 def get_all_datasets() -> Dict[str, DatasetConfig]:
     """Retorna todos os datasets disponiveis."""
     all_datasets = {}
     all_datasets.update(TOY_DATASETS)
     all_datasets.update(UCI_DATASETS)
+    all_datasets.update(GENERATED_DATASETS)
     return all_datasets
 
 
