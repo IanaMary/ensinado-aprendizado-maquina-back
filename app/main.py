@@ -12,6 +12,12 @@ from app.routers import arvore_decisao
 from app.routers import regressao_logistica
 from app.routers import regressao_linear
 from app.routers import svm
+from app.routers import svm_linear
+from app.routers import random_forest
+from app.routers import adaboost
+from app.routers import naive_bayes
+from app.routers import mlp
+from app.routers import qda
 from app.routers import kmeans
 from app.routers import toy_datasets
 from app.routers import pipelines
@@ -55,6 +61,12 @@ app.include_router(arvore_decisao.router, prefix="/classificador/treinamento", d
 app.include_router(regressao_logistica.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(regressao_linear.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(svm.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(svm_linear.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(random_forest.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(adaboost.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(naive_bayes.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(mlp.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(qda.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(kmeans.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(metricas_router, prefix="/classificador", dependencies=auth_dependency)
 app.include_router(pipelines.router, dependencies=auth_dependency)

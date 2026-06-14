@@ -33,6 +33,7 @@ class TestTreinamentoBase:
         })
         mock_db["modelos"].find_one = AsyncMock(return_value={
             "_id": ObjectId(),
+            "valor": "knn",
             "hiperparametros": [
                 {"nomeHiperparametro": "n_neighbors", "valorPadrao": 5}
             ]
@@ -53,6 +54,8 @@ class TestTreinamentoBase:
         data = response.json()
         assert "id" in data
         assert data["modelo"] == "knn"
+        # Hiperparametro enviado pelo usuario deve ser aplicado (sobrepoe o padrao do seed).
+        assert data["hiperparametros"]["n_neighbors"] == 3
 
 
 def _montar_mocks_treinamento(mock_db, df):
@@ -79,6 +82,7 @@ def _montar_mocks_treinamento(mock_db, df):
     })
     mock_db["modelos"].find_one = AsyncMock(return_value={
         "_id": ObjectId(),
+        "valor": "knn",
         "hiperparametros": [{"nomeHiperparametro": "n_neighbors", "valorPadrao": 1}],
     })
     return coleta_id, config_id

@@ -255,7 +255,7 @@ db.modelos.insertMany([
         dados_rotulados: true,
         resumo: "Multi-Layer Perceptron: rede neural com camadas ocultas.",
         hiperparametros: [
-            { nomeHiperparametro: "hidden_layer_sizes", valorPadrao: "100" },
+            { nomeHiperparametro: "hidden_layer_sizes", valorPadrao: 100 },
             { nomeHiperparametro: "max_iter", valorPadrao: 500 },
             { nomeHiperparametro: "activation", valorPadrao: "relu" }
         ],

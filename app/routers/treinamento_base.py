@@ -55,7 +55,14 @@ async def treinar_modelo_generico(
         random_state = get_sklearn_random_state()
         if random_state is not None:
             hiperparametros["random_state"] = random_state
-    
+
+    # Aplicar hiperparametros editados pelo usuario na ferramenta. Considera apenas
+    # os parametros aceitos pelo construtor do modelo (evita "unexpected keyword")
+    # e ignora valores vazios.
+    for nome_param, valor in (request.hiperparametros or {}).items():
+        if nome_param in sig.parameters and valor != "":
+            hiperparametros[nome_param] = valor
+
     atributos: List[str] = [k for k, v in conf_doc.get("atributos", {}).items() if v]
     target: str = conf_doc.get("target")
     
@@ -198,7 +205,7 @@ async def treinar_modelo_generico(
         "hiperparametros": modelo.get_params(),
         "hiperparametros_padrao": hiperparametros_padrao,
         "classes": classes,
-        "modelo": nome_modelo_label.lower().replace(" ", "_"),
+        "modelo": modelo_doc.get('valor'),
         "nome_modelo": modelo_doc.get('label'),
         "id": id_result
     })
