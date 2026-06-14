@@ -69,18 +69,18 @@ async def gerar_pairplot(request: PairplotRequest):
     # Determinar colunas para visualizar
     atributos = [k for k, v in conf_doc.get("atributos", {}).items() if v]
     target = conf_doc.get("target", "")
-    
-    # Se colunas não foram especificadas, usar atributos + target
+
     if request.colunas:
         colunas_viz = [c for c in request.colunas if c in df.columns]
     else:
-        colunas_viz = atributos.copy()
-        if target and target in df.columns and target not in colunas_viz:
-            colunas_viz.append(target)
-    
+        colunas_viz = [c for c in atributos if c in df.columns]
+
+    # Pairplot exige colunas numéricas para diag_kind="kde"; filtra categóricas.
+    colunas_viz = [c for c in colunas_viz if pd.api.types.is_numeric_dtype(df[c])]
+
     if not colunas_viz:
-        raise HTTPException(status_code=400, detail="Nenhuma coluna válida para visualizar.")
-    
+        raise HTTPException(status_code=400, detail="Nenhuma coluna numérica válida para visualizar.")
+
     # Limitar a 10 colunas para evitar gráficos muito grandes
     if len(colunas_viz) > 10:
         colunas_viz = colunas_viz[:10]
@@ -94,20 +94,25 @@ async def gerar_pairplot(request: PairplotRequest):
         if df[target].nunique() <= 20:
             hue = target
     
-    # Preparar dados para o pairplot
-    df_viz = df[colunas_viz].dropna()
-    
+    # Preparar dados para o pairplot: inclui coluna hue no subset para seaborn
+    # mas usa vars= para que ela não apareça como eixo no gráfico.
+    cols_para_df = list(colunas_viz)
+    if hue and hue not in cols_para_df and hue in df.columns:
+        cols_para_df.append(hue)
+    df_viz = df[cols_para_df].dropna()
+
     # Limitar a 1000 amostras para performance
     if len(df_viz) > 1000:
         df_viz = df_viz.sample(n=1000, random_state=42)
-    
+
     try:
         # Configurar estilo
         sns.set_theme(style="ticks")
-        
+
         # Gerar pairplot
         g = sns.pairplot(
             df_viz,
+            vars=colunas_viz,
             hue=hue,
             diag_kind="kde",
             plot_kws={"alpha": 0.6, "s": 30},
