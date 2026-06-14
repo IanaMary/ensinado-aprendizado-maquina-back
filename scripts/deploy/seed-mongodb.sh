@@ -130,8 +130,11 @@ db.modelos.insertMany([
         resumo: "Logistic Regression",
         hiperparametros: [
             { nomeHiperparametro: "C", valorPadrao: 1.0 },
+            { nomeHiperparametro: "penalty", valorPadrao: "l2" },
             { nomeHiperparametro: "solver", valorPadrao: "lbfgs" },
-            { nomeHiperparametro: "max_iter", valorPadrao: 100 }
+            { nomeHiperparametro: "max_iter", valorPadrao: 100 },
+            { nomeHiperparametro: "fit_intercept", valorPadrao: true },
+            { nomeHiperparametro: "tol", valorPadrao: 0.0001 }
         ],
         metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
     },
@@ -147,7 +150,9 @@ db.modelos.insertMany([
         resumo: "Linear Regression",
         hiperparametros: [
             { nomeHiperparametro: "fit_intercept", valorPadrao: true },
-            { nomeHiperparametro: "positive", valorPadrao: false }
+            { nomeHiperparametro: "positive", valorPadrao: false },
+            { nomeHiperparametro: "copy_X", valorPadrao: true },
+            { nomeHiperparametro: "n_jobs", valorPadrao: null }
         ],
         metricas: ["r2_score", "mean_squared_error", "root_mean_squared_error", "mean_absolute_error"]
     },
@@ -256,8 +261,13 @@ db.modelos.insertMany([
         resumo: "Multi-Layer Perceptron: rede neural com camadas ocultas.",
         hiperparametros: [
             { nomeHiperparametro: "hidden_layer_sizes", valorPadrao: 100 },
+            { nomeHiperparametro: "activation", valorPadrao: "relu" },
+            { nomeHiperparametro: "solver", valorPadrao: "adam" },
+            { nomeHiperparametro: "alpha", valorPadrao: 0.0001 },
+            { nomeHiperparametro: "learning_rate", valorPadrao: "constant" },
+            { nomeHiperparametro: "learning_rate_init", valorPadrao: 0.001 },
             { nomeHiperparametro: "max_iter", valorPadrao: 500 },
-            { nomeHiperparametro: "activation", valorPadrao: "relu" }
+            { nomeHiperparametro: "early_stopping", valorPadrao: false }
         ],
         metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
     },
@@ -273,6 +283,233 @@ db.modelos.insertMany([
         resumo: "Quadratic Discriminant Analysis: assume covariância diferente por classe.",
         hiperparametros: [],
         metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
+    },
+    {
+        label: "SGD Classifier",
+        valor: "sgd",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: true,
+        dados_rotulados: true,
+        resumo: "Classificador linear treinado por gradiente descendente estocástico. Escala bem para muitos dados.",
+        hiperparametros: [
+            { nomeHiperparametro: "loss", valorPadrao: "hinge" },
+            { nomeHiperparametro: "penalty", valorPadrao: "l2" },
+            { nomeHiperparametro: "alpha", valorPadrao: 0.0001 },
+            { nomeHiperparametro: "l1_ratio", valorPadrao: 0.15 },
+            { nomeHiperparametro: "max_iter", valorPadrao: 1000 },
+            { nomeHiperparametro: "tol", valorPadrao: 0.001 },
+            { nomeHiperparametro: "learning_rate", valorPadrao: "optimal" },
+            { nomeHiperparametro: "eta0", valorPadrao: 0.01 },
+            { nomeHiperparametro: "fit_intercept", valorPadrao: true },
+            { nomeHiperparametro: "early_stopping", valorPadrao: false }
+        ],
+        metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
+    },
+    {
+        label: "Perceptron",
+        valor: "perceptron",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: true,
+        dados_rotulados: true,
+        resumo: "O classificador linear mais simples: ajusta uma reta separadora aprendendo com os erros.",
+        hiperparametros: [
+            { nomeHiperparametro: "penalty", valorPadrao: null },
+            { nomeHiperparametro: "alpha", valorPadrao: 0.0001 },
+            { nomeHiperparametro: "max_iter", valorPadrao: 1000 },
+            { nomeHiperparametro: "tol", valorPadrao: 0.001 },
+            { nomeHiperparametro: "eta0", valorPadrao: 1.0 },
+            { nomeHiperparametro: "fit_intercept", valorPadrao: true },
+            { nomeHiperparametro: "early_stopping", valorPadrao: false }
+        ],
+        metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
+    },
+    {
+        label: "Ridge",
+        valor: "ridge",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: false,
+        dados_rotulados: true,
+        resumo: "Regressão Linear com regularização L2: penaliza coeficientes grandes para evitar overfitting.",
+        hiperparametros: [
+            { nomeHiperparametro: "alpha", valorPadrao: 1.0 },
+            { nomeHiperparametro: "fit_intercept", valorPadrao: true },
+            { nomeHiperparametro: "solver", valorPadrao: "auto" },
+            { nomeHiperparametro: "max_iter", valorPadrao: null },
+            { nomeHiperparametro: "tol", valorPadrao: 0.0001 },
+            { nomeHiperparametro: "positive", valorPadrao: false },
+            { nomeHiperparametro: "copy_X", valorPadrao: true }
+        ],
+        metricas: ["r2_score", "mean_squared_error", "root_mean_squared_error", "mean_absolute_error"]
+    },
+    {
+        label: "Regressão Polinomial",
+        valor: "regressao_polinomial",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: false,
+        dados_rotulados: true,
+        resumo: "Regressão Linear sobre atributos elevados a potências: ajusta curvas, não só retas.",
+        hiperparametros: [
+            { nomeHiperparametro: "degree", valorPadrao: 2 },
+            { nomeHiperparametro: "include_bias", valorPadrao: true },
+            { nomeHiperparametro: "interaction_only", valorPadrao: false },
+            { nomeHiperparametro: "fit_intercept", valorPadrao: true },
+            { nomeHiperparametro: "positive", valorPadrao: false }
+        ],
+        metricas: ["r2_score", "mean_squared_error", "root_mean_squared_error", "mean_absolute_error"]
+    },
+    {
+        label: "Regressão Quantílica",
+        valor: "quantile",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: false,
+        dados_rotulados: true,
+        resumo: "Prevê um quantil (ex.: a mediana) em vez da média. Útil quando há valores extremos.",
+        hiperparametros: [
+            { nomeHiperparametro: "quantile", valorPadrao: 0.5 },
+            { nomeHiperparametro: "alpha", valorPadrao: 1.0 },
+            { nomeHiperparametro: "fit_intercept", valorPadrao: true },
+            { nomeHiperparametro: "solver", valorPadrao: "highs" }
+        ],
+        metricas: ["r2_score", "mean_squared_error", "root_mean_squared_error", "mean_absolute_error"]
+    },
+    {
+        label: "Regressão de Huber",
+        valor: "huber",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: false,
+        dados_rotulados: true,
+        resumo: "Regressão robusta: combina erro quadrático e absoluto para sofrer menos com outliers.",
+        hiperparametros: [
+            { nomeHiperparametro: "epsilon", valorPadrao: 1.35 },
+            { nomeHiperparametro: "alpha", valorPadrao: 0.0001 },
+            { nomeHiperparametro: "max_iter", valorPadrao: 100 },
+            { nomeHiperparametro: "fit_intercept", valorPadrao: true },
+            { nomeHiperparametro: "tol", valorPadrao: 0.00001 },
+            { nomeHiperparametro: "warm_start", valorPadrao: false }
+        ],
+        metricas: ["r2_score", "mean_squared_error", "root_mean_squared_error", "mean_absolute_error"]
+    },
+    {
+        label: "Regressão RANSAC",
+        valor: "ransac",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: false,
+        dados_rotulados: true,
+        resumo: "Ajusta o modelo só nos pontos 'bons' (inliers), ignorando outliers automaticamente.",
+        hiperparametros: [
+            { nomeHiperparametro: "min_samples", valorPadrao: null },
+            { nomeHiperparametro: "residual_threshold", valorPadrao: null },
+            { nomeHiperparametro: "max_trials", valorPadrao: 100 },
+            { nomeHiperparametro: "stop_probability", valorPadrao: 0.99 },
+            { nomeHiperparametro: "loss", valorPadrao: "absolute_error" }
+        ],
+        metricas: ["r2_score", "mean_squared_error", "root_mean_squared_error", "mean_absolute_error"]
+    },
+    {
+        label: "Regressão Theil-Sen",
+        valor: "theilsen",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: false,
+        dados_rotulados: true,
+        resumo: "Regressão robusta baseada em medianas de inclinações. Resiste bem a outliers.",
+        hiperparametros: [
+            { nomeHiperparametro: "fit_intercept", valorPadrao: true },
+            { nomeHiperparametro: "max_subpopulation", valorPadrao: 10000 },
+            { nomeHiperparametro: "n_subsamples", valorPadrao: null },
+            { nomeHiperparametro: "max_iter", valorPadrao: 300 },
+            { nomeHiperparametro: "tol", valorPadrao: 0.001 },
+            { nomeHiperparametro: "n_jobs", valorPadrao: null }
+        ],
+        metricas: ["r2_score", "mean_squared_error", "root_mean_squared_error", "mean_absolute_error"]
+    },
+    {
+        label: "SVR (Regressão SVM)",
+        valor: "svr",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: false,
+        dados_rotulados: true,
+        resumo: "Support Vector Regression: versão de regressão das máquinas de vetores de suporte.",
+        hiperparametros: [
+            { nomeHiperparametro: "C", valorPadrao: 1.0 },
+            { nomeHiperparametro: "kernel", valorPadrao: "rbf" },
+            { nomeHiperparametro: "gamma", valorPadrao: "scale" },
+            { nomeHiperparametro: "epsilon", valorPadrao: 0.1 },
+            { nomeHiperparametro: "degree", valorPadrao: 3 },
+            { nomeHiperparametro: "coef0", valorPadrao: 0.0 },
+            { nomeHiperparametro: "tol", valorPadrao: 0.001 },
+            { nomeHiperparametro: "shrinking", valorPadrao: true },
+            { nomeHiperparametro: "max_iter", valorPadrao: -1 }
+        ],
+        metricas: ["r2_score", "mean_squared_error", "root_mean_squared_error", "mean_absolute_error"]
+    },
+    {
+        label: "Rede Neural (MLP) Regressora",
+        valor: "mlp_regressor",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: false,
+        dados_rotulados: true,
+        resumo: "Rede neural com camadas ocultas para prever valores contínuos.",
+        hiperparametros: [
+            { nomeHiperparametro: "hidden_layer_sizes", valorPadrao: 100 },
+            { nomeHiperparametro: "activation", valorPadrao: "relu" },
+            { nomeHiperparametro: "solver", valorPadrao: "adam" },
+            { nomeHiperparametro: "alpha", valorPadrao: 0.0001 },
+            { nomeHiperparametro: "learning_rate", valorPadrao: "constant" },
+            { nomeHiperparametro: "learning_rate_init", valorPadrao: 0.001 },
+            { nomeHiperparametro: "max_iter", valorPadrao: 500 },
+            { nomeHiperparametro: "early_stopping", valorPadrao: false }
+        ],
+        metricas: ["r2_score", "mean_squared_error", "root_mean_squared_error", "mean_absolute_error"]
+    },
+    {
+        label: "k-NN Regressor",
+        valor: "knn_regressor",
+        tipoItem: "treino-validacao-teste",
+        habilitado: true,
+        movido: false,
+        icon: "metrica",
+        prever_categoria: false,
+        dados_rotulados: true,
+        resumo: "k vizinhos mais próximos para regressão: prevê a média dos vizinhos mais parecidos.",
+        hiperparametros: [
+            { nomeHiperparametro: "n_neighbors", valorPadrao: 5 },
+            { nomeHiperparametro: "weights", valorPadrao: "uniform" },
+            { nomeHiperparametro: "algorithm", valorPadrao: "auto" },
+            { nomeHiperparametro: "leaf_size", valorPadrao: 30 },
+            { nomeHiperparametro: "p", valorPadrao: 2 },
+            { nomeHiperparametro: "metric", valorPadrao: "minkowski" }
+        ],
+        metricas: ["r2_score", "mean_squared_error", "root_mean_squared_error", "mean_absolute_error"]
     }
 ]);
 print("  -> modelos: OK (" + db.modelos.countDocuments({}) + " documentos)");

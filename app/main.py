@@ -19,6 +19,17 @@ from app.routers import naive_bayes
 from app.routers import mlp
 from app.routers import qda
 from app.routers import kmeans
+from app.routers import ridge
+from app.routers import regressao_polinomial
+from app.routers import quantile
+from app.routers import huber
+from app.routers import ransac
+from app.routers import theilsen
+from app.routers import svr
+from app.routers import mlp_regressor
+from app.routers import knn_regressor
+from app.routers import sgd
+from app.routers import perceptron
 from app.routers import toy_datasets
 from app.routers import pipelines
 from app.routers import visualizacao
@@ -68,6 +79,17 @@ app.include_router(naive_bayes.router, prefix="/classificador/treinamento", depe
 app.include_router(mlp.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(qda.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(kmeans.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(ridge.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(regressao_polinomial.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(quantile.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(huber.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(ransac.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(theilsen.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(svr.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(mlp_regressor.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(knn_regressor.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(sgd.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(perceptron.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(metricas_router, prefix="/classificador", dependencies=auth_dependency)
 app.include_router(pipelines.router, dependencies=auth_dependency)
 app.include_router(visualizacao.router, prefix="/visualizacao", dependencies=auth_dependency)
