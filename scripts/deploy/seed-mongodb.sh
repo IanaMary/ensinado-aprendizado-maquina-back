@@ -145,6 +145,10 @@ db.modelos.insertMany([
         prever_categoria: false,
         dados_rotulados: true,
         resumo: "Linear Regression",
+        hiperparametros: [
+            { nomeHiperparametro: "fit_intercept", valorPadrao: true },
+            { nomeHiperparametro: "positive", valorPadrao: false }
+        ],
         metricas: ["r2_score", "mean_squared_error", "root_mean_squared_error", "mean_absolute_error"]
     },
     {
