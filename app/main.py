@@ -7,6 +7,7 @@ from app.routers import login
 from app.routers import convite
 from app.routers import conf_pipeline
 from app.routers import tutor
+from app.routers import chat_tutor
 from app.routers import knn
 from app.routers import arvore_decisao
 from app.routers import regressao_logistica
@@ -62,6 +63,7 @@ auth_dependency = [Depends(get_usuario_atual)]
 app.include_router(usuarios.router, dependencies=auth_dependency)
 app.include_router(conf_pipeline.router, dependencies=auth_dependency)
 app.include_router(tutor.router, dependencies=auth_dependency)
+app.include_router(chat_tutor.router, dependencies=auth_dependency)
 
 app.include_router(coleta_dados_xlxs_router, prefix="/coleta_dados", dependencies=auth_dependency)
 app.include_router(coleta_dados_csv_router, prefix="/coleta_dados", dependencies=auth_dependency)
