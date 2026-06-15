@@ -2,10 +2,43 @@ from typing import List, OrderedDict
 from fastapi import APIRouter, HTTPException, Depends, Query
 from datetime import datetime
 from typing import List, Optional
+from pydantic import BaseModel
+from bson import ObjectId
 from app.schemas.conf_pipeline import ItemColeta, ItemColetaOut
 from app.database import opcoes_coletas, opcoes_modelos, opcoes_metricas
 
 router = APIRouter(prefix="/conf_pipeline", tags=["Configuração Pipeline"])
+
+
+class HabilitadoPayload(BaseModel):
+  habilitado: bool
+
+
+async def _patch_habilitado(colecao, item_id: str, habilitado: bool):
+  if not ObjectId.is_valid(item_id):
+    raise HTTPException(status_code=400, detail="ID inválido")
+  resultado = await colecao.update_one(
+    {"_id": ObjectId(item_id)},
+    {"$set": {"habilitado": habilitado}}
+  )
+  if resultado.matched_count == 0:
+    raise HTTPException(status_code=404, detail="Item não encontrado")
+  return {"id": item_id, "habilitado": habilitado}
+
+
+@router.patch("/coleta_dados/{item_id}/habilitado")
+async def patch_coleta_habilitado(item_id: str, payload: HabilitadoPayload):
+  return await _patch_habilitado(opcoes_coletas, item_id, payload.habilitado)
+
+
+@router.patch("/modelos/{item_id}/habilitado")
+async def patch_modelo_habilitado(item_id: str, payload: HabilitadoPayload):
+  return await _patch_habilitado(opcoes_modelos, item_id, payload.habilitado)
+
+
+@router.patch("/metricas/{item_id}/habilitado")
+async def patch_metrica_habilitado(item_id: str, payload: HabilitadoPayload):
+  return await _patch_habilitado(opcoes_metricas, item_id, payload.habilitado)
 
 @router.post("/itens_coleta_dados/multiplos")
 async def itens_coleta_dados(itens: List[ItemColeta]):
@@ -36,11 +69,12 @@ async def get_all_coleta(
   return [
     {
       **{k: v for k, v in doc.items() if k != "_id"},
-      "id": str(doc["_id"])
+      "id": str(doc["_id"]),
+      "habilitado": doc.get("habilitado", True),
     }
     for doc in documentos
   ]
-  
+
 @router.get("/modelos/todos", response_model=List)
 async def get_all_modelos(
     limite: int = Query(10, ge=1, le=100),
@@ -77,9 +111,10 @@ async def get_all_modelos(
       **{k: v for k, v in doc.items() if k not in ["_id", "prever_categoria", "dados_rotulados"]},
       "id": str(doc["_id"]),
       "preverCategoria": doc["prever_categoria"],
-      "dadosRotulados": doc["dados_rotulados"]
+      "dadosRotulados": doc["dados_rotulados"],
+      "habilitado": doc.get("habilitado", True),
     }
-    
+
     for doc in documentos
   ]
   
@@ -108,6 +143,7 @@ async def get_all_metricas(
       **{k: v for k, v in doc.items() if k != "_id"},
       "id": str(doc["_id"]),
       "marcado": False,
+      "habilitado": doc.get("habilitado", True),
     }
     for doc in documentos
   ]
