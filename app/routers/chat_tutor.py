@@ -8,15 +8,50 @@ graficos, codigo Python gerado) e responde de forma pedagogica, em PT-BR, para a
 import json
 import logging
 import os
+import time
+from collections import defaultdict
+from datetime import datetime, timezone
+from typing import Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from bson import ObjectId
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 
-from app.schemas.chat import ChatTutorRequest
+from app.database import historico_chat
+from app.security import get_usuario_atual
+from app.schemas.chat import (
+    ChatHistoricoListItem,
+    ChatHistoricoResponse,
+    ChatMensagem,
+    ChatTutorRequest,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tutor", tags=["Tutor"])
+
+
+# ============================================================
+# RATE LIMITING (in-memory, por usuario)
+# ============================================================
+RATE_LIMIT_MAX = int(os.getenv("CHAT_RATE_LIMIT_MAX", "20"))  # requests
+RATE_LIMIT_WINDOW = int(os.getenv("CHAT_RATE_LIMIT_WINDOW", "60"))  # segundos
+
+_rate_limits: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_rate_limit(user_id: str):
+    agora = time.time()
+    window_start = agora - RATE_LIMIT_WINDOW
+    # Remove timestamps fora da janela
+    _rate_limits[user_id] = [t for t in _rate_limits[user_id] if t > window_start]
+    if len(_rate_limits[user_id]) >= RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Limite de {RATE_LIMIT_MAX} mensagens por {RATE_LIMIT_WINDOW}s atingido. Aguarde e tente novamente.",
+        )
+    _rate_limits[user_id].append(agora)
 
 NVIDIA_BASE_URL = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
 NVIDIA_MODEL = os.getenv("NVIDIA_MODEL", "minimaxai/minimax-m3")
@@ -48,7 +83,11 @@ def _montar_contexto(contexto) -> str:
 
 
 @router.post("/chat")
-async def chat_tutor(request: ChatTutorRequest):
+async def chat_tutor(request: ChatTutorRequest, req: Request):
+    # Rate limit: usa o token JWT como identificador
+    user_id = req.state.user_id if hasattr(req.state, "user_id") else "anonymous"
+    _check_rate_limit(user_id)
+
     api_key = os.getenv("NVIDIA_API_KEY")
     if not api_key:
         raise HTTPException(
@@ -100,3 +139,174 @@ async def chat_tutor(request: ChatTutorRequest):
         raise HTTPException(status_code=502, detail="Resposta do tutor em formato inesperado.")
 
     return {"resposta": resposta}
+
+
+async def _stream_nvidia(api_key: str, payload: dict):
+    """Gera tokens SSE a partir do streaming da NVIDIA."""
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream(
+                "POST",
+                f"{NVIDIA_BASE_URL}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+                json=payload,
+            ) as resp:
+                if resp.status_code != 200:
+                    logger.warning("NVIDIA stream respondeu %s", resp.status_code)
+                    yield f"data: {json.dumps({'error': 'O tutor retornou um erro.'})}\n\n"
+                    return
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data_str = line[6:]
+                    if data_str.strip() == "[DONE]":
+                        yield "data: [DONE]\n\n"
+                        return
+                    try:
+                        chunk = json.loads(data_str)
+                        delta = chunk["choices"][0].get("delta", {})
+                        token = delta.get("content", "")
+                        if token:
+                            yield f"data: {json.dumps({'token': token})}\n\n"
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        continue
+    except httpx.TimeoutException:
+        yield f"data: {json.dumps({'error': 'O tutor demorou demais para responder.'})}\n\n"
+    except httpx.HTTPError:
+        yield f"data: {json.dumps({'error': 'Não consegui falar com o tutor agora.'})}\n\n"
+
+
+@router.post("/chat/stream")
+async def chat_tutor_stream(request: ChatTutorRequest, req: Request):
+    """Versao streaming (SSE) do chat tutor."""
+    user_id = req.state.user_id if hasattr(req.state, "user_id") else "anonymous"
+    _check_rate_limit(user_id)
+
+    api_key = os.getenv("NVIDIA_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="O tutor por chat não está configurado no servidor (NVIDIA_API_KEY ausente).",
+        )
+
+    contexto_txt = _montar_contexto(request.contexto)
+    mensagens = [
+        {"role": "system", "content": SYSTEM_PROMPT + "\n\n=== CONTEXTO DO PIPELINE ===\n" + contexto_txt},
+    ]
+    for m in request.mensagens:
+        if m.role in ("user", "assistant") and m.content:
+            mensagens.append({"role": m.role, "content": m.content})
+
+    if len(mensagens) == 1:
+        raise HTTPException(status_code=400, detail="Envie ao menos uma mensagem do usuário.")
+
+    payload = {
+        "model": NVIDIA_MODEL,
+        "messages": mensagens,
+        "temperature": 0.4,
+        "max_tokens": 1024,
+        "stream": True,
+    }
+
+    return StreamingResponse(
+        _stream_nvidia(api_key, payload),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ============================================================
+# HISTÓRICO DE CONVERSAS
+# ============================================================
+
+def _serializar_hist(doc: dict) -> dict:
+    doc["id"] = str(doc.pop("_id"))
+    for campo in ("criado_em", "atualizado_em"):
+        if isinstance(doc.get(campo), datetime):
+            doc[campo] = doc[campo].isoformat()
+    return doc
+
+
+@router.get("/chat/historico", response_model=list[ChatHistoricoListItem])
+async def listar_historico(
+    pipeline_id: Optional[str] = Query(None),
+    usuario=Depends(get_usuario_atual),
+):
+    filtro = {"usuario_id": str(usuario["id"])}
+    if pipeline_id:
+        filtro["pipeline_id"] = pipeline_id
+    cursor = historico_chat.find(filtro).sort("atualizado_em", -1).limit(50)
+    resultados = []
+    async for doc in cursor:
+        resultados.append(ChatHistoricoListItem(**_serializar_hist(doc)))
+    return resultados
+
+
+@router.get("/chat/historico/{chat_id}", response_model=ChatHistoricoResponse)
+async def obter_historico(chat_id: str, usuario=Depends(get_usuario_atual)):
+    if not ObjectId.is_valid(chat_id):
+        raise HTTPException(status_code=400, detail="ID inválido.")
+    doc = await historico_chat.find_one(
+        {"_id": ObjectId(chat_id), "usuario_id": str(usuario["id"])}
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+    return ChatHistoricoResponse(**_serializar_hist(doc))
+
+
+@router.post("/chat/historico", response_model=ChatHistoricoResponse)
+async def criar_historico(
+    pipeline_id: Optional[str] = None,
+    titulo: str = "Nova conversa",
+    usuario=Depends(get_usuario_atual),
+):
+    agora = datetime.now(timezone.utc)
+    doc = {
+        "usuario_id": str(usuario["id"]),
+        "pipeline_id": pipeline_id,
+        "titulo": titulo,
+        "mensagens": [],
+        "criado_em": agora,
+        "atualizado_em": agora,
+    }
+    result = await historico_chat.insert_one(doc)
+    doc["_id"] = result.inserted_id
+    return ChatHistoricoResponse(**_serializar_hist(doc))
+
+
+@router.put("/chat/historico/{chat_id}")
+async def atualizar_historico(
+    chat_id: str,
+    mensagens: list[ChatMensagem],
+    titulo: Optional[str] = None,
+    usuario=Depends(get_usuario_atual),
+):
+    if not ObjectId.is_valid(chat_id):
+        raise HTTPException(status_code=400, detail="ID inválido.")
+
+    atualizacoes = {
+        "mensagens": [m.model_dump() for m in mensagens],
+        "atualizado_em": datetime.now(timezone.utc),
+    }
+    if titulo:
+        atualizacoes["titulo"] = titulo
+
+    result = await historico_chat.update_one(
+        {"_id": ObjectId(chat_id), "usuario_id": str(usuario["id"])},
+        {"$set": atualizacoes},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+    return {"ok": True}
+
+
+@router.delete("/chat/historico/{chat_id}")
+async def deletar_historico(chat_id: str, usuario=Depends(get_usuario_atual)):
+    if not ObjectId.is_valid(chat_id):
+        raise HTTPException(status_code=400, detail="ID inválido.")
+    result = await historico_chat.delete_one(
+        {"_id": ObjectId(chat_id), "usuario_id": str(usuario["id"])}
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+    return {"ok": True}
