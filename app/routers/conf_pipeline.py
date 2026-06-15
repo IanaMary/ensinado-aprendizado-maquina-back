@@ -5,7 +5,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from bson import ObjectId
 from app.schemas.conf_pipeline import ItemColeta, ItemColetaOut
-from app.database import opcoes_coletas, opcoes_modelos, opcoes_metricas
+from app.database import opcoes_coletas, opcoes_modelos, opcoes_metricas, opcoes_pre_processamento
 
 router = APIRouter(prefix="/conf_pipeline", tags=["Configuração Pipeline"])
 
@@ -39,6 +39,30 @@ async def patch_modelo_habilitado(item_id: str, payload: HabilitadoPayload):
 @router.patch("/metricas/{item_id}/habilitado")
 async def patch_metrica_habilitado(item_id: str, payload: HabilitadoPayload):
   return await _patch_habilitado(opcoes_metricas, item_id, payload.habilitado)
+
+
+# Pre-processamento — chave eh "valor" (catalogo canonico vive em itens-coletas-dados.json
+# no front; o backend so persiste o estado habilitado/desabilitado por valor).
+@router.get("/pre_processamento/todos", response_model=List)
+async def get_all_pre_processamento():
+  cursor = opcoes_pre_processamento.find()
+  documentos = await cursor.to_list(length=None)
+  return [
+    {"valor": doc["valor"], "habilitado": doc.get("habilitado", True)}
+    for doc in documentos if doc.get("valor")
+  ]
+
+
+@router.patch("/pre_processamento/{valor}/habilitado")
+async def patch_pre_processamento_habilitado(valor: str, payload: HabilitadoPayload):
+  if not valor or len(valor) > 100:
+    raise HTTPException(status_code=400, detail="Valor inválido")
+  await opcoes_pre_processamento.update_one(
+    {"valor": valor},
+    {"$set": {"valor": valor, "habilitado": payload.habilitado}},
+    upsert=True
+  )
+  return {"valor": valor, "habilitado": payload.habilitado}
 
 @router.post("/itens_coleta_dados/multiplos")
 async def itens_coleta_dados(itens: List[ItemColeta]):

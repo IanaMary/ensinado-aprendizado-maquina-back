@@ -132,6 +132,7 @@ def mock_db(mock_user):
         patch("app.routers.conf_pipeline.opcoes_coletas", mock_pipeline),
         patch("app.routers.conf_pipeline.opcoes_modelos", mock_modelos),
         patch("app.routers.conf_pipeline.opcoes_metricas", mock_pipeline),
+        patch("app.routers.conf_pipeline.opcoes_pre_processamento", mock_pipeline),
         
         patch("app.coleta_dados.coleta_dados_csv.arquivos", mock_arquivos),
         patch("app.coleta_dados.coleta_dados_csv.configuracoes_treinamento", mock_config),

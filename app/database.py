@@ -39,6 +39,7 @@ verificadores_professor = db["verificadores_professor"]
 opcoes_coletas = db["coleta_dados"]
 opcoes_modelos = db["modelos"]
 opcoes_metricas = db["metricas"]
+opcoes_pre_processamento = db["pre_processamento"]
 
 arquivos = db["arquivos"]
 configuracoes_treinamento = db["configuracoes_treinamento"]
