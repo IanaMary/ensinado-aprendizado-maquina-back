@@ -128,6 +128,7 @@ def mock_db(mock_user):
         patch("app.routers.usuarios.verificadores_professor", mock_verif),
         patch("app.security.colecao_usuario", mock_user_col),
         patch("app.routers.tutor.tutor", mock_tutor),
+        patch("app.routers.tutor.tutor_audit", mock_tutor),
         
         patch("app.routers.conf_pipeline.opcoes_coletas", mock_pipeline),
         patch("app.routers.conf_pipeline.opcoes_modelos", mock_modelos),

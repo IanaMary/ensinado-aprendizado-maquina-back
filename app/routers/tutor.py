@@ -1,11 +1,60 @@
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Query
+from datetime import datetime, timezone
+from fastapi import APIRouter, HTTPException, Query, Depends
 from app.schemas.tutor import AtualizarDescricaoRequest, ContextoPipeInicio, ContextoPipeColetaDados, ContextoPipePreProcessamento, ContextoPipeSelecaoModelo, ContextoPipeTreinamento, ContextoPipeSelecaoMetricas
 from app.funcoes_genericas.funcoes_genericas import serialize_doc, concatenar_campos
-from app.database import tutor
+from app.database import tutor, tutor_audit
+from app.security import get_usuario_atual
 from bson import ObjectId
 
 router = APIRouter(prefix="/tutor", tags=["Tutor"])
+
+
+async def _registrar_edicao(usuario: dict, doc_id: str, set_data: dict, operacao: str):
+    """Registra uma edicao no tutor em db.tutor_audit (auditoria)."""
+    try:
+        doc = await tutor.find_one({"_id": ObjectId(doc_id)}, {"pipe": 1})
+        pipe = (doc or {}).get("pipe", "desconhecido")
+    except Exception:
+        pipe = "desconhecido"
+
+    entrada = {
+        "pipe": pipe,
+        "tutor_id": str(doc_id),
+        "operacao": operacao,
+        "campos_alterados": list((set_data or {}).keys()),
+        "usuario_id": str(usuario.get("_id") or usuario.get("id") or ""),
+        "usuario_email": usuario.get("email", ""),
+        "usuario_nome": usuario.get("nome") or usuario.get("name") or usuario.get("email", ""),
+        "timestamp": datetime.now(timezone.utc),
+    }
+    try:
+        await tutor_audit.insert_one(entrada)
+    except Exception:
+        # Auditoria nao deve quebrar a edicao
+        pass
+
+
+@router.get("/audit")
+async def listar_audit(
+    pipe: Optional[str] = Query(None),
+    limite: int = Query(20, ge=1, le=100),
+):
+    filtro = {"pipe": pipe} if pipe else {}
+    cursor = tutor_audit.find(filtro).sort("timestamp", -1).limit(limite)
+    documentos = await cursor.to_list(length=limite)
+    return [
+        {
+            "id": str(d["_id"]),
+            "pipe": d.get("pipe", ""),
+            "operacao": d.get("operacao", ""),
+            "campos_alterados": d.get("campos_alterados", []),
+            "usuario_email": d.get("usuario_email", ""),
+            "usuario_nome": d.get("usuario_nome", ""),
+            "timestamp": d.get("timestamp").isoformat() if d.get("timestamp") else None,
+        }
+        for d in documentos
+    ]
 
 @router.get("/")
 async def buscar_tutor_descricao(
@@ -82,7 +131,8 @@ async def buscar_tutor_pipe(
 async def atualizar_descricao(
     id: str,
     request: AtualizarDescricaoRequest,
-    modelos: Optional[List[str]] = Query(None)  # ?modelos=supervisionado&modelos=classificacao
+    modelos: Optional[List[str]] = Query(None),  # ?modelos=supervisionado&modelos=classificacao
+    usuario: dict = Depends(get_usuario_atual),
 ):
     try:
         filtro = {"_id": ObjectId(id)}
@@ -113,11 +163,17 @@ async def atualizar_descricao(
     if resultado.matched_count == 0:
         raise HTTPException(status_code=404, detail="Documento não encontrado")
 
+    await _registrar_edicao(usuario, id, set_data, "atualizar_descricao")
+
     return {"detail": "Contexto atualizado com sucesso", "update_data": set_data}
 
 
 @router.put("/editar-modelos/{id}")
-async def atualizar_modelos(id: str, request: AtualizarDescricaoRequest):
+async def atualizar_modelos(
+    id: str,
+    request: AtualizarDescricaoRequest,
+    usuario: dict = Depends(get_usuario_atual),
+):
     """
     Atualiza apenas os campos de modelos nos subníveis fixos,
     ignorando listas vazias.
@@ -160,12 +216,18 @@ async def atualizar_modelos(id: str, request: AtualizarDescricaoRequest):
     if resultado.matched_count == 0:
         raise HTTPException(status_code=404, detail="Documento não encontrado")
 
+    await _registrar_edicao(usuario, id, set_data, "atualizar_modelos")
+
     return {"detail": "Modelos atualizados com sucesso", "update_data": set_data}
 
 
-    
+
 @router.put("/editar-tipo-aprendizado/{id}")
-async def atualizar_chaves_fixas(id: str, request: AtualizarDescricaoRequest):
+async def atualizar_chaves_fixas(
+    id: str,
+    request: AtualizarDescricaoRequest,
+    usuario: dict = Depends(get_usuario_atual),
+):
     """
     Atualiza apenas as chaves fixas definidas manualmente no $set.
     """
@@ -221,5 +283,7 @@ async def atualizar_chaves_fixas(id: str, request: AtualizarDescricaoRequest):
 
     if resultado.matched_count == 0:
         raise HTTPException(status_code=404, detail="Documento não encontrado")
+
+    await _registrar_edicao(usuario, id, set_data, "atualizar_chaves_fixas")
 
     return {"detail": "Campos atualizados com sucesso", "update_data": set_data}

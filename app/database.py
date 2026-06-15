@@ -53,6 +53,7 @@ modelos_treinados = db["modelos_treinados"]
 # TUTOR
 # =========================
 tutor = db["tutor"]
+tutor_audit = db["tutor_audit"]
 
 # =========================
 # PIPELINES
