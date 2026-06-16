@@ -4,9 +4,10 @@ import logging
 from io import BytesIO
 from typing import Callable, Dict, Any, List
 import bson.json_util as bson
-import joblib
 from fastapi import APIRouter, HTTPException
 from app.deps import pd
+from app.sandbox import SandboxError, executar_treinamento
+from app.mlflow_client import log_run, log_metrics as mlflow_log_metrics, log_bytes_artifact
 from app.schemas.schemas import DatasetRequest
 from app.database import configuracoes_treinamento, arquivos, opcoes_modelos, modelos_treinados
 from app.utils.seed import get_sklearn_random_state
@@ -58,9 +59,9 @@ async def treinar_modelo_generico(
 
     # Aplicar hiperparametros editados pelo usuario na ferramenta. Considera apenas
     # os parametros aceitos pelo construtor do modelo (evita "unexpected keyword")
-    # e ignora valores vazios.
+    # e ignora valores vazios ou None.
     for nome_param, valor in (request.hiperparametros or {}).items():
-        if nome_param in sig.parameters and valor != "":
+        if nome_param in sig.parameters and valor is not None and valor != "":
             hiperparametros[nome_param] = valor
 
     atributos: List[str] = [k for k, v in conf_doc.get("atributos", {}).items() if v]
@@ -122,43 +123,60 @@ async def treinar_modelo_generico(
 
     try:
         hiperparametros.update(kwargs_adicionais)
-        modelo = instancia_classe(**hiperparametros)
-        
-        # Treinar modelo (clustering usa apenas X_train)
-        if is_clustering:
-            modelo.fit(X_train)
-        else:
-            modelo.fit(X_train, y_train)
-        
-        # Serializa com joblib (seguro e eficiente)
-        buffer = BytesIO()
-        joblib.dump(modelo, buffer)
-        modelo_bytes = buffer.getvalue()
-        
-        # Calcula checksum de validação
-        checksum = hashlib.sha256(modelo_bytes).hexdigest()
-        
-        # Para clustering, não há classes
-        classes = []
-        if hasattr(modelo, 'classes_'):
-            classes = list(map(str, modelo.classes_))
-        elif hasattr(modelo, 'labels_'):
-            classes = list(map(str, sorted(set(modelo.labels_))))
-        
-        result = await modelos_treinados.insert_one({
-            "arquivo_id": request.arquivo_id,
-            "arq_teste": arquivo_doc.get("content_teste_base64"),
-            "hiperparametros": hiperparametros,
-            "atributos": atributos,
-            "target": target,
-            "classes": classes,
-            "modelo_treinado": bson.Binary(modelo_bytes),
-            "checksum": checksum,
-            "modelo": modelo_doc.get('valor'),
-        })
-        
-        id_result = str(result.inserted_id)
-        
+        class_path = f"{instancia_classe.__module__}.{instancia_classe.__name__}"
+
+        mlflow_tags = {
+            "modelo": modelo_doc.get("valor", ""),
+            "tipo_treino": "clustering" if is_clustering else "supervisionado",
+            "n_atributos": len(atributos),
+            "n_amostras_treino": len(X_train),
+        }
+        with log_run(
+            run_name=nome_modelo_label,
+            params=hiperparametros,
+            tags=mlflow_tags,
+        ) as mlflow_run_id:
+
+            train_result = executar_treinamento(
+                class_path=class_path,
+                hiperparametros=hiperparametros,
+                X_train=X_train,
+                y_train=None if is_clustering else y_train,
+                is_clustering=is_clustering,
+            )
+
+            modelo_bytes = train_result.model_bytes
+            checksum = hashlib.sha256(modelo_bytes).hexdigest()
+            classes = train_result.classes
+
+            # Artefato do modelo no MLflow (no-op se desativado).
+            log_bytes_artifact(
+                modelo_bytes,
+                run_id=mlflow_run_id,
+                filename="model.joblib",
+                artifact_path="model",
+            )
+
+            result = await modelos_treinados.insert_one({
+                "arquivo_id": request.arquivo_id,
+                "arq_teste": arquivo_doc.get("content_teste_base64"),
+                "hiperparametros": hiperparametros,
+                "atributos": atributos,
+                "target": target,
+                "classes": classes,
+                "modelo_treinado": bson.Binary(modelo_bytes),
+                "checksum": checksum,
+                "modelo": modelo_doc.get('valor'),
+                "mlflow_run_id": mlflow_run_id,
+            })
+
+            id_result = str(result.inserted_id)
+
+    except SandboxError as e:
+        logger.warning(f"treinar_modelo_generico bloqueado pelo sandbox ({e.kind}): {e}")
+        # timeout/memória são erros de uso (input ruim), não erros internos
+        status = 400 if e.kind in ("timeout", "memory", "config") else 500
+        raise HTTPException(status_code=status, detail=f"Erro no treinamento: {e}")
     except Exception as e:
         logger.exception(f"treinar_modelo_generico falhou: {e}")
         raise HTTPException(status_code=500, detail=f"Erro no treinamento: {str(e)}")
@@ -187,25 +205,19 @@ async def treinar_modelo_generico(
         h["nomeHiperparametro"]: h["valorPadrao"]
         for h in modelo_doc.get("hiperparametros", [])
     }
-    
-    # Para clustering, não há classes
-    classes = []
-    if hasattr(modelo, 'classes_'):
-        classes = list(modelo.classes_)
-    elif hasattr(modelo, 'labels_'):
-        classes = list(sorted(set(modelo.labels_)))
-    
+
     return converter_numpy({
         "atributos": atributos,
         "target": target,
-        "modelo_treinado": str(modelo),
+        "modelo_treinado": train_result.model_repr,
         "status": f"modelo {nome_modelo_label} treinado com sucesso",
         "total_amostras_treino": len(X_train),
         "total_amostras_teste": total_amostras_teste,
-        "hiperparametros": modelo.get_params(),
+        "hiperparametros": train_result.params,
         "hiperparametros_padrao": hiperparametros_padrao,
-        "classes": classes,
+        "classes": train_result.classes,
         "modelo": modelo_doc.get('valor'),
         "nome_modelo": modelo_doc.get('label'),
-        "id": id_result
+        "id": id_result,
+        "mlflow_run_id": mlflow_run_id,
     })
