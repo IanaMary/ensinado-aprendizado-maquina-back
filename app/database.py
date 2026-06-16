@@ -64,3 +64,8 @@ pipelines = db["pipelines"]
 # HISTÓRICO DE CHAT
 # =========================
 historico_chat = db["historico_chat"]
+
+# =========================
+# CONFIGURAÇÕES DO TUTOR
+# =========================
+configuracoes_tutor = db["configuracoes_tutor"]

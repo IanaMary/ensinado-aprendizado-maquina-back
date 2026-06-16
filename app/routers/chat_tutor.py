@@ -18,7 +18,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from app.database import historico_chat
+from app.database import historico_chat, configuracoes_tutor
 from app.security import get_usuario_atual
 from app.schemas.chat import (
     ChatHistoricoListItem,
@@ -58,6 +58,76 @@ NVIDIA_MODEL = os.getenv("NVIDIA_MODEL", "minimaxai/minimax-m3")
 # Limite defensivo para nao mandar um contexto gigante ao modelo.
 MAX_CONTEXTO_CHARS = 8000
 
+
+# ============================================================
+# CONFIGURAÇÃO DO MODELO LLM
+# ============================================================
+
+@router.get("/modelos")
+async def listar_modelos(usuario=Depends(get_usuario_atual)):
+    """Lista os modelos LLM disponíveis na NVIDIA."""
+    api_key = os.getenv("NVIDIA_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="NVIDIA_API_KEY não configurada no servidor.",
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                f"{NVIDIA_BASE_URL}/models",
+                headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+            )
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Timeout ao listar modelos.")
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="Erro ao conectar com a NVIDIA.")
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Erro ao listar modelos da NVIDIA.")
+
+    try:
+        data = resp.json()
+        modelos = [
+            {"id": m["id"], "owned_by": m.get("owned_by", "")}
+            for m in data.get("data", [])
+        ]
+    except (KeyError, ValueError):
+        raise HTTPException(status_code=502, detail="Resposta inesperada ao listar modelos.")
+
+    # Busca o modelo configurado atualmente
+    config = await configuracoes_tutor.find_one({"chave": "llm_model"})
+    modelo_atual = config.get("valor", NVIDIA_MODEL) if config else NVIDIA_MODEL
+
+    return {"modelos": modelos, "modelo_atual": modelo_atual}
+
+
+@router.get("/modelo")
+async def obter_modelo(usuario=Depends(get_usuario_atual)):
+    """Retorna o modelo LLM atualmente selecionado."""
+    config = await configuracoes_tutor.find_one({"chave": "llm_model"})
+    modelo = config.get("valor", NVIDIA_MODEL) if config else NVIDIA_MODEL
+    return {"modelo": modelo}
+
+
+@router.put("/modelo")
+async def definir_modelo(body: dict, usuario=Depends(get_usuario_atual)):
+    """Define o modelo LLM a ser utilizado pelo tutor."""
+    if usuario.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas admins podem alterar o modelo do tutor.")
+
+    modelo = body.get("modelo")
+    if not modelo or not isinstance(modelo, str):
+        raise HTTPException(status_code=400, detail="Campo 'modelo' é obrigatório.")
+
+    await configuracoes_tutor.update_one(
+        {"chave": "llm_model"},
+        {"$set": {"chave": "llm_model", "valor": modelo, "atualizado_por": str(usuario.get("id", ""))}},
+        upsert=True,
+    )
+    return {"modelo": modelo}
+
 SYSTEM_PROMPT = (
     "Você é o tutor de Aprendizado de Máquina da plataforma Iana (H2IA Tutor). "
     "Seu público são estudantes do ensino fundamental e médio. "
@@ -95,6 +165,10 @@ async def chat_tutor(request: ChatTutorRequest, req: Request):
             detail="O tutor por chat não está configurado no servidor (NVIDIA_API_KEY ausente).",
         )
 
+    # Busca o modelo configurado
+    config = await configuracoes_tutor.find_one({"chave": "llm_model"})
+    modelo = config.get("valor", NVIDIA_MODEL) if config else NVIDIA_MODEL
+
     contexto_txt = _montar_contexto(request.contexto)
     mensagens = [
         {"role": "system", "content": SYSTEM_PROMPT + "\n\n=== CONTEXTO DO PIPELINE ===\n" + contexto_txt},
@@ -107,7 +181,7 @@ async def chat_tutor(request: ChatTutorRequest, req: Request):
         raise HTTPException(status_code=400, detail="Envie ao menos uma mensagem do usuário.")
 
     payload = {
-        "model": NVIDIA_MODEL,
+        "model": modelo,
         "messages": mensagens,
         "temperature": 0.4,
         "max_tokens": 1024,
@@ -189,6 +263,10 @@ async def chat_tutor_stream(request: ChatTutorRequest, req: Request):
             detail="O tutor por chat não está configurado no servidor (NVIDIA_API_KEY ausente).",
         )
 
+    # Busca o modelo configurado
+    config = await configuracoes_tutor.find_one({"chave": "llm_model"})
+    modelo = config.get("valor", NVIDIA_MODEL) if config else NVIDIA_MODEL
+
     contexto_txt = _montar_contexto(request.contexto)
     mensagens = [
         {"role": "system", "content": SYSTEM_PROMPT + "\n\n=== CONTEXTO DO PIPELINE ===\n" + contexto_txt},
@@ -201,7 +279,7 @@ async def chat_tutor_stream(request: ChatTutorRequest, req: Request):
         raise HTTPException(status_code=400, detail="Envie ao menos uma mensagem do usuário.")
 
     payload = {
-        "model": NVIDIA_MODEL,
+        "model": modelo,
         "messages": mensagens,
         "temperature": 0.4,
         "max_tokens": 1024,

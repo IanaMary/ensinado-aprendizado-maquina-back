@@ -134,6 +134,7 @@ def mock_db(mock_user):
         patch("app.routers.conf_pipeline.opcoes_modelos", mock_modelos),
         patch("app.routers.conf_pipeline.opcoes_metricas", mock_pipeline),
         patch("app.routers.conf_pipeline.opcoes_pre_processamento", mock_pipeline),
+        patch("app.routers.conf_pipeline.tutor_audit", mock_tutor),
         
         patch("app.coleta_dados.coleta_dados_csv.arquivos", mock_arquivos),
         patch("app.coleta_dados.coleta_dados_csv.configuracoes_treinamento", mock_config),
@@ -152,6 +153,8 @@ def mock_db(mock_user):
         patch("app.routers.treinamento_base.modelos_treinados", mock_modelos),
         patch("app.routers.toy_datasets.arquivos", mock_arquivos),
         patch("app.routers.toy_datasets.configuracoes_treinamento", mock_config),
+        patch("app.routers.chat_tutor.configuracoes_tutor", _make_mock_collection()),
+        patch("app.routers.chat_tutor.historico_chat", _make_mock_collection()),
         patch("ucimlrepo.fetch_ucirepo", MagicMock(return_value=MagicMock(
             data=MagicMock(original=pd.DataFrame({"col1": [1, 2], "target": [0, 1]}))
         ))),
