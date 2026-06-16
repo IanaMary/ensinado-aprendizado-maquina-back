@@ -8,6 +8,7 @@ from app.routers import convite
 from app.routers import conf_pipeline
 from app.routers import tutor
 from app.routers import chat_tutor
+from app.routers import artefatos
 from app.routers import knn
 from app.routers import arvore_decisao
 from app.routers import regressao_logistica
@@ -34,6 +35,7 @@ from app.routers import perceptron
 from app.routers import toy_datasets
 from app.routers import pipelines
 from app.routers import visualizacao
+from app.routers import admin
 from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, configuracao_treinamento_router
 from app.metricas import router as metricas_router
 from app.security import get_usuario_atual
@@ -64,6 +66,7 @@ app.include_router(usuarios.router, dependencies=auth_dependency)
 app.include_router(conf_pipeline.router, dependencies=auth_dependency)
 app.include_router(tutor.router, dependencies=auth_dependency)
 app.include_router(chat_tutor.router, dependencies=auth_dependency)
+app.include_router(artefatos.router, dependencies=auth_dependency)
 
 app.include_router(coleta_dados_xlxs_router, prefix="/coleta_dados", dependencies=auth_dependency)
 app.include_router(coleta_dados_csv_router, prefix="/coleta_dados", dependencies=auth_dependency)
@@ -94,6 +97,7 @@ app.include_router(sgd.router, prefix="/classificador/treinamento", dependencies
 app.include_router(perceptron.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(metricas_router, prefix="/classificador", dependencies=auth_dependency)
 app.include_router(pipelines.router, dependencies=auth_dependency)
+app.include_router(admin.router, dependencies=auth_dependency)
 app.include_router(visualizacao.router, prefix="/visualizacao", dependencies=auth_dependency)
 
 @app.on_event("startup")

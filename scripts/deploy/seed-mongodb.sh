@@ -77,6 +77,7 @@ db.modelos.insertMany([
         prever_categoria: true,
         dados_rotulados: true,
         resumo: "K-Nearest Neighbors",
+        execucao: { modulo: "sklearn.neighbors", classe: "KNeighborsClassifier" },
         hiperparametros: [
             { nomeHiperparametro: "n_neighbors", valorPadrao: 5 },
             { nomeHiperparametro: "weights", valorPadrao: "uniform" },
@@ -94,6 +95,7 @@ db.modelos.insertMany([
         prever_categoria: true,
         dados_rotulados: true,
         resumo: "Decision Tree Classifier",
+        execucao: { modulo: "sklearn.tree", classe: "DecisionTreeClassifier" },
         hiperparametros: [
             { nomeHiperparametro: "criterion", valorPadrao: "gini" },
             { nomeHiperparametro: "max_depth", valorPadrao: null },
@@ -111,6 +113,7 @@ db.modelos.insertMany([
         prever_categoria: true,
         dados_rotulados: true,
         resumo: "Support Vector Machine",
+        execucao: { modulo: "sklearn.svm", classe: "SVC" },
         hiperparametros: [
             { nomeHiperparametro: "C", valorPadrao: 1.0 },
             { nomeHiperparametro: "kernel", valorPadrao: "rbf" },
@@ -128,6 +131,7 @@ db.modelos.insertMany([
         prever_categoria: true,
         dados_rotulados: true,
         resumo: "Logistic Regression",
+        execucao: { modulo: "sklearn.linear_model", classe: "LogisticRegression" },
         hiperparametros: [
             { nomeHiperparametro: "C", valorPadrao: 1.0 },
             { nomeHiperparametro: "penalty", valorPadrao: "l2" },
@@ -148,6 +152,7 @@ db.modelos.insertMany([
         prever_categoria: false,
         dados_rotulados: true,
         resumo: "Linear Regression",
+        execucao: { modulo: "sklearn.linear_model", classe: "LinearRegression" },
         hiperparametros: [
             { nomeHiperparametro: "fit_intercept", valorPadrao: true },
             { nomeHiperparametro: "positive", valorPadrao: false },
@@ -166,6 +171,7 @@ db.modelos.insertMany([
         prever_categoria: false,
         dados_rotulados: false,
         resumo: "K-Means Clustering",
+        execucao: { modulo: "sklearn.cluster", classe: "KMeans" },
         hiperparametros: [
             { nomeHiperparametro: "n_clusters", valorPadrao: 3 },
             { nomeHiperparametro: "init", valorPadrao: "k-means++" },
@@ -183,6 +189,7 @@ db.modelos.insertMany([
         prever_categoria: false,
         dados_rotulados: false,
         resumo: "Principal Component Analysis",
+        execucao: { modulo: "sklearn.decomposition", classe: "PCA" },
         hiperparametros: [
             { nomeHiperparametro: "n_components", valorPadrao: 2 }
         ],
@@ -198,6 +205,7 @@ db.modelos.insertMany([
         prever_categoria: true,
         dados_rotulados: true,
         resumo: "SVM com kernel linear. Mais rápido para dados linearmente separáveis.",
+        execucao: { modulo: "sklearn.svm", classe: "LinearSVC" },
         hiperparametros: [
             { nomeHiperparametro: "C", valorPadrao: 1.0 }
         ],
@@ -213,6 +221,7 @@ db.modelos.insertMany([
         prever_categoria: true,
         dados_rotulados: true,
         resumo: "Conjunto de árvores de decisão que votam na classe final.",
+        execucao: { modulo: "sklearn.ensemble", classe: "RandomForestClassifier" },
         hiperparametros: [
             { nomeHiperparametro: "n_estimators", valorPadrao: 100 },
             { nomeHiperparametro: "max_depth", valorPadrao: null },
@@ -230,6 +239,7 @@ db.modelos.insertMany([
         prever_categoria: true,
         dados_rotulados: true,
         resumo: "Combina classificadores fracos em um classificador forte.",
+        execucao: { modulo: "sklearn.ensemble", classe: "AdaBoostClassifier" },
         hiperparametros: [
             { nomeHiperparametro: "n_estimators", valorPadrao: 50 },
             { nomeHiperparametro: "learning_rate", valorPadrao: 1.0 }
@@ -246,6 +256,7 @@ db.modelos.insertMany([
         prever_categoria: true,
         dados_rotulados: true,
         resumo: "Classificador probabilístico baseado no Teorema de Bayes.",
+        execucao: { modulo: "sklearn.naive_bayes", classe: "GaussianNB" },
         hiperparametros: [],
         metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
     },
@@ -259,6 +270,7 @@ db.modelos.insertMany([
         prever_categoria: true,
         dados_rotulados: true,
         resumo: "Multi-Layer Perceptron: rede neural com camadas ocultas.",
+        execucao: { modulo: "sklearn.neural_network", classe: "MLPClassifier" },
         hiperparametros: [
             { nomeHiperparametro: "hidden_layer_sizes", valorPadrao: 100 },
             { nomeHiperparametro: "activation", valorPadrao: "relu" },
@@ -281,6 +293,7 @@ db.modelos.insertMany([
         prever_categoria: true,
         dados_rotulados: true,
         resumo: "Quadratic Discriminant Analysis: assume covariância diferente por classe.",
+        execucao: { modulo: "sklearn.discriminant_analysis", classe: "QuadraticDiscriminantAnalysis" },
         hiperparametros: [],
         metricas: ["accuracy_score", "precision_score", "recall_score", "f1_score", "confusion_matrix"]
     },
@@ -294,6 +307,7 @@ db.modelos.insertMany([
         prever_categoria: true,
         dados_rotulados: true,
         resumo: "Classificador linear treinado por gradiente descendente estocástico. Escala bem para muitos dados.",
+        execucao: { modulo: "sklearn.linear_model", classe: "SGDClassifier" },
         hiperparametros: [
             { nomeHiperparametro: "loss", valorPadrao: "hinge" },
             { nomeHiperparametro: "penalty", valorPadrao: "l2" },
@@ -318,6 +332,7 @@ db.modelos.insertMany([
         prever_categoria: true,
         dados_rotulados: true,
         resumo: "O classificador linear mais simples: ajusta uma reta separadora aprendendo com os erros.",
+        execucao: { modulo: "sklearn.linear_model", classe: "Perceptron" },
         hiperparametros: [
             { nomeHiperparametro: "penalty", valorPadrao: null },
             { nomeHiperparametro: "alpha", valorPadrao: 0.0001 },
@@ -339,6 +354,7 @@ db.modelos.insertMany([
         prever_categoria: false,
         dados_rotulados: true,
         resumo: "Regressão Linear com regularização L2: penaliza coeficientes grandes para evitar overfitting.",
+        execucao: { modulo: "sklearn.linear_model", classe: "Ridge" },
         hiperparametros: [
             { nomeHiperparametro: "alpha", valorPadrao: 1.0 },
             { nomeHiperparametro: "fit_intercept", valorPadrao: true },
@@ -360,6 +376,7 @@ db.modelos.insertMany([
         prever_categoria: false,
         dados_rotulados: true,
         resumo: "Regressão Linear sobre atributos elevados a potências: ajusta curvas, não só retas.",
+        execucao: { modulo: "sklearn.preprocessing", classe: "PolynomialFeatures" },
         hiperparametros: [
             { nomeHiperparametro: "degree", valorPadrao: 2 },
             { nomeHiperparametro: "include_bias", valorPadrao: true },
@@ -379,6 +396,7 @@ db.modelos.insertMany([
         prever_categoria: false,
         dados_rotulados: true,
         resumo: "Prevê um quantil (ex.: a mediana) em vez da média. Útil quando há valores extremos.",
+        execucao: { modulo: "sklearn.linear_model", classe: "QuantileRegressor" },
         hiperparametros: [
             { nomeHiperparametro: "quantile", valorPadrao: 0.5 },
             { nomeHiperparametro: "alpha", valorPadrao: 1.0 },
@@ -397,6 +415,7 @@ db.modelos.insertMany([
         prever_categoria: false,
         dados_rotulados: true,
         resumo: "Regressão robusta: combina erro quadrático e absoluto para sofrer menos com outliers.",
+        execucao: { modulo: "sklearn.linear_model", classe: "HuberRegressor" },
         hiperparametros: [
             { nomeHiperparametro: "epsilon", valorPadrao: 1.35 },
             { nomeHiperparametro: "alpha", valorPadrao: 0.0001 },
@@ -417,6 +436,7 @@ db.modelos.insertMany([
         prever_categoria: false,
         dados_rotulados: true,
         resumo: "Ajusta o modelo só nos pontos 'bons' (inliers), ignorando outliers automaticamente.",
+        execucao: { modulo: "sklearn.linear_model", classe: "RANSACRegressor" },
         hiperparametros: [
             { nomeHiperparametro: "min_samples", valorPadrao: null },
             { nomeHiperparametro: "residual_threshold", valorPadrao: null },
@@ -436,6 +456,7 @@ db.modelos.insertMany([
         prever_categoria: false,
         dados_rotulados: true,
         resumo: "Regressão robusta baseada em medianas de inclinações. Resiste bem a outliers.",
+        execucao: { modulo: "sklearn.linear_model", classe: "TheilSenRegressor" },
         hiperparametros: [
             { nomeHiperparametro: "fit_intercept", valorPadrao: true },
             { nomeHiperparametro: "max_subpopulation", valorPadrao: 10000 },
@@ -456,6 +477,7 @@ db.modelos.insertMany([
         prever_categoria: false,
         dados_rotulados: true,
         resumo: "Support Vector Regression: versão de regressão das máquinas de vetores de suporte.",
+        execucao: { modulo: "sklearn.svm", classe: "SVR" },
         hiperparametros: [
             { nomeHiperparametro: "C", valorPadrao: 1.0 },
             { nomeHiperparametro: "kernel", valorPadrao: "rbf" },
@@ -479,6 +501,7 @@ db.modelos.insertMany([
         prever_categoria: false,
         dados_rotulados: true,
         resumo: "Rede neural com camadas ocultas para prever valores contínuos.",
+        execucao: { modulo: "sklearn.neural_network", classe: "MLPRegressor" },
         hiperparametros: [
             { nomeHiperparametro: "hidden_layer_sizes", valorPadrao: 100 },
             { nomeHiperparametro: "activation", valorPadrao: "relu" },
@@ -501,6 +524,7 @@ db.modelos.insertMany([
         prever_categoria: false,
         dados_rotulados: true,
         resumo: "k vizinhos mais próximos para regressão: prevê a média dos vizinhos mais parecidos.",
+        execucao: { modulo: "sklearn.neighbors", classe: "KNeighborsRegressor" },
         hiperparametros: [
             { nomeHiperparametro: "n_neighbors", valorPadrao: 5 },
             { nomeHiperparametro: "weights", valorPadrao: "uniform" },
@@ -529,6 +553,7 @@ db.metricas.insertMany([
         movido: false,
         icon: "metrica",
         resumo: "Proporção de previsões corretas",
+        execucao: { modulo: "sklearn.metrics", funcao: "accuracy_score" },
         explicacao: "Das 100 amostras de teste, quantas o modelo acertou? É a métrica mais simples: acertos dividido pelo total. Pode enganar quando as classes são desbalanceadas — um modelo que sempre prevê a classe majoritária pode ter acurácia alta sem ser útil."
     },
     {
@@ -540,6 +565,7 @@ db.metricas.insertMany([
         movido: false,
         icon: "metrica",
         resumo: "Das previsões positivas, quantas estavam corretas",
+        execucao: { modulo: "sklearn.metrics", funcao: "precision_score" },
         explicacao: "Se o modelo disse \"é spam\" 10 vezes e 8 realmente eram spam, a precisão é 80%. Importante quando o custo de um falso positivo é alto — por exemplo, marcar um e-mail legítimo como spam."
     },
     {
@@ -551,6 +577,7 @@ db.metricas.insertMany([
         movido: false,
         icon: "metrica",
         resumo: "Dos positivos reais, quantos o modelo detectou",
+        execucao: { modulo: "sklearn.metrics", funcao: "recall_score" },
         explicacao: "Se existem 100 e-mails spam e o modelo detectou 70, o recall é 70%. Importante quando o custo de um falso negativo é alto — por exemplo, deixar passar um spam perigoso ou não detectar uma doença."
     },
     {
@@ -562,6 +589,7 @@ db.metricas.insertMany([
         movido: false,
         icon: "metrica",
         resumo: "Média harmônica entre precisão e recall",
+        execucao: { modulo: "sklearn.metrics", funcao: "f1_score" },
         explicacao: "Resume precisão e recall em um único número. Se um dos dois for baixo, o F1 cai bastante. Útil quando as classes estão desbalanceadas e você precisa equilibrar os dois tipos de erro."
     },
     {
@@ -573,6 +601,7 @@ db.metricas.insertMany([
         movido: false,
         icon: "metrica",
         resumo: "Tabela de acertos e erros por classe",
+        execucao: { modulo: "sklearn.metrics", funcao: "confusion_matrix" },
         explicacao: "Mostra exatamente onde o modelo acerta e onde erra. A diagonal principal mostra os acertos; os números fora da diagonal mostram os erros — por exemplo, quantos gatos foram confundidos com cachorros."
     },
     {
@@ -584,6 +613,7 @@ db.metricas.insertMany([
         movido: false,
         icon: "metrica",
         resumo: "Quão bem definidos estão os clusters (-1 a 1)",
+        execucao: { modulo: "sklearn.metrics", funcao: "silhouette_score" },
         explicacao: "Mede o quão parecido cada ponto é com seu próprio cluster comparado aos outros clusters. Valores próximos de 1 indicam clusters bem separados; próximos de 0 indicam sobreposição; negativos indicam pontos possivelmente no cluster errado."
     },
     {
@@ -595,6 +625,7 @@ db.metricas.insertMany([
         movido: false,
         icon: "metrica",
         resumo: "Razão entre separação e coesão dos clusters",
+        execucao: { modulo: "sklearn.metrics", funcao: "calinski_harabasz_score" },
         explicacao: "Compara a dispersão entre os clusters (quão distantes estão entre si) com a dispersão dentro de cada cluster (quão compactos são). Valores maiores indicam clusters mais definidos e separados."
     },
     {
@@ -606,6 +637,7 @@ db.metricas.insertMany([
         movido: false,
         icon: "metrica",
         resumo: "Similaridade média entre clusters (quanto menor, melhor)",
+        execucao: { modulo: "sklearn.metrics", funcao: "davies_bouldin_score" },
         explicacao: "Para cada cluster, calcula o quão parecido ele é com o cluster mais próximo. A média desses valores é o Davies-Bouldin. Zero significaria clusters perfeitamente separados. Valores baixos indicam boa separação."
     },
     {
@@ -617,6 +649,7 @@ db.metricas.insertMany([
         movido: false,
         icon: "metrica",
         resumo: "Quanto da variação o modelo explica (0 a 1)",
+        execucao: { modulo: "sklearn.metrics", funcao: "r2_score" },
         explicacao: "Indica o quanto o modelo explica a variação dos valores reais. R² = 1 é uma previsão perfeita; R² = 0 equivale a sempre chutar a média dos valores. Pode ser negativo quando o modelo é pior do que esse chute."
     },
     {
@@ -628,6 +661,7 @@ db.metricas.insertMany([
         movido: false,
         icon: "metrica",
         resumo: "Média dos erros ao quadrado (quanto menor, melhor)",
+        execucao: { modulo: "sklearn.metrics", funcao: "mean_squared_error" },
         explicacao: "Eleva cada erro ao quadrado e tira a média. Como eleva ao quadrado, pune mais os erros grandes. Fica na unidade ao quadrado do alvo, por isso costuma ser difícil de interpretar diretamente."
     },
     {
@@ -639,6 +673,7 @@ db.metricas.insertMany([
         movido: false,
         icon: "metrica",
         resumo: "Erro típico na mesma unidade do alvo (menor é melhor)",
+        execucao: { modulo: "sklearn.metrics", funcao: "root_mean_squared_error" },
         explicacao: "É a raiz quadrada do MSE, então volta para a mesma unidade do valor previsto. Se você prevê preços em reais, o RMSE também fica em reais — fácil de ler como o erro típico do modelo."
     },
     {
@@ -650,6 +685,7 @@ db.metricas.insertMany([
         movido: false,
         icon: "metrica",
         resumo: "Média do tamanho dos erros (quanto menor, melhor)",
+        execucao: { modulo: "sklearn.metrics", funcao: "mean_absolute_error" },
         explicacao: "Tira a média do tamanho dos erros, sem elevar ao quadrado. É menos sensível a erros muito grandes do que o RMSE. Se o MAE é 5, em média o modelo erra 5 unidades para cima ou para baixo."
     }
 ]);

@@ -4,10 +4,11 @@ logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, HTTPException
 from app.deps import pd, metricas_disponiveis
-from app.database import modelos_treinados, arquivos
+from app.database import modelos_treinados, arquivos, opcoes_metricas
 from app.schemas.schemas import AvaliacaoModelosRequest
 from app.funcoes_genericas.validacao import validar_object_id, MAX_ARQUIVO_BASE64
 from bson import ObjectId
+import importlib
 import joblib
 import base64
 import io
@@ -40,6 +41,36 @@ router = APIRouter()
 AVERAGES_PERMITIDAS = {"micro", "macro", "weighted"}
 VISUALIZACOES_KEY = "_visualizacoes"
 
+_metrica_fn_cache: dict[str, callable] = {}
+
+
+async def _get_metrica_fn_dynamic(valor: str) -> Optional[callable]:
+    if valor in _metrica_fn_cache:
+        return _metrica_fn_cache[valor]
+    fn = metricas_disponiveis.get(valor)
+    if fn:
+        _metrica_fn_cache[valor] = fn
+        return fn
+    try:
+        doc = await opcoes_metricas.find_one({"valor": valor})
+    except Exception:
+        return None
+    if not doc:
+        return None
+    execucao = doc.get("execucao", {})
+    modulo = execucao.get("modulo")
+    funcao = execucao.get("funcao")
+    if not modulo or not funcao:
+        return None
+    try:
+        mod = importlib.import_module(modulo)
+        fn = getattr(mod, funcao)
+        _metrica_fn_cache[valor] = fn
+        return fn
+    except Exception as e:
+        logger.warning("Falha ao importar metrica dinamica %s.%s: %s", modulo, funcao, e)
+        return None
+
 
 def normalizar_media_metrica(average: Optional[str]) -> str:
     return average if average in AVERAGES_PERMITIDAS else "weighted"
@@ -57,6 +88,52 @@ def _figura_para_base64(fig) -> str:
     plt.close(fig)
     buffer.seek(0)
     return base64.b64encode(buffer.read()).decode("utf-8")
+
+
+def _logar_avaliacao_mlflow(
+    run_id: Optional[str],
+    label_modelo: str,
+    metricas_pedidas: list,
+    resultados_formatados: dict,
+) -> None:
+    """Loga métricas escalares + visualizações PNG no run MLflow do modelo.
+
+    No-op silencioso quando MLflow está desativado ou o run não existe.
+    Falhas individuais são engolidas — avaliação no Mongo é a fonte de verdade.
+    """
+    from app.mlflow_client import log_bytes_artifact, log_metrics
+
+    if not run_id:
+        return
+
+    # Coleta métricas escalares (ignora dicts da confusion matrix e mensagens de erro).
+    escalares: dict[str, float] = {}
+    for metrica in metricas_pedidas:
+        valor = resultados_formatados.get(metrica.label, {}).get(label_modelo)
+        if isinstance(valor, (int, float)) and not isinstance(valor, bool):
+            chave = str(metrica.valor or metrica.label).replace(" ", "_")
+            escalares[chave] = float(valor)
+    if escalares:
+        log_metrics(escalares, run_id=run_id)
+
+    # Loga cada visualização PNG como artifact.
+    visualizacoes = resultados_formatados.get(VISUALIZACOES_KEY, {}).get(label_modelo, []) or []
+    for viz in visualizacoes:
+        b64 = (viz or {}).get("base64")
+        titulo = (viz or {}).get("titulo") or "viz"
+        if not b64:
+            continue
+        try:
+            payload = base64.b64decode(b64)
+            nome_arquivo = "".join(c if c.isalnum() else "_" for c in titulo).strip("_") + ".png"
+            log_bytes_artifact(
+                payload,
+                run_id=run_id,
+                filename=nome_arquivo or "viz.png",
+                artifact_path="visualizacoes",
+            )
+        except Exception as e:
+            logger.warning("Falha ao logar artefato de viz '%s': %s", titulo, e)
 
 
 def _renderizar_visualizacao(nome: str, factory) -> Optional[dict]:
@@ -293,7 +370,7 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
                     if metrica.valor == "root_mean_squared_error":
                         valor_metrica = float(mean_squared_error(y_test, y_pred) ** 0.5)
                     else:
-                        metrica_fn = metricas_disponiveis.get(metrica.valor)
+                        metrica_fn = await _get_metrica_fn_dynamic(metrica.valor)
                         if not metrica_fn:
                             resultados_formatados[metrica.label][nome_modelo] = "Métrica não suportada"
                             continue
@@ -332,7 +409,7 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
                         }
                         continue
 
-                    metrica_fn = metricas_disponiveis.get(metrica.valor)
+                    metrica_fn = await _get_metrica_fn_dynamic(metrica.valor)
                     if not metrica_fn:
                         resultados_formatados[metrica.label][nome_modelo] = "Métrica não suportada"
                         continue
@@ -342,5 +419,13 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
                 except Exception as e:
                     logger.warning(f"Erro ao calcular métrica {metrica.label}: {e}")
                     resultados_formatados[metrica.label][nome_modelo] = f"Erro: {str(e)}"
+
+        # MLflow: anexa métricas + visualizações ao run que treinou esse modelo.
+        _logar_avaliacao_mlflow(
+            run_id=doc.get("mlflow_run_id"),
+            label_modelo=nome_modelo,
+            metricas_pedidas=request.metricas,
+            resultados_formatados=resultados_formatados,
+        )
 
     return resultados_formatados

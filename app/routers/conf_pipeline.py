@@ -1,13 +1,122 @@
-from typing import List, OrderedDict
-from fastapi import APIRouter, HTTPException, Depends, Query
-from datetime import datetime
+from typing import List, OrderedDict, Any, Dict
+from fastapi import APIRouter, HTTPException, Depends, Query, Body
+from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel
 from bson import ObjectId
 from app.schemas.conf_pipeline import ItemColeta, ItemColetaOut
-from app.database import opcoes_coletas, opcoes_modelos, opcoes_metricas, opcoes_pre_processamento
+from app.database import opcoes_coletas, opcoes_modelos, opcoes_metricas, opcoes_pre_processamento, tutor_audit
+from app.security import get_usuario_atual
 
 router = APIRouter(prefix="/conf_pipeline", tags=["Configuração Pipeline"])
+
+
+# Campos imutaveis por colecao
+_CAMPOS_IMUTAVEIS = {"_id", "id"}
+
+# Allowlist de modulos Python que o admin pode declarar no bloco `execucao`.
+# O backend usa esses caminhos via importlib no sandbox (app/sandbox/runner.py).
+# Qualquer modulo fora dessa lista vira HTTP 400 — defesa contra execucao de
+# codigo arbitrario via UI de admin comprometida.
+_PREFIXOS_MODULOS_PERMITIDOS = (
+    "sklearn.",
+    "xgboost",
+    "lightgbm",
+    "yellowbrick.",
+)
+
+_TIPOS_HIPERPARAM_VALIDOS = {"int", "float", "str", "bool", "enum"}
+
+
+def _validar_execucao(execucao: Any) -> None:
+    """Valida o bloco `execucao` enviado pelo admin. Lanca HTTPException(400)."""
+    if execucao is None:
+        return
+    if not isinstance(execucao, dict):
+        raise HTTPException(status_code=400, detail="execucao deve ser um objeto.")
+
+    modulo = execucao.get("modulo")
+    classe = execucao.get("classe")
+    if not isinstance(modulo, str) or not modulo:
+        raise HTTPException(status_code=400, detail="execucao.modulo é obrigatório.")
+    if not isinstance(classe, str) or not classe:
+        raise HTTPException(status_code=400, detail="execucao.classe é obrigatório.")
+
+    if not any(modulo == p.rstrip(".") or modulo.startswith(p) for p in _PREFIXOS_MODULOS_PERMITIDOS):
+        permitidos = ", ".join(_PREFIXOS_MODULOS_PERMITIDOS)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Módulo '{modulo}' não está na lista permitida. Permitidos: {permitidos}",
+        )
+
+    hiper = execucao.get("hiperparametros", [])
+    if hiper is None:
+        return
+    if not isinstance(hiper, list):
+        raise HTTPException(status_code=400, detail="execucao.hiperparametros deve ser uma lista.")
+
+    nomes_vistos: set[str] = set()
+    for i, h in enumerate(hiper):
+        if not isinstance(h, dict):
+            raise HTTPException(status_code=400, detail=f"hiperparametros[{i}] deve ser um objeto.")
+        nome = h.get("nome") or h.get("nomeHiperparametro")
+        if not isinstance(nome, str) or not nome:
+            raise HTTPException(status_code=400, detail=f"hiperparametros[{i}].nome é obrigatório.")
+        if nome in nomes_vistos:
+            raise HTTPException(status_code=400, detail=f"hiperparametro '{nome}' duplicado.")
+        nomes_vistos.add(nome)
+        tipo = h.get("tipo")
+        if tipo is not None and tipo not in _TIPOS_HIPERPARAM_VALIDOS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"hiperparametros[{i}].tipo inválido. Use: {sorted(_TIPOS_HIPERPARAM_VALIDOS)}",
+            )
+        if tipo == "enum":
+            opcoes = h.get("opcoes")
+            if not isinstance(opcoes, list) or not opcoes:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"hiperparametros[{i}].opcoes obrigatório quando tipo='enum'.",
+                )
+
+# Mapa para CRUD generico (apenas colecoes com _id ObjectId)
+_COLECOES_OID = {
+  "coleta_dados": "opcoes_coletas",
+  "modelos": "opcoes_modelos",
+  "metricas": "opcoes_metricas",
+}
+
+
+def _colecao_por_tipo(tipo: str):
+  if tipo == "coleta_dados":
+    return opcoes_coletas
+  if tipo == "modelos":
+    return opcoes_modelos
+  if tipo == "metricas":
+    return opcoes_metricas
+  return None
+
+
+async def _registrar_audit_catalogo(usuario: dict, tipo: str, item_id: str, operacao: str, campos: List[str]):
+  entrada = {
+    "pipe": tipo,
+    "tutor_id": item_id,
+    "operacao": operacao,
+    "campos_alterados": campos,
+    "usuario_id": str(usuario.get("_id") or usuario.get("id") or ""),
+    "usuario_email": usuario.get("email", ""),
+    "usuario_nome": usuario.get("nome") or usuario.get("name") or usuario.get("email", ""),
+    "timestamp": datetime.now(timezone.utc),
+  }
+  try:
+    await tutor_audit.insert_one(entrada)
+  except Exception:
+    pass
+  try:
+    from app.routers.admin import registrar_log_admin
+    await registrar_log_admin(usuario, f"catalogo_{operacao}", f"{tipo}/{item_id}: {', '.join(campos)}")
+  except Exception:
+    pass
 
 
 class HabilitadoPayload(BaseModel):
@@ -51,6 +160,121 @@ async def get_all_pre_processamento():
     {"valor": doc["valor"], "habilitado": doc.get("habilitado", True)}
     for doc in documentos if doc.get("valor")
   ]
+
+
+async def _serialize_doc(d: dict) -> dict:
+  out = {k: v for k, v in d.items() if k not in {"_id"}}
+  out["id"] = str(d["_id"])
+  return out
+
+
+# ======================================================
+# CRUD generico para colecoes do catalogo (coleta_dados,
+# modelos, metricas) — usado pelo admin em conf-tutor.
+# ======================================================
+@router.get("/catalogo/{tipo}/{item_id}")
+async def get_item(tipo: str, item_id: str):
+  colecao = _colecao_por_tipo(tipo)
+  if colecao is None:
+    raise HTTPException(status_code=404, detail="Tipo inválido")
+  if not ObjectId.is_valid(item_id):
+    raise HTTPException(status_code=400, detail="ID inválido")
+  doc = await colecao.find_one({"_id": ObjectId(item_id)})
+  if not doc:
+    raise HTTPException(status_code=404, detail="Item não encontrado")
+  return await _serialize_doc(doc)
+
+
+@router.put("/catalogo/{tipo}/{item_id}")
+async def put_item(
+  tipo: str,
+  item_id: str,
+  payload: Dict[str, Any] = Body(...),
+  usuario: dict = Depends(get_usuario_atual),
+):
+  colecao = _colecao_por_tipo(tipo)
+  if colecao is None:
+    raise HTTPException(status_code=404, detail="Tipo inválido")
+  if not ObjectId.is_valid(item_id):
+    raise HTTPException(status_code=400, detail="ID inválido")
+  set_data = {k: v for k, v in (payload or {}).items() if k not in _CAMPOS_IMUTAVEIS}
+  if not set_data:
+    raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+  if "execucao" in set_data:
+    _validar_execucao(set_data["execucao"])
+  resultado = await colecao.update_one({"_id": ObjectId(item_id)}, {"$set": set_data})
+  if resultado.matched_count == 0:
+    raise HTTPException(status_code=404, detail="Item não encontrado")
+  await _registrar_audit_catalogo(usuario, tipo, item_id, "catalogo_atualizar", list(set_data.keys()))
+  return {"id": item_id, "campos_alterados": list(set_data.keys())}
+
+
+@router.post("/catalogo/{tipo}")
+async def post_item(
+  tipo: str,
+  payload: Dict[str, Any] = Body(...),
+  usuario: dict = Depends(get_usuario_atual),
+):
+  colecao = _colecao_por_tipo(tipo)
+  if colecao is None:
+    raise HTTPException(status_code=404, detail="Tipo inválido")
+  if not payload or not payload.get("valor") or not payload.get("label"):
+    raise HTTPException(status_code=400, detail="Campos 'valor' e 'label' são obrigatórios")
+  # Garante valor unico (e impede colisao quando reusado por outros codigos)
+  existente = await colecao.find_one({"valor": payload["valor"]})
+  if existente:
+    raise HTTPException(status_code=409, detail="Já existe um item com este valor")
+  doc = {k: v for k, v in payload.items() if k not in _CAMPOS_IMUTAVEIS}
+  if "execucao" in doc:
+    _validar_execucao(doc["execucao"])
+  doc.setdefault("habilitado", True)
+  resultado = await colecao.insert_one(doc)
+  novo_id = str(resultado.inserted_id)
+  await _registrar_audit_catalogo(usuario, tipo, novo_id, "catalogo_criar", list(doc.keys()))
+  return {"id": novo_id}
+
+
+@router.delete("/catalogo/{tipo}/{item_id}")
+async def delete_item(
+  tipo: str,
+  item_id: str,
+  usuario: dict = Depends(get_usuario_atual),
+):
+  colecao = _colecao_por_tipo(tipo)
+  if colecao is None:
+    raise HTTPException(status_code=404, detail="Tipo inválido")
+  if not ObjectId.is_valid(item_id):
+    raise HTTPException(status_code=400, detail="ID inválido")
+  resultado = await colecao.delete_one({"_id": ObjectId(item_id)})
+  if resultado.deleted_count == 0:
+    raise HTTPException(status_code=404, detail="Item não encontrado")
+  await _registrar_audit_catalogo(usuario, tipo, item_id, "catalogo_remover", [])
+  return {"id": item_id, "removido": True}
+
+
+# ======================================================
+# Pre-processamento — chave eh "valor" (sem ObjectId);
+# o documento eh upsertado/atualizado por valor.
+# ======================================================
+@router.put("/pre_processamento_doc/{valor}")
+async def put_pre_processamento_doc(
+  valor: str,
+  payload: Dict[str, Any] = Body(...),
+  usuario: dict = Depends(get_usuario_atual),
+):
+  if not valor or len(valor) > 100:
+    raise HTTPException(status_code=400, detail="Valor inválido")
+  set_data = {k: v for k, v in (payload or {}).items() if k not in _CAMPOS_IMUTAVEIS and k != "valor"}
+  set_data["valor"] = valor
+  if len(set_data) <= 1:
+    raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+  await opcoes_pre_processamento.update_one(
+    {"valor": valor},
+    {"$set": set_data},
+    upsert=True
+  )
+  await _registrar_audit_catalogo(usuario, "pre_processamento", valor, "catalogo_atualizar", list(set_data.keys()))
+  return {"valor": valor, "campos_alterados": list(set_data.keys())}
 
 
 @router.patch("/pre_processamento/{valor}/habilitado")
