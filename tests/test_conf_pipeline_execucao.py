@@ -122,3 +122,42 @@ async def test_put_sem_execucao_continua_funcionando(client, mock_db, auth_heade
         headers=auth_headers,
     )
     assert resp.status_code == 200
+
+
+# ---- pre_processamento: bloco execucao validado no PUT por valor ----
+
+@pytest.mark.asyncio
+async def test_put_pre_processamento_execucao_valida_passa(client, mock_db, auth_headers):
+    from app.routers import conf_pipeline
+    conf_pipeline.opcoes_pre_processamento.update_one = AsyncMock(
+        return_value=MagicMock(matched_count=1, modified_count=1, upserted_id=None)
+    )
+    conf_pipeline.tutor_audit.insert_one = AsyncMock()
+    resp = await client.put(
+        "/conf_pipeline/pre_processamento_doc/standard_scaler",
+        json={
+            "label": "StandardScaler",
+            "execucao": {
+                "modulo": "sklearn.preprocessing",
+                "classe": "StandardScaler",
+                "hiperparametros": [],
+            },
+        },
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+async def test_put_pre_processamento_modulo_proibido_400(client, mock_db, auth_headers):
+    from app.routers import conf_pipeline
+    conf_pipeline.opcoes_pre_processamento.update_one = AsyncMock(
+        return_value=MagicMock(matched_count=1, modified_count=1)
+    )
+    resp = await client.put(
+        "/conf_pipeline/pre_processamento_doc/malicioso",
+        json={"execucao": {"modulo": "subprocess", "classe": "Popen"}},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+    assert "permitida" in resp.json()["detail"].lower()

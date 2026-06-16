@@ -9,10 +9,16 @@ from app.deps import pd
 from app.sandbox import SandboxError, executar_treinamento
 from app.mlflow_client import log_run, log_metrics as mlflow_log_metrics, log_bytes_artifact
 from app.schemas.schemas import DatasetRequest
-from app.database import configuracoes_treinamento, arquivos, opcoes_modelos, modelos_treinados
+from app.database import configuracoes_treinamento, arquivos, opcoes_modelos, modelos_treinados, opcoes_pre_processamento
 from app.utils.seed import get_sklearn_random_state
 from app.funcoes_genericas.funcoes_genericas import converter_numpy
 from app.funcoes_genericas.validacao import validar_object_id, MAX_ARQUIVO_BASE64
+from app.pre_processamento import (
+    PRE_PROCESSAMENTO_CATALOGO,
+    catalogo_com_overrides,
+    montar_specs_pre_processamento,
+    tem_imputer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +72,22 @@ async def treinar_modelo_generico(
 
     atributos: List[str] = [k for k, v in conf_doc.get("atributos", {}).items() if v]
     target: str = conf_doc.get("target")
-    
+
     # Verificar se é clustering (sem target)
     is_clustering = target is None or target == ""
+
+    # Pré-processamento escolhido no pipeline gráfico. Resolvido contra o catálogo
+    # canônico (com overrides de execucao vindos de db.pre_processamento, p/ que
+    # itens registrados/editados pelo admin sejam de fato executados) e enviado ao
+    # sandbox para virar um sklearn Pipeline junto do modelo.
+    pre_proc_itens = [s.model_dump() for s in (request.pre_processamento or [])]
+    pre_proc_catalogo = PRE_PROCESSAMENTO_CATALOGO
+    if pre_proc_itens:
+        valores = list({i.get("valor") for i in pre_proc_itens if i.get("valor")})
+        docs_pp = await opcoes_pre_processamento.find({"valor": {"$in": valores}}).to_list(length=None)
+        pre_proc_catalogo = catalogo_com_overrides(docs_pp)
+    pre_proc_specs = montar_specs_pre_processamento(pre_proc_itens, pre_proc_catalogo)
+    imputer_presente = tem_imputer(pre_proc_itens, pre_proc_catalogo)
     
     conteudo_base64 = arquivo_doc.get("content_treino_base64")
     if not conteudo_base64:
@@ -102,12 +121,13 @@ async def treinar_modelo_generico(
             raise HTTPException(status_code=400, detail=f"Coluna '{col}' não encontrada nos dados de treino.")
     
     X_train = df[atributos]
-    
-    # Verificar valores ausentes
-    if X_train.isnull().any().any():
+
+    # Verificar valores ausentes — liberado quando há um imputer no pipeline,
+    # que justamente preenche esses valores durante o fit.
+    if not imputer_presente and X_train.isnull().any().any():
         raise HTTPException(
             status_code=400,
-            detail="Os dados de treino contêm valores ausentes. Remova ou preencha os valores vazios antes de treinar."
+            detail="Os dados de treino contêm valores ausentes. Adicione um SimpleImputer ao pré-processamento ou preencha os valores vazios antes de treinar."
         )
     
     # Para modelos supervisionados, verificar target
@@ -143,6 +163,7 @@ async def treinar_modelo_generico(
                 X_train=X_train,
                 y_train=None if is_clustering else y_train,
                 is_clustering=is_clustering,
+                pre_processamento=pre_proc_specs,
             )
 
             modelo_bytes = train_result.model_bytes
@@ -167,6 +188,7 @@ async def treinar_modelo_generico(
                 "modelo_treinado": bson.Binary(modelo_bytes),
                 "checksum": checksum,
                 "modelo": modelo_doc.get('valor'),
+                "pre_processamento": pre_proc_specs,
                 "mlflow_run_id": mlflow_run_id,
             })
 

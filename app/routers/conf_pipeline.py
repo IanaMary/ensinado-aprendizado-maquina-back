@@ -150,16 +150,35 @@ async def patch_metrica_habilitado(item_id: str, payload: HabilitadoPayload):
   return await _patch_habilitado(opcoes_metricas, item_id, payload.habilitado)
 
 
-# Pre-processamento — chave eh "valor" (catalogo canonico vive em itens-coletas-dados.json
-# no front; o backend so persiste o estado habilitado/desabilitado por valor).
+# Pre-processamento — chave eh "valor". Os documentos guardam o bloco `execucao`
+# (modulo/classe/hiperparametros/aplica_em) usado tanto pelo treino quanto pela
+# geracao de codigo, alem de habilitado e conteudo educacional.
 @router.get("/pre_processamento/todos", response_model=List)
 async def get_all_pre_processamento():
   cursor = opcoes_pre_processamento.find()
   documentos = await cursor.to_list(length=None)
   return [
-    {"valor": doc["valor"], "habilitado": doc.get("habilitado", True)}
+    {
+      **{k: v for k, v in doc.items() if k != "_id"},
+      "id": str(doc["_id"]) if doc.get("_id") is not None else None,
+      "habilitado": doc.get("habilitado", True),
+    }
     for doc in documentos if doc.get("valor")
   ]
+
+
+@router.get("/pre_processamento_doc/{valor}")
+async def get_pre_processamento_doc(valor: str):
+  if not valor or len(valor) > 100:
+    raise HTTPException(status_code=400, detail="Valor inválido")
+  doc = await opcoes_pre_processamento.find_one({"valor": valor})
+  if not doc:
+    raise HTTPException(status_code=404, detail="Item não encontrado")
+  return {
+    **{k: v for k, v in doc.items() if k != "_id"},
+    "id": str(doc["_id"]),
+    "habilitado": doc.get("habilitado", True),
+  }
 
 
 async def _serialize_doc(d: dict) -> dict:
@@ -268,6 +287,8 @@ async def put_pre_processamento_doc(
   set_data["valor"] = valor
   if len(set_data) <= 1:
     raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+  if "execucao" in set_data:
+    _validar_execucao(set_data["execucao"])
   await opcoes_pre_processamento.update_one(
     {"valor": valor},
     {"$set": set_data},

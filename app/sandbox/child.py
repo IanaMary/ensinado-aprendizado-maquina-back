@@ -36,6 +36,73 @@ def _write_result(work: Path, payload: dict) -> None:
     (work / "result.json").write_text(json.dumps(payload, default=str))
 
 
+def _instanciar(modulo: str, classe: str, hiper: dict):
+    """Importa e instancia uma classe sklearn (modulo.classe) com kwargs."""
+    mod = importlib.import_module(modulo)
+    cls = getattr(mod, classe)
+    return cls(**(hiper or {}))
+
+
+def _montar_modelo(spec: dict):
+    """Monta o estimador final. Com pré-processamento, devolve um sklearn Pipeline
+    (transformers + estimador) para que o modelo serializado já contenha as
+    transformações ajustadas — assim `predict()` aplica tudo sobre X cru.
+
+    Cada etapa com colunas específicas vira um ColumnTransformer (remainder
+    passthrough); sem colunas, o transformer atua sobre todas as features.
+    """
+    module_path, _, class_name = spec["class_path"].rpartition(".")
+    if not module_path or not class_name:
+        raise ValueError(f"class_path inválido: {spec['class_path']!r}")
+    estimador = _instanciar(module_path, class_name, spec.get("hiperparametros", {}))
+
+    etapas = spec.get("pre_processamento") or []
+    if not etapas:
+        return estimador
+
+    from sklearn.compose import ColumnTransformer
+    from sklearn.pipeline import Pipeline
+
+    steps = []
+    for i, etapa in enumerate(etapas):
+        transformer = _instanciar(
+            etapa["modulo"], etapa["classe"], etapa.get("hiperparametros", {})
+        )
+        nome = f"prep_{i}_{etapa.get('valor', 'transformer')}"
+        colunas = etapa.get("colunas") or []
+        if colunas:
+            ct = ColumnTransformer(
+                transformers=[(nome, transformer, colunas)],
+                remainder="passthrough",
+                verbose_feature_names_out=False,
+            )
+            steps.append((nome, ct))
+        else:
+            steps.append((nome, transformer))
+    steps.append(("modelo", estimador))
+
+    pipe = Pipeline(steps)
+    # Mantém DataFrames (com nomes de coluna) entre etapas — necessário quando uma
+    # etapa posterior referencia colunas por nome.
+    try:
+        pipe.set_output(transform="pandas")
+    except Exception:
+        pass
+    return pipe
+
+
+def _estimador_final(modelo):
+    """Retorna o último estimador, desembrulhando um Pipeline se necessário."""
+    try:
+        from sklearn.pipeline import Pipeline
+
+        if isinstance(modelo, Pipeline):
+            return modelo.steps[-1][1]
+    except Exception:
+        pass
+    return modelo
+
+
 def main(workdir: str) -> int:
     work = Path(workdir)
     try:
@@ -67,13 +134,7 @@ def main(workdir: str) -> int:
         if not spec["is_clustering"]:
             y_train = pd.read_pickle(work / "y_train.pkl")
 
-        module_path, _, class_name = spec["class_path"].rpartition(".")
-        if not module_path or not class_name:
-            raise ValueError(f"class_path inválido: {spec['class_path']!r}")
-        mod = importlib.import_module(module_path)
-        cls = getattr(mod, class_name)
-
-        modelo = cls(**spec["hiperparametros"])
+        modelo = _montar_modelo(spec)
         if spec["is_clustering"]:
             modelo.fit(X_train)
         else:
@@ -81,11 +142,12 @@ def main(workdir: str) -> int:
 
         joblib.dump(modelo, work / "model.joblib")
 
+        final = _estimador_final(modelo)
         classes: list = []
-        if hasattr(modelo, "classes_"):
-            classes = [str(c) for c in modelo.classes_]
-        elif hasattr(modelo, "labels_"):
-            classes = [str(c) for c in sorted(set(modelo.labels_))]
+        if hasattr(final, "classes_"):
+            classes = [str(c) for c in final.classes_]
+        elif hasattr(final, "labels_"):
+            classes = [str(c) for c in sorted(set(final.labels_))]
 
         try:
             params = json.loads(json.dumps(modelo.get_params(), default=str))

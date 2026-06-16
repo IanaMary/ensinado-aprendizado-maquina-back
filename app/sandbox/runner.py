@@ -59,6 +59,7 @@ def executar_treinamento(
     X_train: pd.DataFrame,
     y_train: Optional[pd.Series],
     is_clustering: bool,
+    pre_processamento: Optional[list[dict[str, Any]]] = None,
     max_ram_mb: int = DEFAULT_MAX_RAM_MB,
     max_cpu_sec: int = DEFAULT_MAX_CPU_SEC,
     max_wall_sec: int = DEFAULT_MAX_WALL_SEC,
@@ -78,6 +79,7 @@ def executar_treinamento(
             "class_path": class_path,
             "hiperparametros": hiperparametros,
             "is_clustering": is_clustering,
+            "pre_processamento": pre_processamento or [],
             "max_ram_mb": max_ram_mb,
             "max_cpu_sec": max_cpu_sec,
         }
