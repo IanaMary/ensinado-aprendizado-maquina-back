@@ -57,3 +57,28 @@ class TestChatTutor:
             json={"mensagens": []},
         )
         assert response.status_code == 400
+
+
+class TestSaudeModelos:
+    @pytest.mark.asyncio
+    async def test_modelo_que_responde(self):
+        from app.routers.chat_tutor import _testar_modelo
+        resp = MagicMock()
+        resp.status_code = 200
+        cliente = MagicMock()
+        cliente.post = AsyncMock(return_value=resp)
+        out = await _testar_modelo(cliente, "chave", "meta/llama-3.3-70b-instruct")
+        assert out["responde"] is True
+        assert "latencia_ms" in out
+
+    @pytest.mark.asyncio
+    async def test_modelo_degradado(self):
+        from app.routers.chat_tutor import _testar_modelo
+        resp = MagicMock()
+        resp.status_code = 400
+        resp.json = MagicMock(return_value={"detail": "DEGRADED function cannot be invoked"})
+        cliente = MagicMock()
+        cliente.post = AsyncMock(return_value=resp)
+        out = await _testar_modelo(cliente, "chave", "minimaxai/minimax-m3")
+        assert out["responde"] is False
+        assert "DEGRADED" in out["erro"]

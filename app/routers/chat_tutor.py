@@ -7,6 +7,7 @@ graficos, codigo Python gerado) e responde de forma pedagogica, em PT-BR, para a
 """
 import json
 import logging
+import asyncio
 import os
 import time
 from collections import defaultdict
@@ -54,7 +55,8 @@ def _check_rate_limit(user_id: str):
     _rate_limits[user_id].append(agora)
 
 NVIDIA_BASE_URL = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
-NVIDIA_MODEL = os.getenv("NVIDIA_MODEL", "minimaxai/minimax-m3")
+# Default sane: um modelo de chat estável. O env e o config no banco têm prioridade.
+NVIDIA_MODEL = os.getenv("NVIDIA_MODEL", "meta/llama-3.3-70b-instruct")
 # Limite defensivo para nao mandar um contexto gigante ao modelo.
 MAX_CONTEXTO_CHARS = 8000
 
@@ -101,6 +103,105 @@ async def listar_modelos(usuario=Depends(get_usuario_atual)):
     modelo_atual = config.get("valor", NVIDIA_MODEL) if config else NVIDIA_MODEL
 
     return {"modelos": modelos, "modelo_atual": modelo_atual}
+
+
+# ============================================================
+# HEALTH-CHECK DOS MODELOS LLM (testa em segundo plano + cache)
+# ============================================================
+_SAUDE_TTL = 1800  # 30 min: evita re-testar a cada abertura da tela
+_saude_cache: dict = {
+    "resultados": {},        # { model_id: {"responde": bool, "latencia_ms"?: int, "erro"?: str} }
+    "atualizado_em": 0.0,
+    "em_andamento": False,
+    "total": 0,
+    "concluidos": 0,
+}
+_saude_lock = asyncio.Lock()
+
+
+async def _testar_modelo(client: httpx.AsyncClient, api_key: str, model_id: str) -> dict:
+    """Faz um ping mínimo (max_tokens=1) para saber se o modelo responde a chat."""
+    payload = {
+        "model": model_id,
+        "messages": [{"role": "user", "content": "ping"}],
+        "max_tokens": 1,
+        "temperature": 0,
+        "stream": False,
+    }
+    inicio = time.time()
+    try:
+        resp = await client.post(
+            f"{NVIDIA_BASE_URL}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json=payload,
+        )
+        if resp.status_code == 200:
+            return {"responde": True, "latencia_ms": int((time.time() - inicio) * 1000)}
+        detalhe = f"HTTP {resp.status_code}"
+        try:
+            corpo = resp.json()
+            detalhe = (corpo.get("detail") or corpo.get("title") or detalhe)
+        except Exception:
+            pass
+        return {"responde": False, "erro": str(detalhe)[:140]}
+    except Exception as e:
+        return {"responde": False, "erro": str(e)[:140] or "falha de conexão"}
+
+
+async def _rodar_health_check(api_key: str, modelos: list[str]):
+    """Testa todos os modelos com concorrência limitada, preenchendo o cache à medida
+    que cada um responde (a UI mostra o progresso)."""
+    sem = asyncio.Semaphore(8)
+    _saude_cache["total"] = len(modelos)
+    _saude_cache["concluidos"] = 0
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            async def worker(mid: str):
+                async with sem:
+                    res = await _testar_modelo(client, api_key, mid)
+                _saude_cache["resultados"][mid] = res
+                _saude_cache["concluidos"] += 1
+            await asyncio.gather(*(worker(m) for m in modelos), return_exceptions=True)
+    finally:
+        _saude_cache["atualizado_em"] = time.time()
+        _saude_cache["em_andamento"] = False
+
+
+@router.get("/modelos/saude")
+async def saude_modelos(usuario=Depends(get_usuario_atual), forcar: bool = Query(False)):
+    """Status de resposta de cada modelo LLM. Retorna o cache atual de imediato e
+    dispara o teste em segundo plano quando o cache está velho (ou forcar=True)."""
+    api_key = os.getenv("NVIDIA_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="NVIDIA_API_KEY não configurada no servidor.")
+
+    fresco = (time.time() - _saude_cache["atualizado_em"]) < _SAUDE_TTL
+    async with _saude_lock:
+        if (forcar or not fresco) and not _saude_cache["em_andamento"]:
+            ids: list[str] = []
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.get(
+                        f"{NVIDIA_BASE_URL}/models",
+                        headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+                    )
+                if resp.status_code == 200:
+                    ids = [m["id"] for m in resp.json().get("data", []) if m.get("id")]
+            except Exception:
+                ids = []
+            if ids:
+                _saude_cache["em_andamento"] = True
+                if forcar:
+                    _saude_cache["resultados"] = {}
+                asyncio.create_task(_rodar_health_check(api_key, ids))
+
+    return {
+        "resultados": _saude_cache["resultados"],
+        "atualizado_em": _saude_cache["atualizado_em"],
+        "em_andamento": _saude_cache["em_andamento"],
+        "total": _saude_cache["total"],
+        "concluidos": _saude_cache["concluidos"],
+    }
 
 
 @router.get("/modelo")
