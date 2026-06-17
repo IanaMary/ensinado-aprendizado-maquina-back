@@ -37,7 +37,16 @@ def _write_result(work: Path, payload: dict) -> None:
 
 
 def _instanciar(modulo: str, classe: str, hiper: dict):
-    """Importa e instancia uma classe sklearn (modulo.classe) com kwargs."""
+    """Importa e instancia uma classe sklearn (modulo.classe) com kwargs.
+
+    Defesa em profundidade: reaplica a allowlist de módulos aqui, no ponto de
+    importlib, mesmo que o caminho de treino já valide. Bloqueia execução de
+    código arbitrário caso um doc malicioso chegue ao spec por qualquer via.
+    """
+    from app.pre_processamento.catalogo import modulo_permitido
+
+    if not modulo_permitido(modulo):
+        raise ValueError(f"Módulo '{modulo}' não está na lista permitida.")
     mod = importlib.import_module(modulo)
     cls = getattr(mod, classe)
     return cls(**(hiper or {}))

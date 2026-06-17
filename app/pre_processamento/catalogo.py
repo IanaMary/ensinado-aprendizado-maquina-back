@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional
 # métricas e pré-processamento). Validada nos writers (conf_pipeline) E reaplicada
 # no caminho de treino (normalizar_execucao_db) como defesa em profundidade: um
 # doc malicioso inserido fora da API não pode rodar módulo arbitrário no sandbox.
-PREFIXOS_MODULOS_PERMITIDOS = ("sklearn.", "xgboost", "lightgbm", "yellowbrick.")
+PREFIXOS_MODULOS_PERMITIDOS = ("sklearn.", "xgboost", "lightgbm", "yellowbrick.", "app.modelos_custom.")
 
 
 def modulo_permitido(modulo: Any) -> bool:

@@ -157,6 +157,75 @@ async def test_put_pre_processamento_execucao_valida_passa(client, mock_db, auth
 
 
 @pytest.mark.asyncio
+async def test_put_execucao_metrica_com_funcao_passa(client, mock_db, auth_headers):
+    """Métrica usa execucao.funcao (não classe) — deve passar na validação."""
+    from app.routers import conf_pipeline
+    conf_pipeline.opcoes_metricas.update_one = AsyncMock(
+        return_value=MagicMock(matched_count=1, modified_count=1)
+    )
+    conf_pipeline.tutor_audit.insert_one = AsyncMock()
+    oid = str(ObjectId())
+    resp = await client.put(
+        f"/conf_pipeline/catalogo/metricas/{oid}",
+        json={"execucao": {"modulo": "sklearn.metrics", "funcao": "balanced_accuracy_score", "hiperparametros": []}},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+async def test_put_execucao_classe_e_funcao_juntas_400(client, mock_db, auth_headers):
+    from app.routers import conf_pipeline
+    conf_pipeline.opcoes_modelos.update_one = AsyncMock(
+        return_value=MagicMock(matched_count=1, modified_count=1)
+    )
+    oid = str(ObjectId())
+    resp = await client.put(
+        f"/conf_pipeline/catalogo/modelos/{oid}",
+        json={"execucao": {"modulo": "sklearn.metrics", "classe": "X", "funcao": "y"}},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+    assert "exatamente um" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_post_modelo_sem_execucao_400(client, mock_db, auth_headers):
+    """Criar modelo sem execucao deve ser barrado (item inerte: 404 no treino, codegen quebrado)."""
+    from app.routers import conf_pipeline
+    conf_pipeline.opcoes_modelos.find_one = AsyncMock(return_value=None)
+    conf_pipeline.opcoes_modelos.insert_one = AsyncMock(return_value=MagicMock(inserted_id=ObjectId()))
+    resp = await client.post(
+        "/conf_pipeline/catalogo/modelos",
+        json={"valor": "extra_trees", "label": "Extra Trees"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+    assert "execucao" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_post_modelo_com_execucao_seta_flags(client, mock_db, auth_headers):
+    from app.routers import conf_pipeline
+    conf_pipeline.opcoes_modelos.find_one = AsyncMock(return_value=None)
+    captured = {}
+    async def _insert(doc):
+        captured.update(doc)
+        return MagicMock(inserted_id=ObjectId())
+    conf_pipeline.opcoes_modelos.insert_one = AsyncMock(side_effect=_insert)
+    conf_pipeline.tutor_audit.insert_one = AsyncMock()
+    resp = await client.post(
+        "/conf_pipeline/catalogo/modelos",
+        json={"valor": "extra_trees", "label": "Extra Trees",
+              "execucao": {"modulo": "sklearn.ensemble", "classe": "ExtraTreesClassifier", "hiperparametros": []}},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    assert captured.get("prever_categoria") is True
+    assert captured.get("dados_rotulados") is True
+
+
+@pytest.mark.asyncio
 async def test_put_execucao_prefixo_imitacao_400(client, mock_db, auth_headers):
     """'xgboost_evil' não deve passar (fix do startswith sem ponto final)."""
     from app.routers import conf_pipeline

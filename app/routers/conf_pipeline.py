@@ -39,10 +39,17 @@ def _validar_execucao(execucao: Any) -> None:
 
     modulo = execucao.get("modulo")
     classe = execucao.get("classe")
+    funcao = execucao.get("funcao")
     if not isinstance(modulo, str) or not modulo:
         raise HTTPException(status_code=400, detail="execucao.modulo é obrigatório.")
-    if not isinstance(classe, str) or not classe:
-        raise HTTPException(status_code=400, detail="execucao.classe é obrigatório.")
+    # Modelos/pré-proc usam `classe`; métricas usam `funcao`. Exige exatamente um.
+    tem_classe = isinstance(classe, str) and bool(classe)
+    tem_funcao = isinstance(funcao, str) and bool(funcao)
+    if tem_classe == tem_funcao:
+        raise HTTPException(
+            status_code=400,
+            detail="execucao deve ter exatamente um de 'classe' (modelos/pré-proc) ou 'funcao' (métricas).",
+        )
 
     if not modulo_permitido(modulo):
         permitidos = ", ".join(PREFIXOS_MODULOS_PERMITIDOS)
@@ -248,6 +255,15 @@ async def post_item(
   doc = {k: v for k, v in payload.items() if k not in _CAMPOS_IMUTAVEIS}
   if "execucao" in doc:
     _validar_execucao(doc["execucao"])
+  # Modelos só são funcionais (treino + codegen) com execucao e categorização.
+  if tipo == "modelos":
+    if not isinstance(doc.get("execucao"), dict) or not doc["execucao"].get("classe"):
+      raise HTTPException(status_code=400, detail="Modelo exige bloco 'execucao' com modulo e classe.")
+    doc.setdefault("prever_categoria", True)
+    doc.setdefault("dados_rotulados", True)
+  if tipo == "metricas":
+    if not isinstance(doc.get("execucao"), dict) or not doc["execucao"].get("funcao"):
+      raise HTTPException(status_code=400, detail="Métrica exige bloco 'execucao' com modulo e funcao.")
   doc.setdefault("habilitado", True)
   resultado = await colecao.insert_one(doc)
   novo_id = str(resultado.inserted_id)
@@ -381,8 +397,8 @@ async def get_all_modelos(
     {
       **{k: v for k, v in doc.items() if k not in ["_id", "prever_categoria", "dados_rotulados"]},
       "id": str(doc["_id"]),
-      "preverCategoria": doc["prever_categoria"],
-      "dadosRotulados": doc["dados_rotulados"],
+      "preverCategoria": doc.get("prever_categoria"),
+      "dadosRotulados": doc.get("dados_rotulados"),
       "habilitado": doc.get("habilitado", True),
     }
 

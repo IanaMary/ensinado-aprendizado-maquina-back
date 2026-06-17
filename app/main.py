@@ -9,6 +9,7 @@ from app.routers import conf_pipeline
 from app.routers import tutor
 from app.routers import chat_tutor
 from app.routers import artefatos
+from app.routers import treinamento_base
 from app.routers import knn
 from app.routers import arvore_decisao
 from app.routers import regressao_logistica
@@ -95,6 +96,9 @@ app.include_router(mlp_regressor.router, prefix="/classificador/treinamento", de
 app.include_router(knn_regressor.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(sgd.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(perceptron.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+# Rota genérica data-driven (por último: os routers literais acima têm prioridade).
+# Treina modelos NOVOS cadastrados pelo admin lendo modelo_doc.execucao.
+app.include_router(treinamento_base.router, prefix="/classificador", dependencies=auth_dependency)
 app.include_router(metricas_router, prefix="/classificador", dependencies=auth_dependency)
 app.include_router(pipelines.router, dependencies=auth_dependency)
 app.include_router(admin.router, dependencies=auth_dependency)

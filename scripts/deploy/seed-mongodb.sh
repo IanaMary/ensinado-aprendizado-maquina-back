@@ -376,7 +376,10 @@ db.modelos.insertMany([
         prever_categoria: false,
         dados_rotulados: true,
         resumo: "Regressão Linear sobre atributos elevados a potências: ajusta curvas, não só retas.",
-        execucao: { modulo: "sklearn.preprocessing", classe: "PolynomialFeatures" },
+        // SEM execucao: estimador customizado (PolynomialFeatures + LinearRegression) tem
+        // router próprio (regressao_polinomial.py -> RegressaoPolinomial) e codegen especial
+        // (make_pipeline). O treino execucao-first cairia em PolynomialFeatures (transformer,
+        // sem predict) — por isso o fallback ao instancia_classe é o caminho correto aqui.
         hiperparametros: [
             { nomeHiperparametro: "degree", valorPadrao: 2 },
             { nomeHiperparametro: "include_bias", valorPadrao: true },

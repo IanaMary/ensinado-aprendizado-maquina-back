@@ -62,6 +62,10 @@ async def _get_metrica_fn_dynamic(valor: str) -> Optional[callable]:
     funcao = execucao.get("funcao")
     if not modulo or not funcao:
         return None
+    from app.pre_processamento import modulo_permitido
+    if not modulo_permitido(modulo):
+        logger.warning("Metrica %s com modulo fora da allowlist: %s", valor, modulo)
+        return None
     try:
         mod = importlib.import_module(modulo)
         fn = getattr(mod, funcao)
@@ -70,6 +74,23 @@ async def _get_metrica_fn_dynamic(valor: str) -> Optional[callable]:
     except Exception as e:
         logger.warning("Falha ao importar metrica dinamica %s.%s: %s", modulo, funcao, e)
         return None
+
+
+_metrica_grupo_cache: dict[str, Optional[str]] = {}
+
+
+async def _grupo_da_metrica(valor: str) -> Optional[str]:
+    """Grupo da métrica (classificacao/regressao/agrupamento) do catálogo, cacheado.
+    Permite gatear métricas NOVAS por grupo em vez de listas hardcoded."""
+    if valor in _metrica_grupo_cache:
+        return _metrica_grupo_cache[valor]
+    try:
+        doc = await opcoes_metricas.find_one({"valor": valor})
+    except Exception:
+        return None
+    grupo = (doc or {}).get("grupo")
+    _metrica_grupo_cache[valor] = grupo
+    return grupo
 
 
 def normalizar_media_metrica(average: Optional[str]) -> str:
@@ -343,7 +364,8 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
             clustering_vals = calcular_metricas_clustering(X_test, labels)
             for metrica in request.metricas:
                 try:
-                    if metrica.valor in CLUSTERING_METRICS:
+                    eh_agrup = metrica.valor in CLUSTERING_METRICS or (await _grupo_da_metrica(metrica.valor)) == "agrupamento"
+                    if eh_agrup:
                         resultados_formatados[metrica.label][nome_modelo] = clustering_vals.get(
                             metrica.label, "Métrica não calculada"
                         )
@@ -363,7 +385,8 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
 
             for metrica in request.metricas:
                 try:
-                    if metrica.valor not in REGRESSION_METRICS:
+                    eh_regr = metrica.valor in REGRESSION_METRICS or (await _grupo_da_metrica(metrica.valor)) == "regressao"
+                    if not eh_regr:
                         resultados_formatados[metrica.label][nome_modelo] = "N/A para regressão"
                         continue
 
@@ -399,6 +422,13 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
 
             for metrica in request.metricas:
                 try:
+                    # Gate por grupo (simétrico a regressão/clustering): uma métrica de
+                    # outro grupo forçada contra um classificador retorna N/A.
+                    grupo_m = await _grupo_da_metrica(metrica.valor)
+                    if grupo_m in ("regressao", "agrupamento"):
+                        resultados_formatados[metrica.label][nome_modelo] = "N/A para classificação"
+                        continue
+
                     if metrica.valor == "confusion_matrix":
                         labels_cm = classes_doc if classes_doc else sorted(list(set(y_test) | set(y_pred)))
                         cm = confusion_matrix(y_test, y_pred, labels=labels_cm)

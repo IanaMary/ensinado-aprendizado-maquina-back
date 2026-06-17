@@ -1,8 +1,10 @@
 import base64
 import hashlib
+import importlib
+import inspect
 import logging
 from io import BytesIO
-from typing import Callable, Dict, Any, List
+from typing import Callable, Dict, Any, List, Optional
 import bson.json_util as bson
 from fastapi import APIRouter, HTTPException
 from app.deps import pd
@@ -16,9 +18,13 @@ from app.funcoes_genericas.validacao import validar_object_id, MAX_ARQUIVO_BASE6
 from app.pre_processamento import (
     PRE_PROCESSAMENTO_CATALOGO,
     catalogo_com_overrides,
+    modulo_permitido,
     montar_specs_pre_processamento,
     tem_imputer,
 )
+from app.pre_processamento.catalogo import _hiper_para_dict
+
+router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +32,7 @@ logger = logging.getLogger(__name__)
 async def treinar_modelo_generico(
     request: DatasetRequest,
     nome_modelo_label: str,
-    instancia_classe: Callable,
+    instancia_classe: Optional[Callable] = None,
     **kwargs_adicionais
 ) -> Dict[str, Any]:
     """Treina um modelo genérico e retorna o resultado."""
@@ -50,14 +56,36 @@ async def treinar_modelo_generico(
     if not modelo_doc:
         raise HTTPException(status_code=404, detail="Modelo de treino não encontrado.")
     
-    hiperparametros = {
-        h["nomeHiperparametro"]: h["valorPadrao"]
-        for h in modelo_doc.get("hiperparametros", [])
-    }
-    
+    # Resolve a classe do modelo a partir do bloco `execucao` do documento (data-driven:
+    # funciona para modelos NOVOS cadastrados pelo admin). Fallback ao instancia_classe
+    # passado pelos routers legados (compat). Allowlist reaplicada como defesa.
+    execucao = modelo_doc.get("execucao") or {}
+    modulo_exec, classe_exec = execucao.get("modulo"), execucao.get("classe")
+    if modulo_exec and classe_exec:
+        if not modulo_permitido(modulo_exec):
+            raise HTTPException(status_code=400, detail=f"Módulo '{modulo_exec}' não está na lista permitida.")
+        class_path = f"{modulo_exec}.{classe_exec}"
+    elif instancia_classe is not None:
+        class_path = f"{instancia_classe.__module__}.{instancia_classe.__name__}"
+    else:
+        raise HTTPException(status_code=400, detail="Modelo sem bloco de execução (execucao.modulo/classe) configurado.")
+
+    # Importa a classe p/ inspecionar o construtor (random_state + filtro de kwargs).
+    try:
+        _mod_path, _, _cls_name = class_path.rpartition(".")
+        _cls = getattr(importlib.import_module(_mod_path), _cls_name)
+        sig = inspect.signature(_cls.__init__)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Não foi possível carregar a classe '{class_path}': {e}")
+
+    # Defaults dos hiperparâmetros: prioriza execucao.hiperparametros (formato do editor
+    # admin: {nome,default}); fallback ao top-level legado ({nomeHiperparametro,valorPadrao}).
+    # _hiper_para_dict aceita ambos os formatos.
+    hiperparametros = _hiper_para_dict(
+        execucao.get("hiperparametros") or modelo_doc.get("hiperparametros", [])
+    )
+
     # Aplicar seed global se configurado (apenas se o modelo suportar)
-    import inspect
-    sig = inspect.signature(instancia_classe.__init__)
     if "random_state" in sig.parameters:
         random_state = get_sklearn_random_state()
         if random_state is not None:
@@ -143,7 +171,6 @@ async def treinar_modelo_generico(
 
     try:
         hiperparametros.update(kwargs_adicionais)
-        class_path = f"{instancia_classe.__module__}.{instancia_classe.__name__}"
 
         mlflow_tags = {
             "modelo": modelo_doc.get("valor", ""),
@@ -222,11 +249,10 @@ async def treinar_modelo_generico(
         except Exception as e:
             logger.warning(f"Erro ao contar amostras de teste: {e}")
     
-    # Construir dicionário de valores padrão dos hiperparâmetros
-    hiperparametros_padrao = {
-        h["nomeHiperparametro"]: h["valorPadrao"]
-        for h in modelo_doc.get("hiperparametros", [])
-    }
+    # Valores padrão dos hiperparâmetros (display) — mesma fonte usada no treino.
+    hiperparametros_padrao = _hiper_para_dict(
+        execucao.get("hiperparametros") or modelo_doc.get("hiperparametros", [])
+    )
 
     return converter_numpy({
         "atributos": atributos,
@@ -243,3 +269,18 @@ async def treinar_modelo_generico(
         "id": id_result,
         "mlflow_run_id": mlflow_run_id,
     })
+
+
+@router.post("/treinamento/{valor}")
+async def treinar_modelo_por_valor(valor: str, request: DatasetRequest):
+    """Rota genérica de treino, data-driven pelo `execucao` do documento do modelo.
+
+    Permite treinar modelos NOVOS cadastrados pelo admin (sem router dedicado). Os
+    ~24 routers literais (knn, arvore_decisao, …) são registrados ANTES desta em
+    main.py e mantêm prioridade; esta atende qualquer `valor` restante.
+    """
+    modelo_doc = await opcoes_modelos.find_one({"valor": valor})
+    if not modelo_doc:
+        raise HTTPException(status_code=404, detail=f"Modelo '{valor}' não encontrado no catálogo.")
+    label = modelo_doc.get("label") or valor
+    return await treinar_modelo_generico(request, label)
