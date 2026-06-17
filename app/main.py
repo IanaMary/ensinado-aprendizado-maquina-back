@@ -37,7 +37,7 @@ from app.routers import toy_datasets
 from app.routers import pipelines
 from app.routers import visualizacao
 from app.routers import admin
-from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, configuracao_treinamento_router
+from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, coleta_dados_url_router, configuracao_treinamento_router
 from app.metricas import router as metricas_router
 from app.security import get_usuario_atual
 
@@ -71,6 +71,7 @@ app.include_router(artefatos.router, dependencies=auth_dependency)
 
 app.include_router(coleta_dados_xlxs_router, prefix="/coleta_dados", dependencies=auth_dependency)
 app.include_router(coleta_dados_csv_router, prefix="/coleta_dados", dependencies=auth_dependency)
+app.include_router(coleta_dados_url_router, prefix="/coleta_dados", dependencies=auth_dependency)
 app.include_router(configuracao_treinamento_router, prefix="/configurar_treinamento", dependencies=auth_dependency)
 
 app.include_router(knn.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
