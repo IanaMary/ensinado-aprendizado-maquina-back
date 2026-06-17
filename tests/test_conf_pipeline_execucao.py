@@ -4,6 +4,14 @@ from bson import ObjectId
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _como_admin(mock_db):
+    """Escrita do catálogo exige admin/professor; eleva o usuário de teste."""
+    mock_db["usuarios"].find_one = AsyncMock(
+        return_value={"_id": ObjectId(), "email": "test@test.com", "role": "admin", "nome": "Admin"}
+    )
+
+
 @pytest.mark.asyncio
 async def test_put_execucao_sklearn_passa(client, mock_db, auth_headers):
     from app.routers import conf_pipeline
@@ -146,6 +154,23 @@ async def test_put_pre_processamento_execucao_valida_passa(client, mock_db, auth
         headers=auth_headers,
     )
     assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+async def test_put_execucao_prefixo_imitacao_400(client, mock_db, auth_headers):
+    """'xgboost_evil' não deve passar (fix do startswith sem ponto final)."""
+    from app.routers import conf_pipeline
+    conf_pipeline.opcoes_modelos.update_one = AsyncMock(
+        return_value=MagicMock(matched_count=1, modified_count=1)
+    )
+    oid = str(ObjectId())
+    resp = await client.put(
+        f"/conf_pipeline/catalogo/modelos/{oid}",
+        json={"execucao": {"modulo": "xgboost_evil", "classe": "Boom"}},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+    assert "permitida" in resp.json()["detail"].lower()
 
 
 @pytest.mark.asyncio

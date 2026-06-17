@@ -3,6 +3,28 @@ from bson import ObjectId
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _como_admin(mock_db):
+  """Escrita do catálogo exige admin/professor; eleva o usuário de teste."""
+  mock_db["usuarios"].find_one = AsyncMock(
+    return_value={"_id": ObjectId(), "email": "test@test.com", "role": "admin", "nome": "Admin"}
+  )
+
+
+@pytest.mark.asyncio
+async def test_patch_habilitado_aluno_403(client, mock_db, auth_headers):
+  """Aluno autenticado NÃO pode habilitar/desabilitar (gate de papel)."""
+  mock_db["usuarios"].find_one = AsyncMock(
+    return_value={"_id": ObjectId(), "email": "test@test.com", "role": "aluno", "nome": "Aluno"}
+  )
+  resp = await client.patch(
+    f"/conf_pipeline/modelos/{ObjectId()}/habilitado",
+    json={"habilitado": False},
+    headers=auth_headers,
+  )
+  assert resp.status_code == 403
+
+
 @pytest.mark.asyncio
 async def test_patch_modelo_habilitado_ok(client, mock_db, auth_headers):
   from app.routers import conf_pipeline

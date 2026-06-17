@@ -17,6 +17,7 @@ import pytest
 from app.pre_processamento import (
     PRE_PROCESSAMENTO_CATALOGO,
     catalogo_com_overrides,
+    modulo_permitido,
     montar_specs_pre_processamento,
     normalizar_execucao_db,
     tem_imputer,
@@ -131,6 +132,39 @@ def test_montar_specs_usa_override_de_catalogo():
     specs = montar_specs_pre_processamento([{"valor": "novo_scaler"}], catalogo)
     assert len(specs) == 1
     assert specs[0]["classe"] == "MaxAbsScaler"
+
+
+def test_modulo_permitido_estrito():
+    # casa exato ou submódulo
+    assert modulo_permitido("sklearn.preprocessing")
+    assert modulo_permitido("sklearn")
+    assert modulo_permitido("xgboost")
+    assert modulo_permitido("xgboost.sklearn")
+    assert modulo_permitido("lightgbm")
+    assert modulo_permitido("yellowbrick.classifier")
+    # rejeita imitações e módulos perigosos (fix do startswith sem ponto)
+    assert not modulo_permitido("xgboost_evil")
+    assert not modulo_permitido("lightgbmevil")
+    assert not modulo_permitido("sklearnx")
+    assert not modulo_permitido("os")
+    assert not modulo_permitido("subprocess")
+    assert not modulo_permitido("")
+    assert not modulo_permitido(None)
+
+
+def test_normalizar_execucao_db_rejeita_modulo_proibido():
+    # Defesa em profundidade: doc do DB com módulo fora da allowlist é descartado.
+    assert normalizar_execucao_db({"modulo": "os", "classe": "system"}) is None
+    assert normalizar_execucao_db({"modulo": "subprocess", "classe": "Popen"}) is None
+
+
+def test_catalogo_com_overrides_descarta_doc_malicioso():
+    docs = [{"valor": "evil", "execucao": {"modulo": "subprocess", "classe": "Popen"}}]
+    catalogo = catalogo_com_overrides(docs)
+    # o valor malicioso não entra no catálogo -> montar_specs o ignora
+    assert "evil" not in catalogo
+    specs = montar_specs_pre_processamento([{"valor": "evil"}], catalogo)
+    assert specs == []
 
 
 def test_catalogo_cobre_os_dez_pre_processadores():

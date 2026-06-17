@@ -7,24 +7,26 @@ from bson import ObjectId
 from app.schemas.conf_pipeline import ItemColeta, ItemColetaOut
 from app.database import opcoes_coletas, opcoes_modelos, opcoes_metricas, opcoes_pre_processamento, tutor_audit
 from app.security import get_usuario_atual
+from app.pre_processamento import PREFIXOS_MODULOS_PERMITIDOS, modulo_permitido
 
 router = APIRouter(prefix="/conf_pipeline", tags=["Configuração Pipeline"])
+
+
+async def exigir_admin_ou_professor(usuario: dict = Depends(get_usuario_atual)) -> dict:
+  """Restringe escrita do catálogo a admin/professor. Os GET /todos permanecem
+  abertos a qualquer autenticado (alunos precisam carregar o catálogo no dashboard)."""
+  if (usuario or {}).get("role") not in ("admin", "professor"):
+    raise HTTPException(status_code=403, detail="Acesso restrito a administradores e professores.")
+  return usuario
 
 
 # Campos imutaveis por colecao
 _CAMPOS_IMUTAVEIS = {"_id", "id"}
 
 # Allowlist de modulos Python que o admin pode declarar no bloco `execucao`.
-# O backend usa esses caminhos via importlib no sandbox (app/sandbox/runner.py).
-# Qualquer modulo fora dessa lista vira HTTP 400 — defesa contra execucao de
-# codigo arbitrario via UI de admin comprometida.
-_PREFIXOS_MODULOS_PERMITIDOS = (
-    "sklearn.",
-    "xgboost",
-    "lightgbm",
-    "yellowbrick.",
-)
-
+# Canônica em app/pre_processamento/catalogo.py (reaplicada no caminho de treino).
+# Qualquer modulo fora dela vira HTTP 400 — defesa contra execucao de codigo
+# arbitrario via UI de admin comprometida.
 _TIPOS_HIPERPARAM_VALIDOS = {"int", "float", "str", "bool", "enum"}
 
 
@@ -42,8 +44,8 @@ def _validar_execucao(execucao: Any) -> None:
     if not isinstance(classe, str) or not classe:
         raise HTTPException(status_code=400, detail="execucao.classe é obrigatório.")
 
-    if not any(modulo == p.rstrip(".") or modulo.startswith(p) for p in _PREFIXOS_MODULOS_PERMITIDOS):
-        permitidos = ", ".join(_PREFIXOS_MODULOS_PERMITIDOS)
+    if not modulo_permitido(modulo):
+        permitidos = ", ".join(PREFIXOS_MODULOS_PERMITIDOS)
         raise HTTPException(
             status_code=400,
             detail=f"Módulo '{modulo}' não está na lista permitida. Permitidos: {permitidos}",
@@ -136,17 +138,17 @@ async def _patch_habilitado(colecao, item_id: str, habilitado: bool):
 
 
 @router.patch("/coleta_dados/{item_id}/habilitado")
-async def patch_coleta_habilitado(item_id: str, payload: HabilitadoPayload):
+async def patch_coleta_habilitado(item_id: str, payload: HabilitadoPayload, _perfil: dict = Depends(exigir_admin_ou_professor)):
   return await _patch_habilitado(opcoes_coletas, item_id, payload.habilitado)
 
 
 @router.patch("/modelos/{item_id}/habilitado")
-async def patch_modelo_habilitado(item_id: str, payload: HabilitadoPayload):
+async def patch_modelo_habilitado(item_id: str, payload: HabilitadoPayload, _perfil: dict = Depends(exigir_admin_ou_professor)):
   return await _patch_habilitado(opcoes_modelos, item_id, payload.habilitado)
 
 
 @router.patch("/metricas/{item_id}/habilitado")
-async def patch_metrica_habilitado(item_id: str, payload: HabilitadoPayload):
+async def patch_metrica_habilitado(item_id: str, payload: HabilitadoPayload, _perfil: dict = Depends(exigir_admin_ou_professor)):
   return await _patch_habilitado(opcoes_metricas, item_id, payload.habilitado)
 
 
@@ -209,7 +211,7 @@ async def put_item(
   tipo: str,
   item_id: str,
   payload: Dict[str, Any] = Body(...),
-  usuario: dict = Depends(get_usuario_atual),
+  usuario: dict = Depends(exigir_admin_ou_professor),
 ):
   colecao = _colecao_por_tipo(tipo)
   if colecao is None:
@@ -232,7 +234,7 @@ async def put_item(
 async def post_item(
   tipo: str,
   payload: Dict[str, Any] = Body(...),
-  usuario: dict = Depends(get_usuario_atual),
+  usuario: dict = Depends(exigir_admin_ou_professor),
 ):
   colecao = _colecao_por_tipo(tipo)
   if colecao is None:
@@ -257,7 +259,7 @@ async def post_item(
 async def delete_item(
   tipo: str,
   item_id: str,
-  usuario: dict = Depends(get_usuario_atual),
+  usuario: dict = Depends(exigir_admin_ou_professor),
 ):
   colecao = _colecao_por_tipo(tipo)
   if colecao is None:
@@ -279,7 +281,7 @@ async def delete_item(
 async def put_pre_processamento_doc(
   valor: str,
   payload: Dict[str, Any] = Body(...),
-  usuario: dict = Depends(get_usuario_atual),
+  usuario: dict = Depends(exigir_admin_ou_professor),
 ):
   if not valor or len(valor) > 100:
     raise HTTPException(status_code=400, detail="Valor inválido")
@@ -299,7 +301,7 @@ async def put_pre_processamento_doc(
 
 
 @router.patch("/pre_processamento/{valor}/habilitado")
-async def patch_pre_processamento_habilitado(valor: str, payload: HabilitadoPayload):
+async def patch_pre_processamento_habilitado(valor: str, payload: HabilitadoPayload, _perfil: dict = Depends(exigir_admin_ou_professor)):
   if not valor or len(valor) > 100:
     raise HTTPException(status_code=400, detail="Valor inválido")
   await opcoes_pre_processamento.update_one(
@@ -310,7 +312,7 @@ async def patch_pre_processamento_habilitado(valor: str, payload: HabilitadoPayl
   return {"valor": valor, "habilitado": payload.habilitado}
 
 @router.post("/itens_coleta_dados/multiplos")
-async def itens_coleta_dados(itens: List[ItemColeta]):
+async def itens_coleta_dados(itens: List[ItemColeta], _perfil: dict = Depends(exigir_admin_ou_professor)):
   documentos = [item.model_dump() for item in itens]
   resultado = await opcoes_coletas.insert_many(documentos)
   return {"ids_inseridos": [str(_id) for _id in resultado.inserted_ids]}

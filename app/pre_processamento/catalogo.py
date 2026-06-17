@@ -22,6 +22,24 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+# Allowlist canônica de módulos Python aceitos no bloco `execucao` (modelos,
+# métricas e pré-processamento). Validada nos writers (conf_pipeline) E reaplicada
+# no caminho de treino (normalizar_execucao_db) como defesa em profundidade: um
+# doc malicioso inserido fora da API não pode rodar módulo arbitrário no sandbox.
+PREFIXOS_MODULOS_PERMITIDOS = ("sklearn.", "xgboost", "lightgbm", "yellowbrick.")
+
+
+def modulo_permitido(modulo: Any) -> bool:
+    """True se `modulo` casa exatamente um prefixo permitido ou é um submódulo dele.
+    Estrito: 'xgboost' e 'xgboost.sklearn' passam; 'xgboost_evil'/'sklearnx' não."""
+    if not isinstance(modulo, str) or not modulo:
+        return False
+    for p in PREFIXOS_MODULOS_PERMITIDOS:
+        base = p.rstrip(".")
+        if modulo == base or modulo.startswith(base + "."):
+            return True
+    return False
+
 # valor -> spec de execução
 PRE_PROCESSAMENTO_CATALOGO: Dict[str, Dict[str, Any]] = {
     "standard_scaler": {
@@ -130,6 +148,9 @@ def normalizar_execucao_db(execucao: Optional[Dict[str, Any]]) -> Optional[Dict[
     modulo = execucao.get("modulo")
     classe = execucao.get("classe")
     if not modulo or not classe:
+        return None
+    # Defesa em profundidade: rejeita módulo fora da allowlist mesmo vindo do DB.
+    if not modulo_permitido(modulo):
         return None
     return {
         "modulo": modulo,
