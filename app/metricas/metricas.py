@@ -34,7 +34,7 @@ except Exception:
 from yellowbrick.classifier import ClassificationReport, ClassPredictionError, ConfusionMatrix
 from yellowbrick.target import ClassBalance
 from yellowbrick.cluster import SilhouetteVisualizer, InterclusterDistance, KElbowVisualizer
-from yellowbrick.regressor import ResidualsPlot, PredictionError
+from yellowbrick.regressor import ResidualsPlot, PredictionError, CooksDistance
 
 router = APIRouter()
 
@@ -111,6 +111,28 @@ def _figura_para_base64(fig) -> str:
     return base64.b64encode(buffer.read()).decode("utf-8")
 
 
+def _ler_df_de_base64(b64: Optional[str]):
+    """Lê um DataFrame de um conteúdo base64 (Excel ou CSV). Retorna None em falha."""
+    if not b64:
+        return None
+    try:
+        raw = base64.b64decode(b64)
+    except Exception:
+        return None
+    try:
+        return pd.read_excel(io.BytesIO(raw), engine="openpyxl")
+    except Exception:
+        try:
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                text = raw.decode("latin-1")
+            sep = ";" if ";" in text.split("\n")[0] else ","
+            return pd.read_csv(io.StringIO(text), sep=sep)
+        except Exception:
+            return None
+
+
 def _logar_avaliacao_mlflow(
     run_id: Optional[str],
     label_modelo: str,
@@ -157,10 +179,29 @@ def _logar_avaliacao_mlflow(
             logger.warning("Falha ao logar artefato de viz '%s': %s", titulo, e)
 
 
+def _viz_score(viz, X, y):
+    """Pontua o visualizador (desenha os dados) e o devolve para o finalize()."""
+    viz.score(X, y)
+    return viz
+
+
+def _viz_fit(viz, X, y=None):
+    """Ajusta o visualizador (desenha os dados) e o devolve para o finalize()."""
+    viz.fit(X) if y is None else viz.fit(X, y)
+    return viz
+
+
 def _renderizar_visualizacao(nome: str, factory) -> Optional[dict]:
     try:
         fig, ax = plt.subplots(figsize=(7, 4.5))
-        factory(ax)
+        viz = factory(ax)
+        # Yellowbrick só desenha título, rótulos de eixos e legenda em finalize();
+        # sem isso o gráfico sai "pelado". score()/fit() apenas plotam os dados.
+        if viz is not None and hasattr(viz, "finalize"):
+            try:
+                viz.finalize()
+            except Exception as e:
+                logger.debug("finalize() falhou para '%s': %s", nome, e)
         return {
             "titulo": nome,
             "mime": "image/png",
@@ -179,10 +220,10 @@ def gerar_visualizacoes_classificacao(modelo_treinado, X_test, y_test, classes) 
     visualizacoes = []
 
     visualizadores = [
-        ("Matriz de confusão", lambda ax: ConfusionMatrix(modelo_treinado, classes=classes_str, ax=ax).score(X_test, y_test)),
-        ("Relatório de classificação", lambda ax: ClassificationReport(modelo_treinado, classes=classes_str, support=True, ax=ax).score(X_test, y_test)),
-        ("Erros de predição por classe", lambda ax: ClassPredictionError(modelo_treinado, classes=classes_str, ax=ax).score(X_test, y_test)),
-        ("Balanceamento das classes", lambda ax: ClassBalance(labels=classes_str, ax=ax).fit(y_test)),
+        ("Matriz de confusão", lambda ax: _viz_score(ConfusionMatrix(modelo_treinado, classes=classes_str, ax=ax), X_test, y_test)),
+        ("Relatório de classificação", lambda ax: _viz_score(ClassificationReport(modelo_treinado, classes=classes_str, support=True, ax=ax), X_test, y_test)),
+        ("Erros de predição por classe", lambda ax: _viz_score(ClassPredictionError(modelo_treinado, classes=classes_str, ax=ax), X_test, y_test)),
+        ("Balanceamento das classes", lambda ax: _viz_fit(ClassBalance(labels=classes_str, ax=ax), y_test)),
     ]
 
     for titulo, factory in visualizadores:
@@ -205,9 +246,9 @@ def gerar_visualizacoes_clustering(modelo_treinado, X_test) -> list[dict]:
     max_k = max(max_k, 2)
 
     visualizadores = [
-        ("Silhouette", lambda ax: SilhouetteVisualizer(modelo_treinado, ax=ax).fit(X_test)),
-        ("Distância entre Clusters", lambda ax: InterclusterDistance(modelo_treinado, ax=ax).fit(X_test)),
-        ("Método do Cotovelo", lambda ax: KElbowVisualizer(modelo_treinado, k=(2, max_k), ax=ax, timings=False).fit(X_test)),
+        ("Silhouette", lambda ax: _viz_fit(SilhouetteVisualizer(modelo_treinado, ax=ax), X_test)),
+        ("Distância entre Clusters", lambda ax: _viz_fit(InterclusterDistance(modelo_treinado, ax=ax), X_test)),
+        ("Método do Cotovelo", lambda ax: _viz_fit(KElbowVisualizer(modelo_treinado, k=(2, max_k), ax=ax, timings=False), X_test)),
     ]
 
     for titulo, factory in visualizadores:
@@ -221,15 +262,45 @@ def gerar_visualizacoes_clustering(modelo_treinado, X_test) -> list[dict]:
 REGRESSION_METRICS = {"r2_score", "mean_squared_error", "root_mean_squared_error", "mean_absolute_error"}
 
 
-def gerar_visualizacoes_regressao(modelo_treinado, X_test, y_test) -> list[dict]:
+def gerar_visualizacoes_regressao(modelo_treinado, X_test, y_test, X_train=None, y_train=None) -> list[dict]:
     if not getattr(modelo_treinado, "_estimator_type", None):
         modelo_treinado._estimator_type = "regressor"
     visualizacoes = []
+    tem_treino = X_train is not None and y_train is not None
+
+    def _prediction_error(ax):
+        # bestfit + identity desenham a linha de melhor ajuste e a diagonal y=ŷ;
+        # is_fitted='auto' não re-treina o pipeline já ajustado.
+        viz = PredictionError(modelo_treinado, ax=ax, bestfit=True, identity=True, is_fitted="auto")
+        viz.fit(X_train, y_train) if tem_treino else viz.fit(X_test, y_test)
+        viz.score(X_test, y_test)
+        return viz
+
+    def _residuals(ax):
+        # fit(treino) desenha os resíduos de TREINO; score(teste) os de TESTE.
+        viz = ResidualsPlot(modelo_treinado, ax=ax, is_fitted="auto")
+        viz.fit(X_train, y_train) if tem_treino else viz.fit(X_test, y_test)
+        viz.score(X_test, y_test)
+        return viz
 
     visualizadores = [
-        ("Prediction Error", lambda ax: PredictionError(modelo_treinado, ax=ax).fit(X_test, y_test).score(X_test, y_test)),
-        ("Residuals Plot", lambda ax: ResidualsPlot(modelo_treinado, ax=ax).fit(X_test, y_test).score(X_test, y_test)),
+        ("Prediction Error", _prediction_error),
+        ("Residuals Plot", _residuals),
     ]
+    # Distância de Cook precisa dos dados (X, y) numéricos para ajustar seu próprio
+    # OLS — usa o conjunto de treino quando disponível.
+    def _cooks(ax):
+        # Compat matplotlib >=3.8: ax.stem() não aceita mais 'use_line_collection',
+        # que o CooksDistance ainda passa. Neutraliza só neste ax.
+        _stem_orig = ax.stem
+        def _stem(*args, **kwargs):
+            kwargs.pop("use_line_collection", None)
+            return _stem_orig(*args, **kwargs)
+        ax.stem = _stem
+        return _viz_fit(CooksDistance(ax=ax), X_train, y_train)
+
+    if tem_treino:
+        visualizadores.append(("Distância de Cook", _cooks))
 
     for titulo, factory in visualizadores:
         visualizacao = _renderizar_visualizacao(titulo, factory)
@@ -308,6 +379,7 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
         # Busca o arquivo de teste pelo ID (separado do documento do modelo)
         arquivo_id = doc.get("arquivo_id")
         base64_str = None
+        arquivo_doc = None
 
         if arquivo_id:
             if ObjectId.is_valid(str(arquivo_id)):
@@ -379,8 +451,17 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
             y_test = df_teste[target]
             y_pred = modelo_treinado.predict(X_test)
 
+            # Carrega o conjunto de treino (quando disponível) para desenhar os resíduos
+            # de treino no ResidualsPlot e calcular a Distância de Cook.
+            X_train = y_train = None
+            df_treino = _ler_df_de_base64(arquivo_doc.get("content_treino_base64") if arquivo_doc else None)
+            if (df_treino is not None and target in df_treino.columns
+                    and all(c in df_treino.columns for c in atributos)):
+                X_train = df_treino[atributos]
+                y_train = df_treino[target]
+
             resultados_formatados[VISUALIZACOES_KEY][nome_modelo] = gerar_visualizacoes_regressao(
-                modelo_treinado, X_test, y_test
+                modelo_treinado, X_test, y_test, X_train, y_train
             )
 
             for metrica in request.metricas:
