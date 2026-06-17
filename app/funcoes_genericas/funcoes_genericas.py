@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union, Iterable, Mapping
 import pandas as pd
 from io import BytesIO, StringIO
 import base64
+import math
 import re
 
 
@@ -106,7 +107,14 @@ def converter_numpy(obj: Any) -> Any:
     elif isinstance(obj, (list, tuple)):
         return [converter_numpy(i) for i in obj]
     elif hasattr(obj, "dtype"):  # NumPy types
-        return obj.item()
+        valor = obj.item()
+        # NaN/Infinity não são JSON-compatíveis (Starlette serializa com allow_nan=False
+        # e estoura 500). Mapeia não-finitos para None tanto para floats numpy quanto Python.
+        if isinstance(valor, float) and not math.isfinite(valor):
+            return None
+        return valor
+    elif isinstance(obj, float) and not math.isfinite(obj):
+        return None
     return obj
 
 

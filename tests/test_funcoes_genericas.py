@@ -1,4 +1,7 @@
 import pytest
+import json
+import math
+import numpy as np
 from app.funcoes_genericas.funcoes_genericas import (
     mapear_tipo,
     serialize_doc,
@@ -8,10 +11,35 @@ from app.funcoes_genericas.funcoes_genericas import (
     decode_excel_base64_df,
     gerar_colunas_detalhes,
     validar_xlsx,
+    converter_numpy,
 )
 from bson import ObjectId
 import pandas as pd
 from fastapi import HTTPException
+
+
+class TestConverterNumpy:
+    def test_converte_tipos_numpy(self):
+        out = converter_numpy({"a": np.int64(3), "b": np.float64(1.5), "c": [np.int32(2)]})
+        assert out == {"a": 3, "b": 1.5, "c": [2]}
+        assert isinstance(out["a"], int) and isinstance(out["b"], float)
+
+    def test_nan_e_infinito_viram_none(self):
+        """NaN/Infinity não são JSON-compatíveis (Starlette usa allow_nan=False)."""
+        out = converter_numpy({
+            "nan_np": np.float64("nan"),
+            "inf_np": np.float64("inf"),
+            "nan_py": float("nan"),
+            "neg_inf": float("-inf"),
+            "ok": 2.0,
+        })
+        assert out["nan_np"] is None
+        assert out["inf_np"] is None
+        assert out["nan_py"] is None
+        assert out["neg_inf"] is None
+        assert out["ok"] == 2.0
+        # Serializável com allow_nan=False, igual ao Starlette
+        json.dumps(out, allow_nan=False)
 
 
 class TestMapearTipo:
