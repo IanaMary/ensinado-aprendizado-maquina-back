@@ -22,6 +22,14 @@ from sklearn.base import is_regressor
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+# DejaVu Sans vem empacotada com o matplotlib (sempre disponível). O estilo do
+# Yellowbrick troca font.sans-serif por Arial/Liberation Sans — ausentes no servidor —
+# o que faz títulos, rótulos de eixos e legendas não renderizarem. Reafirmamos a fonte
+# antes de cada savefig em _figura_para_base64.
+_FONTE_SANS = ["DejaVu Sans", "Liberation Sans", "Arial", "sans-serif"]
+matplotlib.rcParams["font.family"] = "sans-serif"
+matplotlib.rcParams["font.sans-serif"] = _FONTE_SANS
 try:
     from setuptools._distutils.version import LooseVersion
     distutils_module = types.ModuleType("distutils")
@@ -104,6 +112,10 @@ def calcular_metrica(metrica_valor: str, metrica_fn, y_test, y_pred, average: Op
 
 
 def _figura_para_base64(fig) -> str:
+    # Reafirma a fonte logo antes de salvar: o Yellowbrick reseta font.sans-serif
+    # durante o render, então garantimos a DejaVu Sans (disponível) na hora do savefig.
+    matplotlib.rcParams["font.family"] = "sans-serif"
+    matplotlib.rcParams["font.sans-serif"] = _FONTE_SANS
     buffer = io.BytesIO()
     fig.savefig(buffer, format="png", bbox_inches="tight", dpi=120)
     plt.close(fig)
