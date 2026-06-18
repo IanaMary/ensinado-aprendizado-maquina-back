@@ -16,7 +16,8 @@ import hashlib
 import sys
 import types
 from typing import Optional
-from sklearn.metrics import confusion_matrix, silhouette_score, calinski_harabasz_score, davies_bouldin_score, mean_squared_error
+import numpy as np
+from sklearn.metrics import confusion_matrix, precision_recall_fscore_support, silhouette_score, calinski_harabasz_score, davies_bouldin_score, mean_squared_error
 from sklearn.base import is_regressor
 
 import matplotlib
@@ -268,16 +269,63 @@ def _renderizar_visualizacao(nome: str, factory) -> Optional[dict]:
         return None
 
 
+def _desenhar_relatorio_classificacao(ax, y_true, y_pred, labels_calc, labels_disp) -> None:
+    """Heatmap precisão/recall/f1 por classe via sklearn — correto e consistente com a
+    matriz de confusão. (O ClassificationReport do Yellowbrick zera com rótulos string
+    nesta versão.)"""
+    p, r, f1, _ = precision_recall_fscore_support(y_true, y_pred, labels=labels_calc, zero_division=0)
+    dados = np.array([p, r, f1]).T  # linhas = classes, colunas = [precisão, recall, f1]
+    im = ax.imshow(dados, cmap=CMAP_NOME, vmin=0.0, vmax=1.0, aspect="auto")
+    ax.set_xticks(range(3)); ax.set_xticklabels(["precisão", "recall", "f1"])
+    ax.set_yticks(range(len(labels_disp))); ax.set_yticklabels(labels_disp)
+    for i in range(len(labels_disp)):
+        for j in range(3):
+            v = float(dados[i, j])
+            ax.text(j, i, f"{v:.2f}", ha="center", va="center",
+                    color=("white" if v >= 0.5 else "#4C1D95"), fontweight="bold", fontsize=11)
+    ax.set_title("Relatório de Classificação")
+    ax.figure.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+
+def _desenhar_erros_predicao(ax, y_true, y_pred, labels_calc, labels_disp) -> None:
+    """Barras empilhadas: por classe REAL (eixo x), empilhadas pela classe PREVISTA
+    (cor) — equivale ao Class Prediction Error, calculado direto da matriz de confusão."""
+    cm = confusion_matrix(y_true, y_pred, labels=labels_calc)
+    x = np.arange(len(labels_disp))
+    base = np.zeros(len(labels_disp))
+    for j, nome in enumerate(labels_disp):
+        alturas = cm[:, j]
+        ax.bar(x, alturas, bottom=base, label=nome, color=PALETA_TEMA[j % len(PALETA_TEMA)])
+        base = base + alturas
+    ax.set_xticks(x); ax.set_xticklabels(labels_disp)
+    ax.set_xlabel("classe real"); ax.set_ylabel("nº de instâncias")
+    ax.set_title("Erros de Predição por Classe")
+    ax.legend(title="classe prevista", fontsize=8)
+
+
 def gerar_visualizacoes_classificacao(modelo_treinado, X_test, y_test, classes) -> list[dict]:
-    classes_str = [str(c) for c in classes]
     if not getattr(modelo_treinado, "_estimator_type", None):
-        modelo_treinado._estimator_type = "classifier"
+        try:
+            modelo_treinado._estimator_type = "classifier"
+        except Exception:
+            pass
+    # Rótulos REAIS na ordem do modelo (para cálculo correto); versão string p/ exibição.
+    classes_modelo = getattr(modelo_treinado, "classes_", None)
+    if classes_modelo is not None and len(classes_modelo) > 0:
+        labels_calc = list(classes_modelo)
+    else:
+        labels_calc = sorted(set(list(y_test)))
+    classes_str = [str(c) for c in labels_calc]
+    try:
+        y_pred = modelo_treinado.predict(X_test)
+    except Exception:
+        y_pred = None
     visualizacoes = []
 
     visualizadores = [
         ("Matriz de confusão", lambda ax: _viz_score(ConfusionMatrix(modelo_treinado, classes=classes_str, ax=ax, cmap=CMAP_NOME), X_test, y_test)),
-        ("Relatório de classificação", lambda ax: _viz_score(ClassificationReport(modelo_treinado, classes=classes_str, support=True, ax=ax, cmap=CMAP_NOME), X_test, y_test)),
-        ("Erros de predição por classe", lambda ax: _viz_score(ClassPredictionError(modelo_treinado, classes=classes_str, ax=ax), X_test, y_test)),
+        ("Relatório de classificação", lambda ax: _desenhar_relatorio_classificacao(ax, y_test, y_pred, labels_calc, classes_str)),
+        ("Erros de predição por classe", lambda ax: _desenhar_erros_predicao(ax, y_test, y_pred, labels_calc, classes_str)),
         ("Balanceamento das classes", lambda ax: _viz_fit(ClassBalance(labels=classes_str, ax=ax), y_test)),
     ]
 
