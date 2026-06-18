@@ -43,6 +43,48 @@ from yellowbrick.classifier import ClassificationReport, ClassPredictionError, C
 from yellowbrick.target import ClassBalance
 from yellowbrick.cluster import SilhouetteVisualizer, InterclusterDistance, KElbowVisualizer
 from yellowbrick.regressor import ResidualsPlot, PredictionError, CooksDistance
+from matplotlib.colors import LinearSegmentedColormap
+
+# ---- Esquema de cores das figuras alinhado ao tema roxo do sistema ----
+# Mesmos tons usados na UI (roxo primário/secundário + acentos das fases da Trilha).
+PALETA_TEMA = ["#7C3AED", "#A855F7", "#C026D3", "#3B82F6", "#EC4899", "#F59E0B", "#22C55E"]
+# Colormap roxo (lavanda clara -> roxo -> roxo escuro) para mapas de calor
+# (Matriz de confusão, Relatório de classificação). Registrado por nome porque o
+# Yellowbrick espera uma string de colormap, não o objeto.
+_CMAP_TEMA = LinearSegmentedColormap.from_list("iana_roxo", ["#F3EEFB", "#A855F7", "#4C1D95"])
+try:
+    matplotlib.colormaps.register(_CMAP_TEMA, force=True)
+except Exception:
+    pass
+# "Purples" é um colormap sequencial roxo que o Yellowbrick reconhece (combina com o tema).
+CMAP_NOME = "Purples"
+COR_TREINO = "#7C3AED"   # roxo primário
+COR_TESTE = "#C026D3"    # magenta (lane y)
+COR_LINHA = "#A78BCA"    # roxo suave p/ linhas guia
+_RC_TEMA = {
+    "axes.titlecolor": "#4C1D95",
+    "axes.labelcolor": "#5B4B78",
+    "text.color": "#4C1D95",
+    "xtick.color": "#8B7AA8",
+    "ytick.color": "#8B7AA8",
+    "axes.edgecolor": "#E0D3F2",
+    "grid.color": "#ECE7F5",
+}
+
+
+def _aplicar_tema() -> None:
+    """Aplica a paleta + cores do tema (texto/eixos/grade) + fonte. Reaplicado por
+    figura porque o Yellowbrick redefine o estilo durante o render."""
+    try:
+        matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler(color=PALETA_TEMA)
+    except Exception:
+        pass
+    matplotlib.rcParams.update(_RC_TEMA)
+    matplotlib.rcParams["font.family"] = "sans-serif"
+    matplotlib.rcParams["font.sans-serif"] = _FONTE_SANS
+
+
+_aplicar_tema()
 
 router = APIRouter()
 
@@ -205,6 +247,7 @@ def _viz_fit(viz, X, y=None):
 
 def _renderizar_visualizacao(nome: str, factory) -> Optional[dict]:
     try:
+        _aplicar_tema()  # paleta/cores do tema antes de desenhar (cores são fixadas no draw)
         fig, ax = plt.subplots(figsize=(7, 4.5))
         viz = factory(ax)
         # Yellowbrick só desenha título, rótulos de eixos e legenda em finalize();
@@ -232,8 +275,8 @@ def gerar_visualizacoes_classificacao(modelo_treinado, X_test, y_test, classes) 
     visualizacoes = []
 
     visualizadores = [
-        ("Matriz de confusão", lambda ax: _viz_score(ConfusionMatrix(modelo_treinado, classes=classes_str, ax=ax), X_test, y_test)),
-        ("Relatório de classificação", lambda ax: _viz_score(ClassificationReport(modelo_treinado, classes=classes_str, support=True, ax=ax), X_test, y_test)),
+        ("Matriz de confusão", lambda ax: _viz_score(ConfusionMatrix(modelo_treinado, classes=classes_str, ax=ax, cmap=CMAP_NOME), X_test, y_test)),
+        ("Relatório de classificação", lambda ax: _viz_score(ClassificationReport(modelo_treinado, classes=classes_str, support=True, ax=ax, cmap=CMAP_NOME), X_test, y_test)),
         ("Erros de predição por classe", lambda ax: _viz_score(ClassPredictionError(modelo_treinado, classes=classes_str, ax=ax), X_test, y_test)),
         ("Balanceamento das classes", lambda ax: _viz_fit(ClassBalance(labels=classes_str, ax=ax), y_test)),
     ]
@@ -290,7 +333,10 @@ def gerar_visualizacoes_regressao(modelo_treinado, X_test, y_test, X_train=None,
 
     def _residuals(ax):
         # fit(treino) desenha os resíduos de TREINO; score(teste) os de TESTE.
-        viz = ResidualsPlot(modelo_treinado, ax=ax, is_fitted="auto")
+        viz = ResidualsPlot(
+            modelo_treinado, ax=ax, is_fitted="auto",
+            train_color=COR_TREINO, test_color=COR_TESTE, line_color=COR_LINHA,
+        )
         viz.fit(X_train, y_train) if tem_treino else viz.fit(X_test, y_test)
         viz.score(X_test, y_test)
         return viz
@@ -309,7 +355,8 @@ def gerar_visualizacoes_regressao(modelo_treinado, X_test, y_test, X_train=None,
             kwargs.pop("use_line_collection", None)
             return _stem_orig(*args, **kwargs)
         ax.stem = _stem
-        return _viz_fit(CooksDistance(ax=ax), X_train, y_train)
+        # "C0" = primeira cor do prop_cycle (roxo do tema, via set_palette).
+        return _viz_fit(CooksDistance(ax=ax, linefmt="C0-", markerfmt="C0o"), X_train, y_train)
 
     if tem_treino:
         visualizadores.append(("Distância de Cook", _cooks))
