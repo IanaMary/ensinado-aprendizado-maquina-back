@@ -100,6 +100,25 @@ class TestLoadToyDataset:
         assert data["dados_rotulados"] is False
         assert "target" not in data["colunas"]
 
+    async def test_gen_sorvete_regressao(self, client, mock_db, auth_headers):
+        """Dataset lúdico de sorvete: regressão com target contínuo."""
+        response = await client.get("/toy_datasets/gen_sorvete", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["fonte"] == "gerador"
+        assert data["prever_categoria"] is False
+        assert data["target"] == "target"
+        assert "temperatura" in data["colunas"] and "target" in data["colunas"]
+
+    async def test_gen_cardume_clustering(self, client, mock_db, auth_headers):
+        """Dataset lúdico de cardume: agrupamento sem target."""
+        response = await client.get("/toy_datasets/gen_cardume?n_clusters=3", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["dados_rotulados"] is False
+        assert "target" not in data["colunas"]
+        assert "velocidade" in data["colunas"]
+
     async def test_load_breast_cancer(self, client, mock_db, auth_headers):
         """Should load Breast Cancer dataset successfully."""
         response = await client.get("/toy_datasets/breast_cancer", headers=auth_headers)

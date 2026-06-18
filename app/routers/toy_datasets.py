@@ -238,6 +238,16 @@ def _carregar_gerador(dataset_name, ds, n_amostras, n_features, ruido, n_classes
             n_samples=n, n_features=nf, noise=ruido if ruido is not None else 10.0, random_state=rs
         )
         cols = [f"atributo_{i + 1}" for i in range(nf)]
+    elif dataset_name == "gen_sorvete":
+        # Regressão lúdica: prever vendas de sorvete a partir de calor e movimento.
+        X, y = make_regression(
+            n_samples=n, n_features=2, noise=ruido if ruido is not None else 12.0, random_state=rs
+        )
+        cols = ["temperatura", "pessoas_na_praia"]
+    elif dataset_name == "gen_cardume":
+        # Agrupamento lúdico: separar peixinhos em cardumes (sem target).
+        X, y = make_blobs(n_samples=n, n_features=2, centers=n_clusters or 3, random_state=rs)
+        cols = ["velocidade", "direcao"]
     else:
         return None, None
 

@@ -445,6 +445,29 @@ GENERATED_DATASETS: Dict[str, DatasetConfig] = {
         modelo_recomendado="Regressão Linear", metrica_recomendada="R² (Coef. de Determinação)",
         visualizacao_recomendada="Prediction Error",
     ),
+    # Datasets lúdicos (ensino fundamental) — usados pela tela "Treine seu Robô".
+    "gen_sorvete": DatasetConfig(
+        id="gen_sorvete", nome="Sorvetes 🍦 (regressão)", fonte="gerador",
+        descricao="Adivinhar quantos sorvetes vão ser vendidos a partir do calor e do movimento na praia.",
+        tipo=DatasetType.REGRESSION, n_amostras=300, n_features=2, target="target",
+        pre_split=PreSplitStatus.SINGLE, dificuldade="iniciante",
+        descricao_target="Quantidade de sorvetes vendidos (um número).",
+        descricao_features="Temperatura e quantas pessoas estão na praia.",
+        pergunta_guia="Quão perto o robô chega do número certo de sorvetes?",
+        modelo_recomendado="Regressão Linear", metrica_recomendada="R² (Coef. de Determinação)",
+        visualizacao_recomendada="Prediction Error",
+    ),
+    "gen_cardume": DatasetConfig(
+        id="gen_cardume", nome="Cardume 🐠 (agrupamento)", fonte="gerador",
+        descricao="Separar peixinhos em cardumes parecidos, sem dizer antes quem é de qual grupo.",
+        tipo=DatasetType.CLUSTERING, n_amostras=300, n_features=2, target=None,
+        pre_split=PreSplitStatus.SINGLE, dificuldade="iniciante",
+        descricao_target="Sem resposta dada (agrupamento não supervisionado).",
+        descricao_features="Velocidade e direção de cada peixinho.",
+        pergunta_guia="Em quantos cardumes o robô consegue separar os peixinhos?",
+        modelo_recomendado="K-means", metrica_recomendada="Silhouette Score",
+        visualizacao_recomendada="Silhouette",
+    ),
 }
 
 
