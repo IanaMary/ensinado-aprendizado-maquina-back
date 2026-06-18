@@ -158,10 +158,16 @@ def main(workdir: str) -> int:
         elif hasattr(final, "labels_"):
             classes = [str(c) for c in sorted(set(final.labels_))]
 
+        # Hiperparâmetros exibidos: os do ESTIMADOR final, não os do Pipeline inteiro.
+        # Com pré-processamento, modelo.get_params() despeja Memory/Steps/ColumnTransformer
+        # e dezenas de prep_*__* — ruído que quebra a tela de hiperparâmetros.
         try:
-            params = json.loads(json.dumps(modelo.get_params(), default=str))
+            params = json.loads(json.dumps(final.get_params(), default=str))
         except Exception:
-            params = {k: str(v) for k, v in modelo.get_params().items()}
+            try:
+                params = {k: str(v) for k, v in final.get_params().items()}
+            except Exception:
+                params = {}
 
         _write_result(
             work,
