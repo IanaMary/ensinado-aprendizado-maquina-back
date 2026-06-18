@@ -7,6 +7,7 @@ from app.deps import pd, metricas_disponiveis
 from app.database import modelos_treinados, arquivos, opcoes_metricas
 from app.schemas.schemas import AvaliacaoModelosRequest
 from app.funcoes_genericas.validacao import validar_object_id, MAX_ARQUIVO_BASE64
+from app.funcoes_genericas.funcoes_genericas import converter_numpy
 from bson import ObjectId
 import importlib
 import joblib
@@ -435,6 +436,45 @@ def calcular_metricas_clustering(X_test, labels) -> dict:
         logger.warning("Erro ao calcular davies_bouldin_score: %s", e)
         resultados["Davies-Bouldin"] = f"Erro: {e}"
     return resultados
+
+
+def _num_ou_cru(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return v
+
+
+@router.post("/prever")
+async def prever(body: dict):
+    """Previsão lúdica ("Treine seu Robô"): carrega o modelo treinado e prevê UM
+    exemplo informado pelo aluno. Reusa o mesmo carregamento da avaliação; o Pipeline
+    aplica o pré-processamento sozinho (vale p/ classificador, regressor e k-means)."""
+    modelo_oid = validar_object_id((body or {}).get("modelo_id"), "modelo_id")
+    valores = (body or {}).get("valores") or {}
+
+    doc = await modelos_treinados.find_one({"_id": modelo_oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Modelo não encontrado.")
+
+    atributos = doc.get("atributos") or []
+    if not atributos:
+        raise HTTPException(status_code=400, detail="Modelo sem atributos registrados.")
+
+    try:
+        modelo = joblib.load(io.BytesIO(bytes(doc["modelo_treinado"])))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Não foi possível carregar o modelo treinado.")
+
+    # 1 linha na ordem dos atributos do treino (faltantes = 0)
+    linha = {col: _num_ou_cru(valores.get(col, 0)) for col in atributos}
+    df = pd.DataFrame([linha], columns=atributos)
+    try:
+        pred = modelo.predict(df)[0]
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Não foi possível prever: {e}")
+
+    return converter_numpy({"predicao": pred})
 
 
 @router.post("/avaliar_modelos")

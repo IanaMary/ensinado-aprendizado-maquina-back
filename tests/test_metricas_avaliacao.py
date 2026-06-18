@@ -63,6 +63,32 @@ class TestAvaliarModelos:
         assert "integridade" in response.json()["detail"]
 
     @pytest.mark.asyncio
+    async def test_prever_retorna_predicao(self, client, mock_db, auth_headers):
+        """/prever: carrega o modelo e prevê um exemplo informado."""
+        df, _, model_bytes = _treinar_knn()
+        doc = _doc_modelo(model_bytes, df)
+        mock_db["modelos"].find_one = AsyncMock(return_value=doc)
+
+        response = await client.post(
+            "/classificador/prever",
+            headers=auth_headers,
+            json={"modelo_id": str(doc["_id"]), "valores": {"f1": 1, "f2": 6}},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["predicao"] == "a"  # (1,6) é vizinho exato de uma linha "a"
+
+    @pytest.mark.asyncio
+    async def test_prever_modelo_inexistente_404(self, client, mock_db, auth_headers):
+        mock_db["modelos"].find_one = AsyncMock(return_value=None)
+        response = await client.post(
+            "/classificador/prever",
+            headers=auth_headers,
+            json={"modelo_id": str(ObjectId()), "valores": {"f1": 1, "f2": 6}},
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
     async def test_arquivo_teste_ausente_retorna_400(self, client, mock_db, auth_headers):
         df, _, model_bytes = _treinar_knn()
         doc = _doc_modelo(model_bytes, df, arq_teste=None)
