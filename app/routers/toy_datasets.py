@@ -239,10 +239,16 @@ def _carregar_gerador(dataset_name, ds, n_amostras, n_features, ruido, n_classes
         )
         cols = [f"atributo_{i + 1}" for i in range(nf)]
     elif dataset_name == "gen_sorvete":
-        # Regressão lúdica: prever vendas de sorvete a partir de calor e movimento.
-        X, y = make_regression(
-            n_samples=n, n_features=2, noise=ruido if ruido is not None else 12.0, random_state=rs
-        )
+        # Regressão lúdica: prever vendas de sorvete a partir do calor e do movimento.
+        # Valores em faixas amigáveis (não padronizados) p/ fazer sentido para crianças:
+        # temperatura 15–40 °C, pessoas 0–500, vendas sempre >= 0.
+        import numpy as np
+        rng = np.random.RandomState(rs)
+        temperatura = rng.uniform(15, 40, n)
+        pessoas = rng.uniform(0, 500, n)
+        rv = ruido if ruido is not None else 1.0
+        y = np.clip(3.0 * (temperatura - 15) + 0.2 * pessoas + rng.normal(0, 12 * rv, n), 0, None).round()
+        X = np.column_stack([temperatura.round(1), pessoas.round()])
         cols = ["temperatura", "pessoas_na_praia"]
     elif dataset_name == "gen_cardume":
         # Agrupamento lúdico: separar peixinhos em cardumes (sem target).
