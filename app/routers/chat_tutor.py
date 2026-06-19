@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 
 from app.database import historico_chat, configuracoes_tutor
 from app.security import get_usuario_atual
+from app.tutor_kb import bloco_kb
 from app.schemas.chat import (
     ChatHistoricoListItem,
     ChatHistoricoResponse,
@@ -237,7 +238,10 @@ SYSTEM_PROMPT = (
     "os dados, as métricas, os gráficos e o código Python gerado. "
     "Se a pergunta for sobre algo que não está no contexto, explique o conceito mesmo assim. "
     "Seja conciso: respostas curtas e diretas, sem jargão desnecessário. Nunca invente resultados numéricos "
-    "que não estejam no contexto."
+    "que não estejam no contexto. "
+    "Quando houver uma BASE DE CONHECIMENTO abaixo, use-a como fonte sobre os modelos e métricas do catálogo "
+    "(nomes, para que servem, quando usar/evitar, hiperparâmetros e seus valores padrão, fórmulas); "
+    "não invente hiperparâmetros nem valores padrão diferentes dos que estão lá."
 )
 
 
@@ -251,6 +255,21 @@ def _montar_contexto(contexto) -> str:
     if len(texto) > MAX_CONTEXTO_CHARS:
         texto = texto[:MAX_CONTEXTO_CHARS] + "\n... (contexto truncado)"
     return texto
+
+
+async def _montar_system(contexto) -> str:
+    """System prompt + contexto do pipeline + base de conhecimento do catálogo."""
+    partes = [
+        SYSTEM_PROMPT,
+        "=== CONTEXTO DO PIPELINE ===\n" + _montar_contexto(contexto),
+    ]
+    try:
+        kb = await bloco_kb(contexto)
+    except Exception:
+        kb = ""
+    if kb:
+        partes.append("=== BASE DE CONHECIMENTO (catálogo verificado) ===\n" + kb)
+    return "\n\n".join(partes)
 
 
 @router.post("/chat")
@@ -270,9 +289,8 @@ async def chat_tutor(request: ChatTutorRequest, req: Request):
     config = await configuracoes_tutor.find_one({"chave": "llm_model"})
     modelo = config.get("valor", NVIDIA_MODEL) if config else NVIDIA_MODEL
 
-    contexto_txt = _montar_contexto(request.contexto)
     mensagens = [
-        {"role": "system", "content": SYSTEM_PROMPT + "\n\n=== CONTEXTO DO PIPELINE ===\n" + contexto_txt},
+        {"role": "system", "content": await _montar_system(request.contexto)},
     ]
     for m in request.mensagens:
         if m.role in ("user", "assistant") and m.content:
@@ -368,9 +386,8 @@ async def chat_tutor_stream(request: ChatTutorRequest, req: Request):
     config = await configuracoes_tutor.find_one({"chave": "llm_model"})
     modelo = config.get("valor", NVIDIA_MODEL) if config else NVIDIA_MODEL
 
-    contexto_txt = _montar_contexto(request.contexto)
     mensagens = [
-        {"role": "system", "content": SYSTEM_PROMPT + "\n\n=== CONTEXTO DO PIPELINE ===\n" + contexto_txt},
+        {"role": "system", "content": await _montar_system(request.contexto)},
     ]
     for m in request.mensagens:
         if m.role in ("user", "assistant") and m.content:
