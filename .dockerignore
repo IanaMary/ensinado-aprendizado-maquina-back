@@ -1,0 +1,11 @@
+venv
+.venv
+__pycache__
+*.pyc
+.git
+.pytest_cache
+.env
+.env.*
+!.env.docker.example
+mlruns
+*.log

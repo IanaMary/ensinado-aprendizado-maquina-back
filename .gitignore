@@ -56,3 +56,4 @@ Thumbs.db
 
 # Cache local de datasets UCI (gerado em runtime)
 dataset_cache/
+!.env.docker.example

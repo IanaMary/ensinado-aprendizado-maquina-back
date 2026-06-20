@@ -1,0 +1,37 @@
+# Sobe o sistema Iana inteiro em containers: MongoDB + backend (FastAPI) + frontend (Angular/nginx).
+# O frontend é construído a partir do repo irmão ../ensinado-aprendizado-maquina
+# (layout padrão de dev: os dois repositórios lado a lado).
+#
+# Uso:
+#   cp .env.docker.example .env.docker   # e ajuste se quiser
+#   docker compose up --build
+# Acesso:  frontend http://localhost:8080  |  API/docs http://localhost:8000/docs
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+
+  backend:
+    build: .
+    restart: unless-stopped
+    env_file: .env.docker
+    depends_on:
+      - mongo
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ../ensinado-aprendizado-maquina
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  mongo_data:
