@@ -110,6 +110,16 @@ class TestLoadToyDataset:
         assert data["target"] == "target"
         assert "temperatura" in data["colunas"] and "target" in data["colunas"]
 
+    async def test_gen_cachorro_regressao(self, client, mock_db, auth_headers):
+        """Dataset lúdico de cachorro: regressão (altura -> peso)."""
+        response = await client.get("/toy_datasets/gen_cachorro", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["fonte"] == "gerador"
+        assert data["prever_categoria"] is False
+        assert data["target"] == "target"
+        assert "altura_cm" in data["colunas"] and "target" in data["colunas"]
+
     async def test_gen_cardume_clustering(self, client, mock_db, auth_headers):
         """Dataset lúdico de cardume: agrupamento sem target."""
         response = await client.get("/toy_datasets/gen_cardume?n_clusters=3", headers=auth_headers)

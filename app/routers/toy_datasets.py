@@ -254,6 +254,18 @@ def _carregar_gerador(dataset_name, ds, n_amostras, n_features, ruido, n_classes
         # Agrupamento lúdico: separar peixinhos em cardumes (sem target).
         X, y = make_blobs(n_samples=n, n_features=2, centers=n_clusters or 3, random_state=rs)
         cols = ["velocidade", "direcao"]
+    elif dataset_name == "gen_cachorro":
+        # Regressão lúdica: descobrir o PESO do cachorro pela ALTURA dele.
+        # Faixas amigáveis: altura 20–70 cm, peso sempre >= 1 kg, com correlação
+        # positiva (cachorro mais alto tende a ser mais pesado) + um pouco de ruído.
+        import numpy as np
+        rng = np.random.RandomState(rs)
+        altura = rng.uniform(20, 70, n)
+        rv = ruido if ruido is not None else 1.0
+        peso = np.clip(0.6 * (altura - 15) + rng.normal(0, 3 * rv, n), 1, None).round(1)
+        X = altura.round(1).reshape(-1, 1)
+        y = peso
+        cols = ["altura_cm"]
     else:
         return None, None
 

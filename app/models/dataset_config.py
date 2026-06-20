@@ -468,6 +468,17 @@ GENERATED_DATASETS: Dict[str, DatasetConfig] = {
         modelo_recomendado="K-means", metrica_recomendada="Silhouette Score",
         visualizacao_recomendada="Silhouette",
     ),
+    "gen_cachorro": DatasetConfig(
+        id="gen_cachorro", nome="Cachorros 🐶 (regressão)", fonte="gerador",
+        descricao="Descobrir o peso do cachorro a partir da altura dele.",
+        tipo=DatasetType.REGRESSION, n_amostras=200, n_features=1, target="target",
+        pre_split=PreSplitStatus.SINGLE, dificuldade="iniciante",
+        descricao_target="Peso do cachorro em kg (um número).",
+        descricao_features="A altura do cachorro (em cm).",
+        pergunta_guia="Quão perto o robô chega do peso certo?",
+        modelo_recomendado="Regressão Linear", metrica_recomendada="R² (Coef. de Determinação)",
+        visualizacao_recomendada="Prediction Error",
+    ),
 }
 
 
