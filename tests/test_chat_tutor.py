@@ -59,6 +59,35 @@ class TestChatTutor:
         assert response.status_code == 400
 
 
+class _AsyncCursor:
+    """Cursor mínimo: suporta .sort().limit() e iteração assíncrona."""
+    def __init__(self, docs):
+        self._docs = docs
+    def sort(self, *a, **k):
+        return self
+    def limit(self, *a, **k):
+        return self
+    def __aiter__(self):
+        async def gen():
+            for d in self._docs:
+                yield d
+        return gen()
+
+
+class TestHistoricoChat:
+    @pytest.mark.asyncio
+    async def test_listar_historico_usa_id_do_usuario(self, client, mock_db, auth_headers):
+        """Regressão: o endpoint usava usuario['id'] (inexistente) -> 500 KeyError."""
+        hist = MagicMock()
+        hist.find = MagicMock(return_value=_AsyncCursor([]))
+        with patch("app.routers.chat_tutor.historico_chat", hist):
+            resp = await client.get("/tutor/chat/historico", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json() == []
+        # confirma que filtrou pelo _id do usuário (não estourou KeyError)
+        assert hist.find.called
+
+
 class TestSaudeModelos:
     @pytest.mark.asyncio
     async def test_modelo_que_responde(self):

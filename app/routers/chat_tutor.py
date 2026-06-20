@@ -225,7 +225,7 @@ async def definir_modelo(body: dict, usuario=Depends(get_usuario_atual)):
 
     await configuracoes_tutor.update_one(
         {"chave": "llm_model"},
-        {"$set": {"chave": "llm_model", "valor": modelo, "atualizado_por": str(usuario.get("id", ""))}},
+        {"$set": {"chave": "llm_model", "valor": modelo, "atualizado_por": str(usuario.get("_id", ""))}},
         upsert=True,
     )
     return {"modelo": modelo}
@@ -428,7 +428,7 @@ async def listar_historico(
     pipeline_id: Optional[str] = Query(None),
     usuario=Depends(get_usuario_atual),
 ):
-    filtro = {"usuario_id": str(usuario["id"])}
+    filtro = {"usuario_id": str(usuario["_id"])}
     if pipeline_id:
         filtro["pipeline_id"] = pipeline_id
     cursor = historico_chat.find(filtro).sort("atualizado_em", -1).limit(50)
@@ -443,7 +443,7 @@ async def obter_historico(chat_id: str, usuario=Depends(get_usuario_atual)):
     if not ObjectId.is_valid(chat_id):
         raise HTTPException(status_code=400, detail="ID inválido.")
     doc = await historico_chat.find_one(
-        {"_id": ObjectId(chat_id), "usuario_id": str(usuario["id"])}
+        {"_id": ObjectId(chat_id), "usuario_id": str(usuario["_id"])}
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Conversa não encontrada.")
@@ -458,7 +458,7 @@ async def criar_historico(
 ):
     agora = datetime.now(timezone.utc)
     doc = {
-        "usuario_id": str(usuario["id"]),
+        "usuario_id": str(usuario["_id"]),
         "pipeline_id": pipeline_id,
         "titulo": titulo,
         "mensagens": [],
@@ -488,7 +488,7 @@ async def atualizar_historico(
         atualizacoes["titulo"] = titulo
 
     result = await historico_chat.update_one(
-        {"_id": ObjectId(chat_id), "usuario_id": str(usuario["id"])},
+        {"_id": ObjectId(chat_id), "usuario_id": str(usuario["_id"])},
         {"$set": atualizacoes},
     )
     if result.matched_count == 0:
@@ -501,7 +501,7 @@ async def deletar_historico(chat_id: str, usuario=Depends(get_usuario_atual)):
     if not ObjectId.is_valid(chat_id):
         raise HTTPException(status_code=400, detail="ID inválido.")
     result = await historico_chat.delete_one(
-        {"_id": ObjectId(chat_id), "usuario_id": str(usuario["id"])}
+        {"_id": ObjectId(chat_id), "usuario_id": str(usuario["_id"])}
     )
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Conversa não encontrada.")
