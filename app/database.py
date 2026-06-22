@@ -69,3 +69,8 @@ historico_chat = db["historico_chat"]
 # CONFIGURAÇÕES DO TUTOR
 # =========================
 configuracoes_tutor = db["configuracoes_tutor"]
+
+# =========================
+# ATIVIDADES DOS USUÁRIOS (telemetria)
+# =========================
+atividade_usuario = db["atividade_usuario"]

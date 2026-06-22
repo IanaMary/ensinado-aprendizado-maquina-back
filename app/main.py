@@ -37,6 +37,7 @@ from app.routers import toy_datasets
 from app.routers import pipelines
 from app.routers import visualizacao
 from app.routers import admin
+from app.routers import atividade
 from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, coleta_dados_url_router, configuracao_treinamento_router
 from app.metricas import router as metricas_router
 from app.security import get_usuario_atual
@@ -103,7 +104,47 @@ app.include_router(treinamento_base.router, prefix="/classificador", dependencie
 app.include_router(metricas_router, prefix="/classificador", dependencies=auth_dependency)
 app.include_router(pipelines.router, dependencies=auth_dependency)
 app.include_router(admin.router, dependencies=auth_dependency)
+app.include_router(atividade.router, dependencies=auth_dependency)
 app.include_router(visualizacao.router, prefix="/visualizacao", dependencies=auth_dependency)
+
+# Retenção da telemetria: documentos de atividade_usuario expiram após N dias
+# (TTL). Configurável por env; default 90 dias. 0/negativo desativa o TTL.
+ATIVIDADE_TTL_DIAS = int(os.getenv("ATIVIDADE_TTL_DIAS", "90"))
+
+
+@app.on_event("startup")
+async def criar_indices_atividade():
+    # A coleção de telemetria é a de maior volume de escrita (1 evento por chamada
+    # HTTP por usuário). Sem índices, listar/resumo viram full scan e o sort por
+    # timestamp pode estourar o limite de sort em memória do MongoDB. O índice de
+    # timestamp também é TTL: expira docs antigos (retenção + privacidade) e ainda
+    # serve ao sort por timestamp. create_index é idempotente.
+    try:
+        from app.database import atividade_usuario
+        if ATIVIDADE_TTL_DIAS > 0:
+            await atividade_usuario.create_index(
+                [("timestamp", -1)], expireAfterSeconds=ATIVIDADE_TTL_DIAS * 86400
+            )
+        else:
+            await atividade_usuario.create_index([("timestamp", -1)])
+        await atividade_usuario.create_index([("usuario_id", 1), ("timestamp", -1)])
+        await atividade_usuario.create_index([("tipo", 1), ("timestamp", -1)])
+    except Exception:
+        # Se já houver um índice de timestamp com opções diferentes (ex.: criado sem
+        # TTL por uma versão anterior), ajusta o expireAfterSeconds via collMod.
+        if ATIVIDADE_TTL_DIAS > 0:
+            try:
+                from app.database import db
+                await db.command({
+                    "collMod": "atividade_usuario",
+                    "index": {
+                        "keyPattern": {"timestamp": -1},
+                        "expireAfterSeconds": ATIVIDADE_TTL_DIAS * 86400,
+                    },
+                })
+            except Exception:
+                pass
+
 
 @app.on_event("startup")
 def prewarm_datasets():

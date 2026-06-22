@@ -16,10 +16,11 @@ from typing import Optional
 
 import httpx
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.database import historico_chat, configuracoes_tutor
+from app.routers.atividade import registrar_atividade
 from app.security import get_usuario_atual
 from app.tutor_kb import bloco_kb
 from app.schemas.chat import (
@@ -54,6 +55,45 @@ def _check_rate_limit(user_id: str):
             detail=f"Limite de {RATE_LIMIT_MAX} mensagens por {RATE_LIMIT_WINDOW}s atingido. Aguarde e tente novamente.",
         )
     _rate_limits[user_id].append(agora)
+
+def _ultima_msg_usuario(request: "ChatTutorRequest") -> str:
+    for m in reversed(request.mensagens):
+        if m.role == "user" and m.content:
+            return m.content
+    return ""
+
+
+def _preview(texto: Optional[str], n: int = 240) -> str:
+    s = texto or ""
+    return s if len(s) <= n else s[:n] + "…"
+
+
+def _resumo_chat(mensagem: str, resposta: str, modelo: str, contexto, *, stream: bool = False) -> dict:
+    """Resumo compacto para a telemetria do chat.
+
+    Guarda apenas preview + tamanho da pergunta/resposta e um descritor leve do
+    contexto (chaves + campos identificadores). O conteúdo completo da conversa já
+    vive em `historico_chat`; aqui evitamos inflar `atividade_usuario` (~KBs/linha)."""
+    resumo_ctx = None
+    if isinstance(contexto, dict):
+        campos = {
+            k: contexto.get(k)
+            for k in ("item", "modelo", "metrica", "dataset", "etapa")
+            if isinstance(contexto.get(k), (str, int, float, bool))
+        }
+        resumo_ctx = {"chaves": sorted(contexto.keys())}
+        if campos:
+            resumo_ctx["campos"] = campos
+    return {
+        "mensagem_preview": _preview(mensagem),
+        "mensagem_tamanho": len(mensagem or ""),
+        "resposta_preview": _preview(resposta),
+        "resposta_tamanho": len(resposta or ""),
+        "modelo": modelo,
+        "contexto": resumo_ctx,
+        "stream": stream,
+    }
+
 
 NVIDIA_BASE_URL = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
 # Default sane: um modelo de chat estável. O env e o config no banco têm prioridade.
@@ -273,9 +313,9 @@ async def _montar_system(contexto) -> str:
 
 
 @router.post("/chat")
-async def chat_tutor(request: ChatTutorRequest, req: Request):
-    # Rate limit: usa o token JWT como identificador
-    user_id = req.state.user_id if hasattr(req.state, "user_id") else "anonymous"
+async def chat_tutor(request: ChatTutorRequest, usuario: dict = Depends(get_usuario_atual)):
+    # Rate limit: usa o id do usuário autenticado como identificador
+    user_id = str(usuario.get("_id") or "anonymous")
     _check_rate_limit(user_id)
 
     api_key = os.getenv("NVIDIA_API_KEY")
@@ -307,6 +347,19 @@ async def chat_tutor(request: ChatTutorRequest, req: Request):
         "stream": False,
     }
 
+    inicio = time.perf_counter()
+
+    async def _logar(status: str, resposta: str = "", erro: Optional[str] = None):
+        await registrar_atividade(
+            usuario,
+            "chat",
+            "resposta_tutor",
+            detalhes=_resumo_chat(_ultima_msg_usuario(request), resposta, modelo, request.contexto),
+            duracao_ms=int((time.perf_counter() - inicio) * 1000),
+            status=status,
+            erro=erro,
+        )
+
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
@@ -315,27 +368,40 @@ async def chat_tutor(request: ChatTutorRequest, req: Request):
                 json=payload,
             )
     except httpx.TimeoutException:
+        await _logar("erro", erro="timeout")
         raise HTTPException(status_code=504, detail="O tutor demorou demais para responder. Tente de novo.")
     except httpx.HTTPError as e:
         logger.warning("Falha de rede ao chamar NVIDIA: %s", type(e).__name__)
+        await _logar("erro", erro=f"rede: {type(e).__name__}")
         raise HTTPException(status_code=502, detail="Não consegui falar com o tutor agora. Tente novamente.")
 
     if resp.status_code != 200:
         # Nao propagar corpo bruto do provedor (pode conter detalhes sensiveis).
         logger.warning("NVIDIA respondeu %s", resp.status_code)
+        await _logar("erro", erro=f"http {resp.status_code}")
         raise HTTPException(status_code=502, detail="O tutor retornou um erro. Tente novamente em instantes.")
 
     try:
         data = resp.json()
         resposta = data["choices"][0]["message"]["content"]
     except (KeyError, IndexError, ValueError):
+        await _logar("erro", erro="resposta em formato inesperado")
         raise HTTPException(status_code=502, detail="Resposta do tutor em formato inesperado.")
 
+    await _logar("sucesso", resposta=resposta)
     return {"resposta": resposta}
 
 
-async def _stream_nvidia(api_key: str, payload: dict):
-    """Gera tokens SSE a partir do streaming da NVIDIA."""
+async def _stream_nvidia(api_key: str, payload: dict, *, usuario=None, modelo="", request=None):
+    """Gera tokens SSE a partir do streaming da NVIDIA.
+
+    Acumula a resposta para registrar a atividade (fire-and-forget) ao final,
+    com sucesso (resposta completa) ou erro (motivo)."""
+    acumulado: list[str] = []
+    status_final = "sucesso"
+    erro_final: Optional[str] = None
+    completou = False  # vira True só quando o stream termina normalmente
+    inicio = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
@@ -346,6 +412,7 @@ async def _stream_nvidia(api_key: str, payload: dict):
             ) as resp:
                 if resp.status_code != 200:
                     logger.warning("NVIDIA stream respondeu %s", resp.status_code)
+                    status_final, erro_final = "erro", f"http {resp.status_code}"
                     yield f"data: {json.dumps({'error': 'O tutor retornou um erro.'})}\n\n"
                     return
                 async for line in resp.aiter_lines():
@@ -353,6 +420,7 @@ async def _stream_nvidia(api_key: str, payload: dict):
                         continue
                     data_str = line[6:]
                     if data_str.strip() == "[DONE]":
+                        completou = True
                         yield "data: [DONE]\n\n"
                         return
                     try:
@@ -360,19 +428,46 @@ async def _stream_nvidia(api_key: str, payload: dict):
                         delta = chunk["choices"][0].get("delta", {})
                         token = delta.get("content", "")
                         if token:
+                            acumulado.append(token)
                             yield f"data: {json.dumps({'token': token})}\n\n"
                     except (json.JSONDecodeError, KeyError, IndexError):
                         continue
+                completou = True  # o stream terminou sem [DONE] explícito
     except httpx.TimeoutException:
+        status_final, erro_final = "erro", "timeout"
         yield f"data: {json.dumps({'error': 'O tutor demorou demais para responder.'})}\n\n"
-    except httpx.HTTPError:
+    except httpx.HTTPError as e:
+        status_final, erro_final = "erro", f"rede: {type(e).__name__}"
         yield f"data: {json.dumps({'error': 'Não consegui falar com o tutor agora.'})}\n\n"
+    finally:
+        # Cliente desconectou no meio do stream (GeneratorExit): não foi sucesso.
+        if status_final == "sucesso" and not completou:
+            status_final, erro_final = "interrompido", "cliente desconectou"
+        if usuario is not None:
+            try:
+                await registrar_atividade(
+                    usuario,
+                    "chat",
+                    "resposta_tutor",
+                    detalhes=_resumo_chat(
+                        _ultima_msg_usuario(request) if request else "",
+                        "".join(acumulado),
+                        modelo,
+                        getattr(request, "contexto", None),
+                        stream=True,
+                    ),
+                    duracao_ms=int((time.perf_counter() - inicio) * 1000),
+                    status=status_final,
+                    erro=erro_final,
+                )
+            except Exception:  # pragma: no cover - teardown defensivo
+                pass
 
 
 @router.post("/chat/stream")
-async def chat_tutor_stream(request: ChatTutorRequest, req: Request):
+async def chat_tutor_stream(request: ChatTutorRequest, usuario: dict = Depends(get_usuario_atual)):
     """Versao streaming (SSE) do chat tutor."""
-    user_id = req.state.user_id if hasattr(req.state, "user_id") else "anonymous"
+    user_id = str(usuario.get("_id") or "anonymous")
     _check_rate_limit(user_id)
 
     api_key = os.getenv("NVIDIA_API_KEY")
@@ -405,7 +500,7 @@ async def chat_tutor_stream(request: ChatTutorRequest, req: Request):
     }
 
     return StreamingResponse(
-        _stream_nvidia(api_key, payload),
+        _stream_nvidia(api_key, payload, usuario=usuario, modelo=modelo, request=request),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
