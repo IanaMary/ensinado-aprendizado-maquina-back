@@ -9,6 +9,7 @@ O padrão de gravação é fire-and-forget (espelha `registrar_log_admin` em
 sempre derivado do JWT no servidor — o corpo enviado pelo front nunca é confiado
 como identidade.
 """
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -24,8 +25,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/atividades", tags=["Atividades"])
 
-# Teto de tamanho do bloco `detalhes` (após serialização) para conter abuso.
+# Teto de tamanho do bloco `detalhes` (após serialização) e de cada string-folha.
 _MAX_DETALHES_CHARS = 20000
+_MAX_STR_LEAF = 2000
 
 
 async def exigir_admin_ou_professor(usuario: dict = Depends(get_usuario_atual)) -> dict:
@@ -34,15 +36,27 @@ async def exigir_admin_ou_professor(usuario: dict = Depends(get_usuario_atual)) 
     return usuario
 
 
+def _podar(obj: Any) -> Any:
+    """Trunca strings-folha longas preservando a estrutura do objeto."""
+    if isinstance(obj, str):
+        return obj if len(obj) <= _MAX_STR_LEAF else obj[:_MAX_STR_LEAF] + "…"
+    if isinstance(obj, dict):
+        return {k: _podar(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_podar(i) for i in obj]
+    return obj
+
+
 def _truncar_detalhes(detalhes: Optional[dict]) -> Optional[dict]:
-    """Limita o tamanho do bloco `detalhes` para não inflar a coleção."""
+    """Limita o tamanho do bloco `detalhes` sem perder estrutura: poda strings longas
+    e, só se o total ainda exceder o teto, cai para um resumo colapsado."""
     if not detalhes:
         return detalhes
     try:
-        import json
-        bruto = json.dumps(detalhes, default=str, ensure_ascii=False)
-        if len(bruto) <= _MAX_DETALHES_CHARS:
-            return detalhes
+        podado = _podar(detalhes)
+        if len(json.dumps(podado, default=str, ensure_ascii=False)) <= _MAX_DETALHES_CHARS:
+            return podado
+        bruto = json.dumps(podado, default=str, ensure_ascii=False)
         return {"_truncado": True, "_resumo": bruto[:_MAX_DETALHES_CHARS]}
     except Exception:
         return {"_truncado": True}
@@ -165,6 +179,15 @@ def _parse_data(valor: Optional[str]) -> Optional[datetime]:
     return dt
 
 
+def _faixa_tempo(inicio: Optional[datetime], fim: Optional[datetime]) -> Optional[dict]:
+    faixa: dict[str, Any] = {}
+    if inicio:
+        faixa["$gte"] = inicio
+    if fim:
+        faixa["$lte"] = fim
+    return faixa or None
+
+
 @router.get("")
 async def listar_atividades(
     usuario_id: Optional[str] = Query(None),
@@ -175,9 +198,13 @@ async def listar_atividades(
     data_fim: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    incluir_total: bool = Query(True),
     _: dict = Depends(exigir_admin_ou_professor),
 ):
-    """Lista atividades com filtros e paginação (admin/professor)."""
+    """Lista atividades com filtros e paginação (admin/professor).
+
+    `incluir_total=false` pula a contagem — o front pede o total só ao (re)filtrar e
+    o reaproveita ao paginar, evitando um scan de contagem a cada página."""
     filtro: dict[str, Any] = {}
     if usuario_id:
         filtro["usuario_id"] = usuario_id
@@ -187,17 +214,19 @@ async def listar_atividades(
         filtro["acao"] = acao
     if status:
         filtro["status"] = status
-    inicio = _parse_data(data_inicio)
-    fim = _parse_data(data_fim)
-    if inicio or fim:
-        faixa: dict[str, Any] = {}
-        if inicio:
-            faixa["$gte"] = inicio
-        if fim:
-            faixa["$lte"] = fim
+    faixa = _faixa_tempo(_parse_data(data_inicio), _parse_data(data_fim))
+    if faixa:
         filtro["timestamp"] = faixa
 
-    total = await atividade_usuario.count_documents(filtro)
+    total = None
+    if incluir_total:
+        # Sem filtro, usa a contagem estimada (metadados, O(1)); com filtro, conta o subconjunto.
+        total = (
+            await atividade_usuario.count_documents(filtro)
+            if filtro
+            else await atividade_usuario.estimated_document_count()
+        )
+
     cursor = atividade_usuario.find(filtro).sort("timestamp", -1).skip(skip).limit(limit)
     itens = []
     async for doc in cursor:
@@ -215,47 +244,44 @@ async def resumo_atividades(
     data_fim: Optional[str] = Query(None),
     _: dict = Depends(exigir_admin_ou_professor),
 ):
-    """Agregações para os cards da tela admin."""
+    """Agregações para os cards da tela admin, em um único passe via $facet."""
     match: dict[str, Any] = {}
-    inicio = _parse_data(data_inicio)
-    fim = _parse_data(data_fim)
-    if inicio or fim:
-        faixa: dict[str, Any] = {}
-        if inicio:
-            faixa["$gte"] = inicio
-        if fim:
-            faixa["$lte"] = fim
+    faixa = _faixa_tempo(_parse_data(data_inicio), _parse_data(data_fim))
+    if faixa:
         match["timestamp"] = faixa
-    match_stage = [{"$match": match}] if match else []
 
-    total = await atividade_usuario.count_documents(match)
+    pipeline: list = []
+    if match:
+        pipeline.append({"$match": match})
+    pipeline.append({
+        "$facet": {
+            "por_tipo": [{"$group": {"_id": "$tipo", "total": {"$sum": 1}}}, {"$sort": {"total": -1}}],
+            "por_acao": [
+                {"$group": {"_id": "$acao", "total": {"$sum": 1}, "duracao_media_ms": {"$avg": "$duracao_ms"}}},
+                {"$sort": {"total": -1}},
+                {"$limit": 20},
+            ],
+            "total": [{"$count": "n"}],
+            "total_erros": [{"$match": {"status": "erro"}}, {"$count": "n"}],
+            "usuarios": [{"$group": {"_id": "$usuario_id"}}, {"$count": "n"}],
+        }
+    })
 
-    por_tipo = []
-    async for r in atividade_usuario.aggregate(
-        match_stage + [{"$group": {"_id": "$tipo", "total": {"$sum": 1}}}, {"$sort": {"total": -1}}]
-    ):
-        por_tipo.append({"tipo": r["_id"], "total": r["total"]})
+    facet: dict[str, Any] = {}
+    async for doc in atividade_usuario.aggregate(pipeline):
+        facet = doc
+        break
 
-    por_acao = []
-    async for r in atividade_usuario.aggregate(
-        match_stage
-        + [
-            {"$group": {"_id": "$acao", "total": {"$sum": 1}, "duracao_media_ms": {"$avg": "$duracao_ms"}}},
-            {"$sort": {"total": -1}},
-            {"$limit": 20},
-        ]
-    ):
-        por_acao.append(
-            {"acao": r["_id"], "total": r["total"], "duracao_media_ms": r.get("duracao_media_ms")}
-        )
-
-    total_erros = await atividade_usuario.count_documents({**match, "status": "erro"})
-    usuarios_ativos = len(await atividade_usuario.distinct("usuario_id", match))
+    def _n(arr) -> int:
+        return arr[0]["n"] if arr else 0
 
     return {
-        "total": total,
-        "total_erros": total_erros,
-        "usuarios_ativos": usuarios_ativos,
-        "por_tipo": por_tipo,
-        "por_acao": por_acao,
+        "total": _n(facet.get("total", [])),
+        "total_erros": _n(facet.get("total_erros", [])),
+        "usuarios_ativos": _n(facet.get("usuarios", [])),
+        "por_tipo": [{"tipo": r["_id"], "total": r["total"]} for r in facet.get("por_tipo", [])],
+        "por_acao": [
+            {"acao": r["_id"], "total": r["total"], "duracao_media_ms": r.get("duracao_media_ms")}
+            for r in facet.get("por_acao", [])
+        ],
     }

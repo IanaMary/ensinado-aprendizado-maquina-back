@@ -85,6 +85,55 @@ class TestRegistrarAtividade:
         assert doc["origem"] == "frontend"
 
 
+class TestValidacaoSchema:
+    @pytest.mark.asyncio
+    async def test_status_invalido_422(self, client, mock_db, auth_headers):
+        resp = await client.post(
+            "/atividades", headers=auth_headers, json={"tipo": "ui", "acao": "x", "status": "qualquer"}
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_tipo_invalido_422(self, client, mock_db, auth_headers):
+        resp = await client.post(
+            "/atividades", headers=auth_headers, json={"tipo": "hackerman", "acao": "x"}
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_duracao_negativa_422(self, client, mock_db, auth_headers):
+        resp = await client.post(
+            "/atividades", headers=auth_headers, json={"tipo": "ui", "acao": "x", "duracao_ms": -5}
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_timestamp_invalido_e_descartado(self, client, mock_db, auth_headers):
+        resp = await client.post(
+            "/atividades", headers=auth_headers,
+            json={"tipo": "ui", "acao": "x", "timestamp_cliente": "não-iso"},
+        )
+        assert resp.status_code == 200
+        doc = mock_db["atividade"].insert_one.call_args.args[0]
+        assert doc["timestamp_cliente"] is None
+
+
+class TestTruncamento:
+    def test_poda_string_longa_preservando_estrutura(self):
+        from app.routers.atividade import _truncar_detalhes, _MAX_STR_LEAF
+        d = {"resposta": "x" * (_MAX_STR_LEAF + 500), "modelo": "knn", "n": 3}
+        out = _truncar_detalhes(d)
+        assert out["modelo"] == "knn"  # estrutura preservada
+        assert out["n"] == 3
+        assert len(out["resposta"]) <= _MAX_STR_LEAF + 1  # truncado (+ "…")
+        assert out["resposta"].endswith("…")
+
+    def test_curto_passa_intacto(self):
+        from app.routers.atividade import _truncar_detalhes
+        d = {"a": "ok", "b": [1, 2, 3]}
+        assert _truncar_detalhes(d) == d
+
+
 class TestConsultaAtividades:
     @pytest.mark.asyncio
     async def test_aluno_nao_pode_listar(self, client, mock_db, auth_headers):
@@ -109,12 +158,47 @@ class TestConsultaAtividades:
     @pytest.mark.asyncio
     async def test_admin_resumo(self, client, mock_db, auth_headers, mock_admin):
         mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
-        mock_db["atividade"].count_documents = AsyncMock(return_value=5)
-        mock_db["atividade"].aggregate = MagicMock(return_value=_AsyncCursor([]))
-        mock_db["atividade"].distinct = AsyncMock(return_value=["u1", "u2"])
+        # resumo agora roda um único $facet — mock retorna o doc agregado
+        facet = {
+            "por_tipo": [{"_id": "chat", "total": 3}],
+            "por_acao": [{"_id": "resposta_tutor", "total": 3, "duracao_media_ms": 1200.0}],
+            "total": [{"n": 5}],
+            "total_erros": [{"n": 1}],
+            "usuarios": [{"n": 2}],
+        }
+        mock_db["atividade"].aggregate = MagicMock(return_value=_AsyncCursor([facet]))
         resp = await client.get("/atividades/resumo", headers=auth_headers)
         assert resp.status_code == 200
-        assert resp.json()["usuarios_ativos"] == 2
+        dados = resp.json()
+        assert dados["total"] == 5
+        assert dados["total_erros"] == 1
+        assert dados["usuarios_ativos"] == 2
+        assert dados["por_tipo"][0] == {"tipo": "chat", "total": 3}
+        assert dados["por_acao"][0]["duracao_media_ms"] == 1200.0
+
+    @pytest.mark.asyncio
+    async def test_resumo_vazio_nao_quebra(self, client, mock_db, auth_headers, mock_admin):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        mock_db["atividade"].aggregate = MagicMock(return_value=_AsyncCursor([]))
+        resp = await client.get("/atividades/resumo", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["usuarios_ativos"] == 0
+
+    @pytest.mark.asyncio
+    async def test_listar_sem_total(self, client, mock_db, auth_headers, mock_admin):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        mock_db["atividade"].find = MagicMock(return_value=_AsyncCursor([]))
+        resp = await client.get("/atividades?incluir_total=false", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["total"] is None
+        # não deve contar quando incluir_total=false
+        assert mock_db["atividade"].count_documents.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_listar_data_invalida_400(self, client, mock_db, auth_headers, mock_admin):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        resp = await client.get("/atividades?data_inicio=nao-e-data", headers=auth_headers)
+        assert resp.status_code == 400
 
 
 class TestIndiceTTL:

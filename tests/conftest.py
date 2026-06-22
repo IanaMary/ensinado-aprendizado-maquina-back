@@ -87,6 +87,7 @@ def _make_mock_collection():
     col.delete_one = AsyncMock(return_value=MagicMock(deleted_count=1))
     col.aggregate = MagicMock(return_value=MagicMock(to_list=AsyncMock(return_value=[])))
     col.count_documents = AsyncMock(return_value=0)
+    col.estimated_document_count = AsyncMock(return_value=0)
     return col
 
 
