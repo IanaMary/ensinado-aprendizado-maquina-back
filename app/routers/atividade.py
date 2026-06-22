@@ -11,6 +11,9 @@ como identidade.
 """
 import json
 import logging
+import os
+import time
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -28,6 +31,24 @@ router = APIRouter(prefix="/atividades", tags=["Atividades"])
 # Teto de tamanho do bloco `detalhes` (após serialização) e de cada string-folha.
 _MAX_DETALHES_CHARS = 20000
 _MAX_STR_LEAF = 2000
+
+# Rate limit da ingestão de telemetria (defesa contra abuso/pico). Conta eventos por
+# usuário numa janela deslizante; excesso → 429 (o front não re-tenta erros 4xx).
+_RATE_MAX = int(os.getenv("ATIVIDADE_RATE_MAX", "600"))
+_RATE_WINDOW = int(os.getenv("ATIVIDADE_RATE_WINDOW", "60"))
+_rate: dict[str, list[float]] = defaultdict(list)
+
+
+def _checar_rate(user_id: str, n_eventos: int) -> bool:
+    agora = time.time()
+    janela = agora - _RATE_WINDOW
+    bucket = [t for t in _rate[user_id] if t > janela]
+    if len(bucket) + n_eventos > _RATE_MAX:
+        _rate[user_id] = bucket
+        return False
+    bucket.extend([agora] * max(1, n_eventos))
+    _rate[user_id] = bucket
+    return True
 
 
 async def exigir_admin_ou_professor(usuario: dict = Depends(get_usuario_atual)) -> dict:
@@ -131,6 +152,8 @@ async def registrar_lote(lote: EventoLote, usuario: dict = Depends(get_usuario_a
             status_code=413,
             detail=f"Lote acima do limite de {MAX_EVENTOS_LOTE} eventos.",
         )
+    if eventos and not _checar_rate(str((usuario or {}).get("_id") or ""), len(eventos)):
+        raise HTTPException(status_code=429, detail="Limite de telemetria atingido. Tente mais tarde.")
     if eventos:
         docs = [
             _doc_atividade(
@@ -150,6 +173,8 @@ async def registrar_lote(lote: EventoLote, usuario: dict = Depends(get_usuario_a
 @router.post("")
 async def registrar_unico(evento: EventoAtividade, usuario: dict = Depends(get_usuario_atual)):
     """Conveniência para gravar um evento único."""
+    if not _checar_rate(str((usuario or {}).get("_id") or ""), 1):
+        raise HTTPException(status_code=429, detail="Limite de telemetria atingido. Tente mais tarde.")
     await registrar_atividade(
         usuario,
         evento.tipo,
@@ -285,3 +310,45 @@ async def resumo_atividades(
             for r in facet.get("por_acao", [])
         ],
     }
+
+
+@router.get("/tempo-preso")
+async def tempo_preso(
+    data_inicio: Optional[str] = Query(None),
+    data_fim: Optional[str] = Query(None),
+    _: dict = Depends(exigir_admin_ou_professor),
+):
+    """Ranking de ações por duração média ("onde os alunos travam") + taxa de erro.
+
+    Considera só eventos com `duracao_ms` (ações cronometradas: treino, chat, etapas)."""
+    match: dict[str, Any] = {"duracao_ms": {"$ne": None}}
+    faixa = _faixa_tempo(_parse_data(data_inicio), _parse_data(data_fim))
+    if faixa:
+        match["timestamp"] = faixa
+
+    pipeline = [
+        {"$match": match},
+        {"$group": {
+            "_id": "$acao",
+            "total": {"$sum": 1},
+            "duracao_media_ms": {"$avg": "$duracao_ms"},
+            "duracao_max_ms": {"$max": "$duracao_ms"},
+            "erros": {"$sum": {"$cond": [{"$eq": ["$status", "erro"]}, 1, 0]}},
+        }},
+        {"$sort": {"duracao_media_ms": -1}},
+        {"$limit": 20},
+    ]
+
+    itens = []
+    async for r in atividade_usuario.aggregate(pipeline):
+        total = r.get("total", 0) or 0
+        erros = r.get("erros", 0) or 0
+        itens.append({
+            "acao": r["_id"],
+            "total": total,
+            "duracao_media_ms": r.get("duracao_media_ms"),
+            "duracao_max_ms": r.get("duracao_max_ms"),
+            "erros": erros,
+            "taxa_erro": (erros / total) if total else 0,
+        })
+    return {"itens": itens}

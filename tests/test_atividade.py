@@ -85,6 +85,28 @@ class TestRegistrarAtividade:
         assert doc["origem"] == "frontend"
 
 
+class TestRateLimit:
+    @pytest.mark.asyncio
+    async def test_excesso_retorna_429(self, client, mock_db, auth_headers, monkeypatch):
+        import app.routers.atividade as mod
+        mod._rate.clear()
+        monkeypatch.setattr(mod, "_RATE_MAX", 2, raising=False)
+        body = {"eventos": [{"tipo": "ui", "acao": "a"}, {"tipo": "ui", "acao": "b"}, {"tipo": "ui", "acao": "c"}]}
+        resp = await client.post("/atividades/lote", headers=auth_headers, json=body)
+        assert resp.status_code == 429
+        assert mock_db["atividade"].insert_many.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_dentro_do_limite_grava(self, client, mock_db, auth_headers, monkeypatch):
+        import app.routers.atividade as mod
+        mod._rate.clear()
+        monkeypatch.setattr(mod, "_RATE_MAX", 10, raising=False)
+        body = {"eventos": [{"tipo": "ui", "acao": "a"}, {"tipo": "ui", "acao": "b"}]}
+        resp = await client.post("/atividades/lote", headers=auth_headers, json=body)
+        assert resp.status_code == 200
+        assert resp.json()["gravados"] == 2
+
+
 class TestValidacaoSchema:
     @pytest.mark.asyncio
     async def test_status_invalido_422(self, client, mock_db, auth_headers):
@@ -199,6 +221,23 @@ class TestConsultaAtividades:
         mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
         resp = await client.get("/atividades?data_inicio=nao-e-data", headers=auth_headers)
         assert resp.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_tempo_preso(self, client, mock_db, auth_headers, mock_admin):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        agg = [{"_id": "rodou_trilha", "total": 4, "duracao_media_ms": 5000.0, "duracao_max_ms": 9000, "erros": 1}]
+        mock_db["atividade"].aggregate = MagicMock(return_value=_AsyncCursor(agg))
+        resp = await client.get("/atividades/tempo-preso", headers=auth_headers)
+        assert resp.status_code == 200
+        item = resp.json()["itens"][0]
+        assert item["acao"] == "rodou_trilha"
+        assert item["taxa_erro"] == 0.25
+        assert item["duracao_max_ms"] == 9000
+
+    @pytest.mark.asyncio
+    async def test_tempo_preso_aluno_403(self, client, mock_db, auth_headers):
+        resp = await client.get("/atividades/tempo-preso", headers=auth_headers)
+        assert resp.status_code == 403
 
 
 class TestIndiceTTL:
