@@ -1,4 +1,4 @@
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Dict, Any
 from pydantic import BaseModel
 
 # ---------------------- Inicio ----------------------
@@ -95,6 +95,8 @@ class Contexto(BaseModel):
 
 # ---------------------- Request ----------------------
 class AtualizarDescricaoRequest(BaseModel):
+    # Usado por /editar-modelos e /editar-tipo-aprendizado, que acessam o contexto
+    # tipado por atributo (supervisionado.classificacao, etc.). Mantido como Union.
     contexto: Union[
         Contexto,
         ContextoPipeInicio,
@@ -104,3 +106,18 @@ class AtualizarDescricaoRequest(BaseModel):
         ContextoPipeSelecaoMetricas,
         ContextoPipeAvaliacao,
     ]
+
+
+class AtualizarContextoRequest(BaseModel):
+    # Para o PUT /{id} (editor de texto genérico da etapa): contexto livre. A Union
+    # tipada era lossy — membros "todos opcionais" casavam errado e descartavam
+    # campos como `texto_pipe` → 400. Dict preserva o que foi enviado para o $set.
+    contexto: Dict[str, Any]
+
+
+class AtualizarSelecaoModeloRequest(BaseModel):
+    # Para /editar-modelos e /editar-tipo-aprendizado: o contexto é sempre a forma
+    # de seleção de modelo (texto + supervisionado/nao_supervisionado aninhados).
+    # Tipar direto (sem Union) evita a resolução lossy que caía no `Contexto` genérico
+    # e descartava `supervisionado`/`texto_pipe` → 400.
+    contexto: ContextoPipeSelecaoModelo

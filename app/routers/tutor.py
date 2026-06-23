@@ -1,13 +1,21 @@
 from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Depends
-from app.schemas.tutor import AtualizarDescricaoRequest, ContextoPipeInicio, ContextoPipeColetaDados, ContextoPipePreProcessamento, ContextoPipeSelecaoModelo, ContextoPipeTreinamento, ContextoPipeSelecaoMetricas
+from app.schemas.tutor import AtualizarContextoRequest, AtualizarSelecaoModeloRequest, ContextoPipeInicio, ContextoPipeColetaDados, ContextoPipePreProcessamento, ContextoPipeSelecaoModelo, ContextoPipeTreinamento, ContextoPipeSelecaoMetricas
 from app.funcoes_genericas.funcoes_genericas import serialize_doc, concatenar_campos
 from app.database import tutor, tutor_audit
 from app.security import get_usuario_atual
 from bson import ObjectId
 
 router = APIRouter(prefix="/tutor", tags=["Tutor"])
+
+
+async def exigir_admin_ou_professor(usuario: dict = Depends(get_usuario_atual)) -> dict:
+    """Restringe a escrita do conteúdo do tutor a admin/professor (os GETs seguem
+    abertos a qualquer autenticado)."""
+    if (usuario or {}).get("role") not in ("admin", "professor"):
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores e professores.")
+    return usuario
 
 
 async def _registrar_edicao(usuario: dict, doc_id: str, set_data: dict, operacao: str):
@@ -130,16 +138,16 @@ async def buscar_tutor_pipe(
 @router.put("/{id}")
 async def atualizar_descricao(
     id: str,
-    request: AtualizarDescricaoRequest,
+    request: AtualizarContextoRequest,
     modelos: Optional[List[str]] = Query(None),  # ?modelos=supervisionado&modelos=classificacao
-    usuario: dict = Depends(get_usuario_atual),
+    usuario: dict = Depends(exigir_admin_ou_professor),
 ):
     try:
         filtro = {"_id": ObjectId(id)}
     except Exception:
         raise HTTPException(status_code=400, detail="ID inválido")
 
-    update_data = request.contexto.model_dump(exclude_none=True)
+    update_data = {k: v for k, v in (request.contexto or {}).items() if v is not None}
     set_data = {}
 
     if modelos and len(modelos) == 2:
@@ -171,8 +179,8 @@ async def atualizar_descricao(
 @router.put("/editar-modelos/{id}")
 async def atualizar_modelos(
     id: str,
-    request: AtualizarDescricaoRequest,
-    usuario: dict = Depends(get_usuario_atual),
+    request: AtualizarSelecaoModeloRequest,
+    usuario: dict = Depends(exigir_admin_ou_professor),
 ):
     """
     Atualiza apenas os campos de modelos nos subníveis fixos,
@@ -225,8 +233,8 @@ async def atualizar_modelos(
 @router.put("/editar-tipo-aprendizado/{id}")
 async def atualizar_chaves_fixas(
     id: str,
-    request: AtualizarDescricaoRequest,
-    usuario: dict = Depends(get_usuario_atual),
+    request: AtualizarSelecaoModeloRequest,
+    usuario: dict = Depends(exigir_admin_ou_professor),
 ):
     """
     Atualiza apenas as chaves fixas definidas manualmente no $set.

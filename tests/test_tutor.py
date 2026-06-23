@@ -76,7 +76,8 @@ class TestTutorEditar:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_atualizar_descricao(self, client, mock_db, auth_headers):
+    async def test_atualizar_descricao(self, client, mock_db, auth_headers, mock_admin):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
         oid = ObjectId()
         response = await client.put(
             f"/tutor/{str(oid)}",
@@ -84,12 +85,48 @@ class TestTutorEditar:
             json={"contexto": {"texto_pipe": "Novo texto"}},
         )
         assert response.status_code == 200
+        # regressão da união lossy: o campo de texto deve ser preservado
+        assert response.json()["update_data"]["texto_pipe"] == "Novo texto"
 
     @pytest.mark.asyncio
-    async def test_atualizar_descricao_id_invalido(self, client, mock_db, auth_headers):
+    async def test_atualizar_descricao_aluno_403(self, client, mock_db, auth_headers):
+        # auth_headers default = aluno; escrita do tutor é restrita a admin/professor
+        response = await client.put(
+            f"/tutor/{str(ObjectId())}",
+            headers=auth_headers,
+            json={"contexto": {"texto_pipe": "x"}},
+        )
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_atualizar_descricao_id_invalido(self, client, mock_db, auth_headers, mock_admin):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
         response = await client.put(
             "/tutor/id-invalido",
             headers=auth_headers,
             json={"contexto": {"texto_pipe": "Novo texto"}},
         )
         assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_atualizar_modelos_preserva_supervisionado(self, client, mock_db, auth_headers, mock_admin):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        response = await client.put(
+            f"/tutor/editar-modelos/{str(ObjectId())}",
+            headers=auth_headers,
+            json={"contexto": {"supervisionado": {"classificacao": {"modelos": [{"valor": "knn"}]}}}},
+        )
+        assert response.status_code == 200
+        # regressão: a união lossy descartava `supervisionado` → 400
+        assert "supervisionado.classificacao.modelos" in response.json()["update_data"]
+
+    @pytest.mark.asyncio
+    async def test_atualizar_tipo_aprendizado_preserva_explicacao(self, client, mock_db, auth_headers, mock_admin):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        response = await client.put(
+            f"/tutor/editar-tipo-aprendizado/{str(ObjectId())}",
+            headers=auth_headers,
+            json={"contexto": {"supervisionado": {"classificacao": {"explicacao": "Classifica em categorias"}}}},
+        )
+        assert response.status_code == 200
+        assert response.json()["update_data"]["supervisionado.classificacao.explicacao"] == "Classifica em categorias"
