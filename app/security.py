@@ -94,3 +94,19 @@ async def get_usuario_atual(
         raise credentials_exception
 
     return user_doc
+
+
+# =========================
+# AUTORIZAÇÃO POR PAPEL
+# =========================
+async def exigir_admin_ou_professor(
+    usuario: dict = Depends(get_usuario_atual)
+) -> dict:
+    """Restringe a rota a admin/professor (escrita de catálogo/tutor, telemetria etc.).
+    Os GETs abertos seguem usando apenas `get_usuario_atual`."""
+    if (usuario or {}).get("role") not in ("admin", "professor"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso restrito a administradores e professores.",
+        )
+    return usuario

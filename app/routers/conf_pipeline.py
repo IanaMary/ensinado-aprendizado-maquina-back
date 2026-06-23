@@ -6,18 +6,10 @@ from pydantic import BaseModel
 from bson import ObjectId
 from app.schemas.conf_pipeline import ItemColeta, ItemColetaOut
 from app.database import opcoes_coletas, opcoes_modelos, opcoes_metricas, opcoes_pre_processamento, tutor_audit
-from app.security import get_usuario_atual
+from app.security import get_usuario_atual, exigir_admin_ou_professor
 from app.pre_processamento import PREFIXOS_MODULOS_PERMITIDOS, modulo_permitido
 
 router = APIRouter(prefix="/conf_pipeline", tags=["Configuração Pipeline"])
-
-
-async def exigir_admin_ou_professor(usuario: dict = Depends(get_usuario_atual)) -> dict:
-  """Restringe escrita do catálogo a admin/professor. Os GET /todos permanecem
-  abertos a qualquer autenticado (alunos precisam carregar o catálogo no dashboard)."""
-  if (usuario or {}).get("role") not in ("admin", "professor"):
-    raise HTTPException(status_code=403, detail="Acesso restrito a administradores e professores.")
-  return usuario
 
 
 # Campos imutaveis por colecao

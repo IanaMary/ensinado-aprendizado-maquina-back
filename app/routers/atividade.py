@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.database import atividade_usuario
 from app.funcoes_genericas.funcoes_genericas import converter_numpy, serialize_doc
 from app.schemas.atividade import EventoAtividade, EventoLote, MAX_EVENTOS_LOTE
-from app.security import get_usuario_atual
+from app.security import get_usuario_atual, exigir_admin_ou_professor
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +49,6 @@ def _checar_rate(user_id: str, n_eventos: int) -> bool:
     bucket.extend([agora] * max(1, n_eventos))
     _rate[user_id] = bucket
     return True
-
-
-async def exigir_admin_ou_professor(usuario: dict = Depends(get_usuario_atual)) -> dict:
-    if (usuario or {}).get("role") not in ("admin", "professor"):
-        raise HTTPException(status_code=403, detail="Acesso restrito a administradores e professores.")
-    return usuario
 
 
 def _podar(obj: Any) -> Any:

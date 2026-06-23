@@ -4,18 +4,10 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from app.schemas.tutor import AtualizarContextoRequest, AtualizarSelecaoModeloRequest, ContextoPipeInicio, ContextoPipeColetaDados, ContextoPipePreProcessamento, ContextoPipeSelecaoModelo, ContextoPipeTreinamento, ContextoPipeSelecaoMetricas
 from app.funcoes_genericas.funcoes_genericas import serialize_doc, concatenar_campos
 from app.database import tutor, tutor_audit
-from app.security import get_usuario_atual
+from app.security import get_usuario_atual, exigir_admin_ou_professor
 from bson import ObjectId
 
 router = APIRouter(prefix="/tutor", tags=["Tutor"])
-
-
-async def exigir_admin_ou_professor(usuario: dict = Depends(get_usuario_atual)) -> dict:
-    """Restringe a escrita do conteúdo do tutor a admin/professor (os GETs seguem
-    abertos a qualquer autenticado)."""
-    if (usuario or {}).get("role") not in ("admin", "professor"):
-        raise HTTPException(status_code=403, detail="Acesso restrito a administradores e professores.")
-    return usuario
 
 
 async def _registrar_edicao(usuario: dict, doc_id: str, set_data: dict, operacao: str):
