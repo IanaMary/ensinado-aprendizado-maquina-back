@@ -74,3 +74,8 @@ configuracoes_tutor = db["configuracoes_tutor"]
 # ATIVIDADES DOS USUÁRIOS (telemetria)
 # =========================
 atividade_usuario = db["atividade_usuario"]
+
+# =========================
+# RUNS DO MLFLOW ↔ USUÁRIO (artefatos)
+# =========================
+mlflow_runs = db["mlflow_runs"]

@@ -141,8 +141,64 @@ def _is_number(v: Any) -> bool:
 # ============================================================
 # Leitura de runs (usado pelo endpoint /tutor/artefatos/{run_id})
 # ============================================================
+_MAX_PROFUNDIDADE = 10
+
+
+def _coletar_recursivo(lister, path: Optional[str] = None, profundidade: int = 0) -> list[dict]:
+    """Enumera artefatos recursivamente. `lister(path)` devolve list[FileInfo] de UM
+    nível (a API do MLflow é rasa; `file_size` é None em diretórios)."""
+    if profundidade > _MAX_PROFUNDIDADE:
+        return []
+    itens: list[dict] = []
+    for fi in lister(path):
+        itens.append({"path": fi.path, "is_dir": fi.is_dir, "file_size": fi.file_size})
+        if fi.is_dir:
+            itens.extend(_coletar_recursivo(lister, fi.path, profundidade + 1))
+    return itens
+
+
+def _listar_modelos(client, run) -> list[dict]:
+    """Modelos logados da run. No MLflow 3.x os modelos viraram entidades LoggedModel
+    e NÃO aparecem em list_artifacts(run_id) — daí buscar via search_logged_models."""
+    run_id = run.info.run_id
+    exp_ids = [run.info.experiment_id]
+    try:
+        encontrados = client.search_logged_models(
+            experiment_ids=exp_ids,
+            filter_string=f"source_run_id = '{run_id}'",
+            max_results=100,
+        )
+    except Exception:
+        try:
+            encontrados = client.search_logged_models(experiment_ids=exp_ids, max_results=100)
+        except Exception as e:  # pragma: no cover - defensivo
+            logger.warning("Falha ao buscar modelos logados: %s", e)
+            return []
+    modelos: list[dict] = []
+    for lm in (encontrados or []):
+        if getattr(lm, "source_run_id", None) != run_id:
+            continue
+        try:
+            artifacts = _coletar_recursivo(
+                lambda p, mid=lm.model_id: client.list_logged_model_artifacts(mid, p)
+            )
+        except Exception:  # pragma: no cover - defensivo
+            artifacts = []
+        modelos.append({
+            "model_id": lm.model_id,
+            "name": lm.name,
+            "model_uri": lm.model_uri,
+            "model_type": lm.model_type,
+            "status": str(lm.status) if lm.status is not None else None,
+            "artifacts": artifacts,
+        })
+    return modelos
+
+
 def get_run_summary(run_id: str) -> Optional[dict[str, Any]]:
-    """Devolve dict {params, metrics, artifacts, tags} ou None se MLflow desativado."""
+    """Resumo da run: params/metrics/tags (sem tags internas mlflow.*), artefatos
+    (recursivo) e modelos logados. None se MLflow desativado, run inexistente ou erro
+    (o endpoint mapeia None → 404)."""
     if not mlflow_enabled():
         return None
     mlflow = _import_mlflow()
@@ -152,16 +208,13 @@ def get_run_summary(run_id: str) -> Optional[dict[str, Any]]:
         mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
         client = mlflow.tracking.MlflowClient()
         run = client.get_run(run_id)
-        artifacts = client.list_artifacts(run_id)
         return {
             "run_id": run_id,
             "params": dict(run.data.params),
             "metrics": dict(run.data.metrics),
             "tags": {k: v for k, v in run.data.tags.items() if not k.startswith("mlflow.")},
-            "artifacts": [
-                {"path": a.path, "is_dir": a.is_dir, "file_size": a.file_size}
-                for a in artifacts
-            ],
+            "artifacts": _coletar_recursivo(lambda p: client.list_artifacts(run_id, p)),
+            "models": _listar_modelos(client, run),
             "status": run.info.status,
             "start_time": run.info.start_time,
             "end_time": run.info.end_time,

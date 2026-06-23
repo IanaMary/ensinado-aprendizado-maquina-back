@@ -40,7 +40,7 @@ from app.routers import admin
 from app.routers import atividade
 from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, coleta_dados_url_router, configuracao_treinamento_router
 from app.metricas import router as metricas_router
-from app.security import get_usuario_atual
+from app.security import get_usuario_atual, definir_usuario_atual
 
 app = FastAPI()
 
@@ -61,8 +61,9 @@ app.include_router(login.router)
 app.include_router(toy_datasets.router)
 app.include_router(convite.router)
 
-# Rotas protegidas (requer JWT)
-auth_dependency = [Depends(get_usuario_atual)]
+# Rotas protegidas (requer JWT). definir_usuario_atual autentica E publica o usuário
+# no ContextVar (para o registro run↔usuário no treino), preservando o comportamento.
+auth_dependency = [Depends(definir_usuario_atual)]
 
 app.include_router(usuarios.router, dependencies=auth_dependency)
 app.include_router(conf_pipeline.router, dependencies=auth_dependency)
@@ -144,6 +145,19 @@ async def criar_indices_atividade():
                 })
             except Exception:
                 pass
+
+
+@app.on_event("startup")
+async def criar_indices_mlflow_runs():
+    # Associação run↔usuário (artefatos): consulta por usuário + data, ordenada por
+    # criado_em. create_index é idempotente.
+    try:
+        from app.database import mlflow_runs
+        await mlflow_runs.create_index("mlflow_run_id", unique=True)
+        await mlflow_runs.create_index([("usuario_id", 1), ("criado_em", -1)])
+        await mlflow_runs.create_index([("criado_em", -1)])
+    except Exception:
+        pass
 
 
 @app.on_event("startup")

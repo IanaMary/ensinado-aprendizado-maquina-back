@@ -10,6 +10,8 @@ from fastapi import APIRouter, HTTPException
 from app.deps import pd
 from app.sandbox import SandboxError, executar_treinamento
 from app.mlflow_client import log_run, log_metrics as mlflow_log_metrics, log_bytes_artifact
+from app.routers.artefatos import registrar_run_usuario
+from app.security import usuario_atual_ctx
 from app.schemas.schemas import DatasetRequest
 from app.database import configuracoes_treinamento, arquivos, opcoes_modelos, modelos_treinados, opcoes_pre_processamento
 from app.utils.seed import get_sklearn_random_state
@@ -220,6 +222,16 @@ async def treinar_modelo_generico(
             })
 
             id_result = str(result.inserted_id)
+
+            # Associa a run ao usuário (artefatos por usuário). Fire-and-forget.
+            await registrar_run_usuario(
+                usuario_atual_ctx.get(),
+                run_id=mlflow_run_id,
+                modelo_id=id_result,
+                modelo=modelo_doc.get("valor"),
+                arquivo_id=request.arquivo_id,
+                configuracao_id=getattr(request, "configuracao_id", None),
+            )
 
     except SandboxError as e:
         logger.warning(f"treinar_modelo_generico bloqueado pelo sandbox ({e.kind}): {e}")

@@ -109,6 +109,7 @@ def mock_db(mock_user):
     mock_verif = _make_mock_collection()
     mock_pipeline = _make_mock_collection()
     mock_atividade = _make_mock_collection()
+    mock_mlflow_runs = _make_mock_collection()
 
     # By default, return the test user for auth lookups
     mock_user_col.find_one = AsyncMock(return_value=mock_user)
@@ -159,6 +160,8 @@ def mock_db(mock_user):
         patch("app.routers.chat_tutor.historico_chat", _make_mock_collection()),
         patch("app.database.atividade_usuario", mock_atividade),
         patch("app.routers.atividade.atividade_usuario", mock_atividade),
+        patch("app.database.mlflow_runs", mock_mlflow_runs),
+        patch("app.routers.artefatos.mlflow_runs", mock_mlflow_runs),
         patch("ucimlrepo.fetch_ucirepo", MagicMock(return_value=MagicMock(
             data=MagicMock(original=pd.DataFrame({"col1": [1, 2], "target": [0, 1]}))
         ))),
@@ -176,6 +179,7 @@ def mock_db(mock_user):
         "verificadores": mock_verif,
         "pipelines": mock_pipeline,
         "atividade": mock_atividade,
+        "mlflow_runs": mock_mlflow_runs,
     }
 
     for p in patches:

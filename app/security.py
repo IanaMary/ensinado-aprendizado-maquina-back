@@ -1,4 +1,6 @@
 import os
+from contextvars import ContextVar
+from typing import Optional
 
 import jwt
 from dotenv import load_dotenv
@@ -94,6 +96,22 @@ async def get_usuario_atual(
         raise credentials_exception
 
     return user_doc
+
+
+# =========================
+# USUÁRIO ATUAL POR REQUEST (ContextVar)
+# =========================
+# Disponibiliza o usuário autenticado para código fora da assinatura do handler
+# (ex.: treinar_modelo_generico, chamado pelos 24 routers de modelo) sem ter que
+# propagar `Depends` em todos eles. Starlette roda cada request em seu próprio
+# contexto, então o valor é isolado por requisição.
+usuario_atual_ctx: ContextVar[Optional[dict]] = ContextVar("usuario_atual", default=None)
+
+
+async def definir_usuario_atual(usuario: dict = Depends(get_usuario_atual)) -> dict:
+    """Autentica (como get_usuario_atual) e ainda publica o usuário no ContextVar."""
+    usuario_atual_ctx.set(usuario)
+    return usuario
 
 
 # =========================
