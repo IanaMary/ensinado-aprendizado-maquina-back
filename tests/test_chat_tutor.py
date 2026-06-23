@@ -58,6 +58,20 @@ class TestChatTutor:
         )
         assert response.status_code == 400
 
+    @pytest.mark.asyncio
+    async def test_put_modelo_nao_colide_com_catch_all(self, client, mock_db, auth_headers, mock_admin):
+        """PUT /tutor/modelo (trocar o LLM) deve cair em definir_modelo, NÃO no
+        catch-all PUT /tutor/{id} de tutor.py (que validaria AtualizarContextoRequest
+        e devolveria 422). chat_tutor.router é registrado antes de tutor.router."""
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        response = await client.put(
+            "/tutor/modelo",
+            headers=auth_headers,
+            json={"modelo": "meta/llama-3.3-70b-instruct"},
+        )
+        assert response.status_code == 200
+        assert response.json()["modelo"] == "meta/llama-3.3-70b-instruct"
+
 
 class _AsyncCursor:
     """Cursor mínimo: suporta .sort().limit() e iteração assíncrona."""
