@@ -10,6 +10,10 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ## 2026-06-23
 
+### Tutor drawer na área de trabalho, itens da trilha e correção do seletor de LLM. Front `1697078` (bundle `main-4XBKEVN2.js`) · Back `9b3bac5`
+- **Seletor de LLM (conf-tutor):** corrigido o **422 ao trocar o modelo** — era colisão de rota: `PUT /tutor/{id}` (catch-all de `tutor.py`) capturava `PUT /tutor/modelo` como `id="modelo"` e validava o corpo como `AtualizarContextoRequest`. `chat_tutor.router` passou a ser registrado **antes** de `tutor.router` em `app/main.py`, fazendo a rota exata `PUT /tutor/modelo` vencer o catch-all. Teste de regressão em `tests/test_chat_tutor.py`. `pytest`: **290 passed** (1 skipped).
+- **Frontend (sem mudança de backend nestes itens):** painel do tutor da área de trabalho virou **drawer lateral**; corrigida a sobreposição de textos no chat; UX do seletor de LLM (bloqueio com progresso durante o health-check + listas Ativos/Inativos); itens da trilha (`.pipeline-item`) re-estilizados via `styles.scss` global.
+
 ### Artefatos por usuário + UX do modal. Front `fe4ce52` (bundle `main-A7ZA3RLS.js`) · Back `262bab9`
 - **Backend:** runs do MLflow agora são **associadas ao usuário** (coleção `mlflow_runs`, gravada no treino via `ContextVar`); `GET /tutor/artefatos` lista por **usuário** e **data** (admin/professor). `get_run_summary` consolidado em `mlflow_client.py`. `pytest`: 289 passed.
 - **Admin:** tela `/view-admin/artefatos` reescrita como **tabela de runs** (usuário/data/paginação) → clica e vê o resumo; fim da busca por `run_id` "no escuro".
