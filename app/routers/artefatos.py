@@ -31,18 +31,57 @@ _RUN_ID_RE = re.compile(r"^[a-zA-Z0-9][\w-]{0,63}$")
 _MAX_PROFUNDIDADE = 10
 
 
-def _listar_artefatos(
-    client: MlflowClient, run_id: str, path: Optional[str] = None, profundidade: int = 0
-) -> list[dict]:
-    """`list_artifacts` lista só um nível — recursão manual nos diretórios."""
+def _coletar_recursivo(lister, path: Optional[str] = None, profundidade: int = 0) -> list[dict]:
+    """Enumera artefatos recursivamente. `lister(path)` devolve list[FileInfo] de UM
+    nível (a API do MLflow é rasa; `file_size` é None em diretórios)."""
     if profundidade > _MAX_PROFUNDIDADE:
         return []
     itens: list[dict] = []
-    for fi in client.list_artifacts(run_id, path):
+    for fi in lister(path):
         itens.append({"path": fi.path, "is_dir": fi.is_dir, "file_size": fi.file_size})
         if fi.is_dir:
-            itens.extend(_listar_artefatos(client, run_id, fi.path, profundidade + 1))
+            itens.extend(_coletar_recursivo(lister, fi.path, profundidade + 1))
     return itens
+
+
+def _listar_modelos(client: MlflowClient, run) -> list[dict]:
+    """Modelos logados da run. No MLflow 3.x os modelos viraram entidades LoggedModel
+    e NÃO aparecem em list_artifacts(run_id) — daí buscar via search_logged_models."""
+    run_id = run.info.run_id
+    exp_ids = [run.info.experiment_id]
+    try:
+        encontrados = client.search_logged_models(
+            experiment_ids=exp_ids,
+            filter_string=f"source_run_id = '{run_id}'",
+            max_results=100,
+        )
+    except Exception:
+        # Filtro indisponível/incompatível: busca por experimento e filtra em Python.
+        try:
+            encontrados = client.search_logged_models(experiment_ids=exp_ids, max_results=100)
+        except Exception as e:  # pragma: no cover - defensivo
+            logger.warning("Falha ao buscar modelos logados: %s", e)
+            return []
+    modelos: list[dict] = []
+    for lm in (encontrados or []):
+        # Garante o escopo da run mesmo se o filtro não tiver sido aplicado pelo store.
+        if getattr(lm, "source_run_id", None) != run_id:
+            continue
+        try:
+            artifacts = _coletar_recursivo(
+                lambda p, mid=lm.model_id: client.list_logged_model_artifacts(mid, p)
+            )
+        except Exception:  # pragma: no cover - defensivo
+            artifacts = []
+        modelos.append({
+            "model_id": lm.model_id,
+            "name": lm.name,
+            "model_uri": lm.model_uri,
+            "model_type": lm.model_type,
+            "status": str(lm.status) if lm.status is not None else None,
+            "artifacts": artifacts,
+        })
+    return modelos
 
 
 def get_run_summary(run_id: str) -> Optional[dict]:
@@ -59,7 +98,10 @@ def get_run_summary(run_id: str) -> Optional[dict]:
         "params": dict(run.data.params),
         "metrics": dict(run.data.metrics),
         "tags": dict(run.data.tags),
-        "artifacts": _listar_artefatos(client, run_id),
+        # Artefatos de run (log_artifact) — no MLflow 3.x NÃO incluem modelos logados.
+        "artifacts": _coletar_recursivo(lambda p: client.list_artifacts(run_id, p)),
+        # Modelos logados (entidades LoggedModel da run), com seus próprios artefatos.
+        "models": _listar_modelos(client, run),
         "status": run.info.status,
         "start_time": run.info.start_time,
         "end_time": run.info.end_time,
