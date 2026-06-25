@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from app.schemas.tutor import AtualizarContextoRequest, AtualizarSelecaoModeloRequest, ContextoPipeInicio, ContextoPipeColetaDados, ContextoPipePreProcessamento, ContextoPipeSelecaoModelo, ContextoPipeTreinamento, ContextoPipeSelecaoMetricas
 from app.funcoes_genericas.funcoes_genericas import serialize_doc, concatenar_campos
 from app.database import tutor, tutor_audit
-from app.security import get_usuario_atual, exigir_admin_ou_professor
+from app.security import exigir_admin_ou_professor
 from bson import ObjectId
 
 router = APIRouter(prefix="/tutor", tags=["Tutor"])

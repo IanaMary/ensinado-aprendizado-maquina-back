@@ -110,6 +110,7 @@ def mock_db(mock_user):
     mock_pipeline = _make_mock_collection()
     mock_atividade = _make_mock_collection()
     mock_mlflow_runs = _make_mock_collection()
+    mock_erros = _make_mock_collection()
 
     # By default, return the test user for auth lookups
     mock_user_col.find_one = AsyncMock(return_value=mock_user)
@@ -125,6 +126,7 @@ def mock_db(mock_user):
         patch("app.database.opcoes_modelos", mock_modelos),
         patch("app.database.opcoes_metricas", mock_pipeline),
         patch("app.database.pipelines", mock_pipeline),
+        patch("app.database.erros_sistema", mock_erros),
 
         patch("app.routers.login.colecao_usuario", mock_user_col),
         patch("app.routers.usuarios.colecao_usuario", mock_user_col),
@@ -132,6 +134,7 @@ def mock_db(mock_user):
         patch("app.security.colecao_usuario", mock_user_col),
         patch("app.routers.tutor.tutor", mock_tutor),
         patch("app.routers.tutor.tutor_audit", mock_tutor),
+        patch("app.routers.sistema.erros_sistema", mock_erros),
         
         patch("app.routers.conf_pipeline.opcoes_coletas", mock_pipeline),
         patch("app.routers.conf_pipeline.opcoes_modelos", mock_modelos),

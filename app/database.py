@@ -79,3 +79,8 @@ atividade_usuario = db["atividade_usuario"]
 # RUNS DO MLFLOW ↔ USUÁRIO (artefatos)
 # =========================
 mlflow_runs = db["mlflow_runs"]
+
+# =========================
+# ERROS DO SISTEMA (Frontend Logs)
+# =========================
+erros_sistema = db["erros_sistema"]

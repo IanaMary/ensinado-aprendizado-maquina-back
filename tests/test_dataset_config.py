@@ -1,7 +1,6 @@
 """
 Tests for the dataset configuration model.
 """
-import pytest
 from app.models.dataset_config import (
     DatasetConfig, DatasetType, PreSplitStatus,
     get_all_datasets, get_dataset_config, TOY_DATASETS, UCI_DATASETS, GENERATED_DATASETS

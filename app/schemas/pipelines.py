@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
-from datetime import datetime
 
 
 class PipelineCreate(BaseModel):

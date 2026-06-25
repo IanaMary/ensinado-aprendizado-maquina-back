@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-from typing import List, Optional
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query

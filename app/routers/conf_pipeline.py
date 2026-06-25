@@ -1,12 +1,12 @@
-from typing import List, OrderedDict, Any, Dict
+from typing import List, Any, Dict
 from fastapi import APIRouter, HTTPException, Depends, Query, Body
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Optional
 from pydantic import BaseModel
 from bson import ObjectId
-from app.schemas.conf_pipeline import ItemColeta, ItemColetaOut
+from app.schemas.conf_pipeline import ItemColeta
 from app.database import opcoes_coletas, opcoes_modelos, opcoes_metricas, opcoes_pre_processamento, tutor_audit
-from app.security import get_usuario_atual, exigir_admin_ou_professor
+from app.security import exigir_admin_ou_professor
 from app.pre_processamento import PREFIXOS_MODULOS_PERMITIDOS, modulo_permitido
 
 router = APIRouter(prefix="/conf_pipeline", tags=["Configuração Pipeline"])

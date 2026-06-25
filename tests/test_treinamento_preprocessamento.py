@@ -22,7 +22,7 @@ from app.pre_processamento import (
     normalizar_execucao_db,
     tem_imputer,
 )
-from app.sandbox import SandboxError, executar_treinamento
+from app.sandbox import executar_treinamento
 
 
 @pytest.fixture

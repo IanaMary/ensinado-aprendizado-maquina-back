@@ -1,11 +1,9 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 from bson import ObjectId
 import pandas as pd
 import io
 import base64
-import joblib
-from sklearn.neighbors import KNeighborsClassifier
 
 
 class TestTreinamentoBase:

@@ -6,8 +6,7 @@ import logging
 import pandas as pd
 
 from app.models.dataset_config import (
-    DatasetConfig, DatasetType, PreSplitStatus,
-    get_all_datasets, get_dataset_config, TOY_DATASETS, UCI_DATASETS
+    DatasetConfig, DatasetType, get_all_datasets, get_dataset_config
 )
 from app.utils.seed import seed_everything, get_seed, get_sklearn_random_state
 from app.database import arquivos, configuracoes_treinamento

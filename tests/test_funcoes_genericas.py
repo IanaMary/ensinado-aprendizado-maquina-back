@@ -1,6 +1,5 @@
 import pytest
 import json
-import math
 import numpy as np
 from app.funcoes_genericas.funcoes_genericas import (
     mapear_tipo,

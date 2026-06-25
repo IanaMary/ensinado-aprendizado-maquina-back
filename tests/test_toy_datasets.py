@@ -2,7 +2,6 @@
 Tests for the toy datasets API endpoint.
 """
 import pytest
-from bson import ObjectId
 
 @pytest.mark.asyncio
 class TestListToyDatasets:

@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException
 from datetime import datetime, timezone
-import secrets
 import os
 from dotenv import load_dotenv
 

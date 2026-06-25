@@ -41,7 +41,7 @@ try:
     sys.modules.setdefault("distutils.version", version_module)
 except Exception:
     pass
-from yellowbrick.classifier import ClassificationReport, ClassPredictionError, ConfusionMatrix
+from yellowbrick.classifier import ConfusionMatrix
 from yellowbrick.target import ClassBalance
 from yellowbrick.cluster import SilhouetteVisualizer, InterclusterDistance, KElbowVisualizer
 from yellowbrick.regressor import ResidualsPlot, PredictionError, CooksDistance

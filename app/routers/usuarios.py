@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
-from typing import List, Optional
-from bson import ObjectId
+from typing import List
 import asyncio
 import logging
 import secrets
@@ -16,7 +15,7 @@ if os.getenv("RENDER") is None:
     load_dotenv()
 
 from app.schemas.usuarios import UserCreate, UserOut, UserInvite, UserInviteResponse
-from app.security import get_senha_hash, verificar_senha, get_usuario_atual
+from app.security import get_senha_hash, get_usuario_atual
 from app.database import colecao_usuario, verificadores_professor
 from app.funcoes_genericas.validacao import validar_object_id
 

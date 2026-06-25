@@ -2,11 +2,9 @@ import csv
 import io
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
-from bson import ObjectId
 
 from app.database import db, colecao_usuario, pipelines
 from app.security import get_usuario_atual

@@ -1,11 +1,9 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from typing_extensions import Annotated
-from typing import Optional, List
-from bson.errors import InvalidId
-from app.schemas.schemas import ConfiguracaoColetaRequest
+from typing import Optional
 import pandas as pd
 import base64
-from io import StringIO, BytesIO
+from io import StringIO
 from bson import ObjectId
 from app.database import arquivos, configuracoes_treinamento
 from app.deps import train_test_split

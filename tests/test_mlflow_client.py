@@ -1,7 +1,6 @@
 """Testes do wrapper app/mlflow_client.py."""
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from app import mlflow_client
 

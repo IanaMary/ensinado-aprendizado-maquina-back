@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from app.database import db, client
+from app.database import client
 from app.routers import usuarios
 from app.routers import login
 from app.routers import convite
@@ -38,11 +38,24 @@ from app.routers import pipelines
 from app.routers import visualizacao
 from app.routers import admin
 from app.routers import atividade
+from app.routers import sistema
 from app.coleta_dados import coleta_dados_csv_router, coleta_dados_xlxs_router, coleta_dados_url_router, configuracao_treinamento_router
 from app.metricas import router as metricas_router
-from app.security import get_usuario_atual, definir_usuario_atual
+from app.security import definir_usuario_atual
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from app.logging_config import setup_logging
+from loguru import logger
+
+setup_logging()
+logger.info("Iniciando H2IA Tutor API")
+
+limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Configuração de CORS segura por ambiente
 allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:4200")
@@ -60,6 +73,7 @@ app.add_middleware(
 app.include_router(login.router)
 app.include_router(toy_datasets.router)
 app.include_router(convite.router)
+app.include_router(sistema.router, prefix="/sistema")
 
 # Rotas protegidas (requer JWT). definir_usuario_atual autentica E publica o usuário
 # no ContextVar (para o registro run↔usuário no treino), preservando o comportamento.

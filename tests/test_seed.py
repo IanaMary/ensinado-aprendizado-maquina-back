@@ -1,7 +1,6 @@
 """
 Tests for the seed utility module.
 """
-import pytest
 import random
 import os
 import numpy as np

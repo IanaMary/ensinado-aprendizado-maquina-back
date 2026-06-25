@@ -9,7 +9,7 @@ import bson.json_util as bson
 from fastapi import APIRouter, HTTPException
 from app.deps import pd
 from app.sandbox import SandboxError, executar_treinamento
-from app.mlflow_client import log_run, log_metrics as mlflow_log_metrics, log_bytes_artifact
+from app.mlflow_client import log_run, log_bytes_artifact
 from app.routers.artefatos import registrar_run_usuario
 from app.security import usuario_atual_ctx
 from app.schemas.schemas import DatasetRequest
