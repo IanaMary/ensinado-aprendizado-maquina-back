@@ -323,11 +323,21 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
             for metrica in request.metricas:
                 try:
                     if metrica.valor == "confusion_matrix":
-                        labels_cm = classes_doc if classes_doc else sorted(list(set(y_test) | set(y_pred)))
-                        cm = confusion_matrix(y_test, y_pred, labels=labels_cm)
+                        # Os rótulos usados no CÁLCULO precisam ter o mesmo tipo de y
+                        # (ex.: inteiros no dataset digits). classes_doc costuma vir como
+                        # string (para exibição); passá-la como labels zera a matriz inteira,
+                        # pois nenhum rótulo string casa com y inteiro. Por isso calculamos
+                        # com os valores reais das classes (modelo/y) e só convertemos para
+                        # string na hora de exibir — mesma lógica das visualizações Yellowbrick.
+                        classes_modelo = getattr(modelo_treinado, "classes_", None)
+                        if classes_modelo is not None and len(classes_modelo) > 0:
+                            labels_calc = list(classes_modelo)
+                        else:
+                            labels_calc = sorted(set(list(y_test)) | set(list(y_pred)))
+                        cm = confusion_matrix(y_test, y_pred, labels=labels_calc)
                         resultados_formatados[metrica.label][nome_modelo] = {
                             "matriz": cm.tolist(),
-                            "classes": labels_cm,
+                            "classes": [str(c) for c in labels_calc],
                             "total": int(len(y_test))
                         }
                         continue
