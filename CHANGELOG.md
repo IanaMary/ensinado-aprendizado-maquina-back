@@ -8,6 +8,29 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-06-26 (conteúdo educacional versionado + Básico/Avançado para todos os elementos)
+
+### Conteúdo versionado no repo + seed idempotente + gráficos/datasets como elementos. Front `76dc145` (bundle `main-DR46LGHV.js`) · Back `9b9265c`
+- **Conteúdo educacional agora é dado versionado no repositório** (`app/conteudo/*.json`), não
+  mais migrado ad-hoc na prod. Fonte canônica → `seed_conteudo.py` (idempotente, não-destrutivo:
+  só `$set conteudo`, nunca toca `execucao`/`habilitado`) → MongoDB. Schema Pydantic
+  (`app/conteudo/schema.py`) valida o JSON em CI. Bootstrap inicial exportado da prod
+  (`export-conteudo.py`). Bloco `conteudo` do `migrate-preproc-conteudo.sh` marcado superseded.
+- **Todos os elementos do pipeline com modo Básico (lúdico) + Avançado (fórmula/código) + link:**
+  - **24 modelos** e **12 métricas**: enriquecidos com `exemplo_codigo` (Python real, verificado
+    rodando) — modelos (24) + métricas (12); `link_yellowbrick` onde há viz (12 modelos + 2 métricas).
+    Campos originais preservados byte-a-byte (aditivo).
+  - **10 pré-processadores**: conteúdo completo novo (defaults verificados na doc sklearn).
+  - **5 fontes de coleta** (dados/xlsx/csv/json/dataset): conteúdo novo.
+  - **10 gráficos Yellowbrick**: nova coleção **`db.graficos`** (elementos de 1ª classe), com
+    Básico/Avançado/`link_yellowbrick`. `GRAFICOS_IDS` + `grafico_id` em cada viz gerada
+    (`metricas.py`, título inalterado p/ não quebrar artefatos MLflow). Endpoints
+    `GET /conf_pipeline/graficos/{todos,valor}` + `PUT /graficos_doc/{valor}`.
+  - **Datasets**: `GET /toy_datasets/{name}/conteudo` (read-only) + `conteudo_card()` derivado.
+- **Seed em prod:** 24+12+10 atualizados, 5 coleta, 10 gráficos inseridos; 2ª rodada = 0 (idempotente).
+- Testes: **315 passed, 1 skipped** (+`test_conteudo_loader`, +`test_conf_pipeline_graficos`,
+  +`grafico_id`/dataset conteudo). Backup `/home/ubuntu/backups/deploy-20260626-075927`.
+
 ## 2026-06-23
 
 ### Tutor drawer na área de trabalho, itens da trilha e correção do seletor de LLM. Front `1697078` (bundle `main-4XBKEVN2.js`) · Back `9b3bac5`
