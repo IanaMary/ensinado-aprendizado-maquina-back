@@ -47,6 +47,24 @@ from yellowbrick.cluster import SilhouetteVisualizer, InterclusterDistance, KElb
 from yellowbrick.regressor import ResidualsPlot, PredictionError, CooksDistance
 from matplotlib.colors import LinearSegmentedColormap
 
+# Slug estável de cada gráfico → título exibido. Fonte única usada para (1) anexar
+# `grafico_id` em cada visualização gerada e (2) casar com o `conteudo` educacional
+# em db.graficos (ver app/conteudo/graficos.json). O título NÃO deve mudar (é também
+# o nome do artefato no MLflow).
+GRAFICOS_IDS = {
+    "matriz_confusao": "Matriz de confusão",
+    "relatorio_classificacao": "Relatório de classificação",
+    "erros_predicao_classe": "Erros de predição por classe",
+    "balanceamento_classes": "Balanceamento das classes",
+    "silhouette": "Silhouette",
+    "distancia_clusters": "Distância entre Clusters",
+    "metodo_cotovelo": "Método do Cotovelo",
+    "prediction_error": "Prediction Error",
+    "residuals_plot": "Residuals Plot",
+    "distancia_cook": "Distância de Cook",
+}
+_TITULO_PARA_SLUG = {titulo: slug for slug, titulo in GRAFICOS_IDS.items()}
+
 # ---- Esquema de cores das figuras alinhado ao tema roxo do sistema ----
 # Mesmos tons usados na UI (roxo primário/secundário + acentos das fases da Trilha).
 PALETA_TEMA = ["#7C3AED", "#A855F7", "#C026D3", "#3B82F6", "#EC4899", "#F59E0B", "#22C55E"]
@@ -261,6 +279,7 @@ def _renderizar_visualizacao(nome: str, factory) -> Optional[dict]:
                 logger.debug("finalize() falhou para '%s': %s", nome, e)
         return {
             "titulo": nome,
+            "grafico_id": _TITULO_PARA_SLUG.get(nome),
             "mime": "image/png",
             "base64": _figura_para_base64(fig),
         }

@@ -92,6 +92,12 @@ else
     echo "=== [5/6] Seed do MongoDB ignorado (use --seed para popular) ==="
 fi
 
+# ---- Seed do conteúdo educacional (sempre; idempotente e não-destrutivo) ----
+echo ""
+echo "=== [5b/6] Semeando conteúdo educacional (app/conteudo/*.json) ==="
+cd "$PROJECT_DIR"
+PYTHONPATH="$PROJECT_DIR" python -m scripts.deploy.seed_conteudo || echo "  AVISO: seed de conteúdo falhou"
+
 # ---- Reiniciar serviço ----
 echo ""
 echo "=== [6/6] Reiniciando serviço ==="

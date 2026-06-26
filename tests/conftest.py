@@ -111,6 +111,7 @@ def mock_db(mock_user):
     mock_atividade = _make_mock_collection()
     mock_mlflow_runs = _make_mock_collection()
     mock_erros = _make_mock_collection()
+    mock_graficos = _make_mock_collection()
 
     # By default, return the test user for auth lookups
     mock_user_col.find_one = AsyncMock(return_value=mock_user)
@@ -140,6 +141,8 @@ def mock_db(mock_user):
         patch("app.routers.conf_pipeline.opcoes_modelos", mock_modelos),
         patch("app.routers.conf_pipeline.opcoes_metricas", mock_pipeline),
         patch("app.routers.conf_pipeline.opcoes_pre_processamento", mock_pipeline),
+        patch("app.database.opcoes_graficos", mock_graficos),
+        patch("app.routers.conf_pipeline.opcoes_graficos", mock_graficos),
         patch("app.routers.conf_pipeline.tutor_audit", mock_tutor),
         
         patch("app.coleta_dados.coleta_dados_csv.arquivos", mock_arquivos),
@@ -183,6 +186,7 @@ def mock_db(mock_user):
         "pipelines": mock_pipeline,
         "atividade": mock_atividade,
         "mlflow_runs": mock_mlflow_runs,
+        "graficos": mock_graficos,
     }
 
     for p in patches:

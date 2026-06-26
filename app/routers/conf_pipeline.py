@@ -5,7 +5,7 @@ from typing import Optional
 from pydantic import BaseModel
 from bson import ObjectId
 from app.schemas.conf_pipeline import ItemColeta
-from app.database import opcoes_coletas, opcoes_modelos, opcoes_metricas, opcoes_pre_processamento, tutor_audit
+from app.database import opcoes_coletas, opcoes_modelos, opcoes_metricas, opcoes_pre_processamento, opcoes_graficos, tutor_audit
 from app.security import exigir_admin_ou_professor
 from app.pre_processamento import PREFIXOS_MODULOS_PERMITIDOS, modulo_permitido
 
@@ -305,6 +305,60 @@ async def put_pre_processamento_doc(
     upsert=True
   )
   await _registrar_audit_catalogo(usuario, "pre_processamento", valor, "catalogo_atualizar", list(set_data.keys()))
+  return {"valor": valor, "campos_alterados": list(set_data.keys())}
+
+
+# ======================================================
+# Gráficos (visualizações Yellowbrick/sklearn) — chave eh
+# "valor" (slug estável, ver metricas.GRAFICOS_IDS). Guardam
+# o `conteudo` educacional (Básico/Avançado) exibido no card.
+# ======================================================
+@router.get("/graficos/todos", response_model=List)
+async def get_all_graficos():
+  cursor = opcoes_graficos.find()
+  documentos = await cursor.to_list(length=None)
+  return [
+    {
+      **{k: v for k, v in doc.items() if k != "_id"},
+      "id": str(doc["_id"]) if doc.get("_id") is not None else None,
+      "habilitado": doc.get("habilitado", True),
+    }
+    for doc in documentos if doc.get("valor")
+  ]
+
+
+@router.get("/graficos/{valor}")
+async def get_grafico_doc(valor: str):
+  if not valor or len(valor) > 100:
+    raise HTTPException(status_code=400, detail="Valor inválido")
+  doc = await opcoes_graficos.find_one({"valor": valor})
+  if not doc:
+    raise HTTPException(status_code=404, detail="Item não encontrado")
+  return {
+    **{k: v for k, v in doc.items() if k != "_id"},
+    "id": str(doc["_id"]),
+    "habilitado": doc.get("habilitado", True),
+  }
+
+
+@router.put("/graficos_doc/{valor}")
+async def put_grafico_doc(
+  valor: str,
+  payload: Dict[str, Any] = Body(...),
+  usuario: dict = Depends(exigir_admin_ou_professor),
+):
+  if not valor or len(valor) > 100:
+    raise HTTPException(status_code=400, detail="Valor inválido")
+  set_data = {k: v for k, v in (payload or {}).items() if k not in _CAMPOS_IMUTAVEIS and k != "valor"}
+  set_data["valor"] = valor
+  if len(set_data) <= 1:
+    raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+  await opcoes_graficos.update_one(
+    {"valor": valor},
+    {"$set": set_data, "$setOnInsert": {"habilitado": True, "tipoItem": "grafico"}},
+    upsert=True,
+  )
+  await _registrar_audit_catalogo(usuario, "graficos", valor, "catalogo_atualizar", list(set_data.keys()))
   return {"valor": valor, "campos_alterados": list(set_data.keys())}
 
 

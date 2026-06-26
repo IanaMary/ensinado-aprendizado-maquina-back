@@ -40,6 +40,7 @@ opcoes_coletas = db["coleta_dados"]
 opcoes_modelos = db["modelos"]
 opcoes_metricas = db["metricas"]
 opcoes_pre_processamento = db["pre_processamento"]
+opcoes_graficos = db["graficos"]
 
 arquivos = db["arquivos"]
 configuracoes_treinamento = db["configuracoes_treinamento"]

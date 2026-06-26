@@ -60,6 +60,19 @@ async def listar_datasets(
     return result
 
 
+@router.get("/{dataset_name}/conteudo")
+async def conteudo_dataset(dataset_name: str):
+    """Bloco `conteudo` educacional do dataset para o card do tutor.
+
+    Read-only: NÃO carrega o dataset nem escreve no banco (ao contrário de
+    GET /toy_datasets/{name}).
+    """
+    ds = get_dataset_config(dataset_name)
+    if ds is None:
+        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' nao encontrado")
+    return ds.conteudo_card()
+
+
 @router.get("/{dataset_name}")
 async def carregar_dataset(
     dataset_name: str,

@@ -1,0 +1,839 @@
+{
+  "label_encoder": {
+    "conceitos": [
+      {
+        "desc": "A coluna que o modelo deve prever, codificada pelo LabelEncoder.",
+        "nome": "Vetor alvo (y)"
+      },
+      {
+        "desc": "Os rótulos únicos aprendidos, guardados em classes_ em ordem alfabética.",
+        "nome": "Classes"
+      },
+      {
+        "desc": "Operação que converte os inteiros de volta nos rótulos originais.",
+        "nome": "inverse_transform"
+      }
+    ],
+    "descricao": "O LabelEncoder converte rótulos categóricos em inteiros de 0 a n_classes-1. Diferente dos outros encoders, ele é projetado para o vetor alvo (y) de uma única dimensão, não para as features (X). É comum em classificação para transformar classes de texto em números antes do treino e depois reverter as previsões com inverse_transform. Por trabalhar em 1D e não preservar nomes de colunas, não deve ser usado dentro de ColumnTransformer para features.",
+    "desvantagens": [
+      "Funciona apenas em uma dimensão (não serve para múltiplas features).",
+      "Impõe ordem numérica que pode confundir se usado em features.",
+      "Não trata categorias desconhecidas no transform (gera erro)."
+    ],
+    "dicas": [
+      "Use no y, e use OrdinalEncoder/OneHotEncoder no X.",
+      "Guarde o encoder para reverter as previsões com inverse_transform.",
+      "As classes ficam em classes_ na ordem alfabética aprendida."
+    ],
+    "exemplo": "Classes alvo ['gato', 'cachorro', 'passaro', 'gato'] viram [1, 0, 2, 1] (ordem alfabética: cachorro=0, gato=1, passaro=2).",
+    "exemplo_codigo": "from sklearn.preprocessing import LabelEncoder\n\ny = ['gato', 'cachorro', 'passaro', 'gato']\nle = LabelEncoder()\ny_cod = le.fit_transform(y)\nprint(y_cod)            # [1 0 2 1]\nprint(le.classes_)     # ['cachorro' 'gato' 'passaro']\nprint(le.inverse_transform([0, 2]))  # ['cachorro' 'passaro']",
+    "formula": "",
+    "hiperparametros_doc": [],
+    "intuicao": "É basicamente um dicionário que troca cada nome de classe por um número e sabe desfazer a troca depois. Como é feito para o alvo, a ordem dos inteiros não importa para o modelo de classificação, que apenas distingue as classes.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.LabelEncoder.html",
+    "naoUsarQuando": [
+      "Para codificar features (X) — use OrdinalEncoder ou OneHotEncoder.",
+      "Dentro de Pipelines/ColumnTransformer de features (ele espera dados 1D).",
+      "Quando a variável é nominal e entra como entrada de um modelo linear."
+    ],
+    "quandoUsar": [
+      "Para codificar o vetor alvo (y) em problemas de classificação.",
+      "Quando precisa reverter previsões numéricas para os nomes das classes.",
+      "Em fluxos simples fora de um ColumnTransformer."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "tipo": "doc",
+        "titulo": "LabelEncoder — scikit-learn documentation",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.LabelEncoder.html"
+      }
+    ],
+    "resumo_basico": "Quando você ensina o computador a reconhecer categorias do alvo, tipo 'gato', 'cachorro' e 'passaro', precisa virar números: gato=0, cachorro=1, passaro=2. O LabelEncoder faz exatamente essa tradução para a coluna de respostas (o que você quer prever). É como dar um número de camisa para cada tipo de resposta.",
+    "titulo": "Codificação de Rótulos (LabelEncoder)",
+    "vantagens": [
+      "Simples e direto para transformar classes em inteiros.",
+      "Permite reverter facilmente com inverse_transform.",
+      "Ideal e padrão para preparar o alvo na classificação."
+    ]
+  },
+  "minmax_scaler": {
+    "conceitos": [
+      {
+        "desc": "Intervalo final dos dados, por padrão (0, 1).",
+        "nome": "Faixa alvo (feature_range)"
+      },
+      {
+        "desc": "Valores extremos aprendidos no treino que definem os limites da escala.",
+        "nome": "Mínimo e máximo"
+      },
+      {
+        "desc": "Preserva a forma da distribuição, apenas comprimindo ou esticando a faixa.",
+        "nome": "Transformação linear"
+      }
+    ],
+    "descricao": "O MinMaxScaler reescala cada feature linearmente para um intervalo definido (por padrão [0, 1]), usando o mínimo e o máximo aprendidos no treino. A transformação preserva a forma da distribuição original, apenas comprimindo a faixa. É útil quando o algoritmo espera entradas em uma faixa limitada (como pixels de imagem 0-1) ou para redes neurais. Deve ser ajustado (fit) só no treino e aplicado (transform) no teste, dentro de um Pipeline.",
+    "desvantagens": [
+      "Muito sensível a outliers, que distorcem o mínimo e o máximo.",
+      "Valores de teste fora da faixa de treino saem do intervalo (a menos que clip=True).",
+      "Não centraliza os dados em zero."
+    ],
+    "dicas": [
+      "Use clip=True para garantir que dados novos não ultrapassem a faixa.",
+      "Cheque outliers antes; eles podem comprimir demais os demais valores.",
+      "Para imagens, feature_range=(0, 1) é a escolha comum."
+    ],
+    "exemplo": "Temperaturas entre 10°C (mínimo) e 30°C (máximo): 20°C vira (20 - 10) / (30 - 10) = 0,5; 10°C vira 0 e 30°C vira 1.",
+    "exemplo_codigo": "from sklearn.preprocessing import MinMaxScaler\nimport numpy as np\n\nX = np.array([[10.0], [20.0], [30.0]])\nscaler = MinMaxScaler(feature_range=(0, 1))\nX_escalado = scaler.fit_transform(X)\nprint(X_escalado.ravel())  # [0.  0.5 1. ]",
+    "formula": "x' = (x - min) / (max - min)",
+    "hiperparametros_doc": [
+      {
+        "default": "(0, 1)",
+        "descricao": "Intervalo (min, max) para o qual os dados são reescalados.",
+        "efeito": "Define os limites finais; ex.: (-1, 1) centraliza melhor para algumas redes.",
+        "nome": "feature_range",
+        "quando_ajustar": "Mude quando o modelo espera outra faixa, como (-1, 1).",
+        "tipo": "enum"
+      },
+      {
+        "default": "False",
+        "descricao": "Recorta valores de teste que caem fora da faixa definida.",
+        "efeito": "Se True, valores fora do intervalo são limitados às bordas.",
+        "nome": "clip",
+        "quando_ajustar": "Ligue quando precisa garantir que nenhum valor saia da faixa.",
+        "tipo": "bool"
+      },
+      {
+        "default": "True",
+        "descricao": "Faz uma cópia dos dados em vez de alterar no local.",
+        "efeito": "Se False, tenta operar in-place para economizar memória.",
+        "nome": "copy",
+        "quando_ajustar": "Raramente necessário; ajuste só por restrição de memória.",
+        "tipo": "bool"
+      }
+    ],
+    "intuicao": "É como ajustar qualquer música para sempre caber numa barra de volume fixa: o silêncio total vira 0 e o som mais alto vira 1. Matematicamente, subtrai o mínimo e divide pela amplitude (máximo menos mínimo), mantendo as proporções entre os pontos.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html",
+    "naoUsarQuando": [
+      "Há outliers extremos, que esmagam todos os outros valores num cantinho da faixa.",
+      "Modelos baseados em árvores, que não se importam com escala.",
+      "Novos dados podem ultrapassar a faixa de treino sem o uso de clip."
+    ],
+    "quandoUsar": [
+      "Quando o algoritmo exige entradas numa faixa fixa, como pixels de imagem (0-1).",
+      "Redes neurais e modelos que se beneficiam de entradas limitadas.",
+      "Quando os dados têm pouca presença de outliers."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "tipo": "doc",
+        "titulo": "MinMaxScaler — scikit-learn documentation",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html"
+      }
+    ],
+    "resumo_basico": "Pensa numa barra de volume do celular que vai de 0 a 100: não importa quão alto seja o som real, ele sempre cabe nessa faixa. O MinMaxScaler faz o mesmo com os números, encolhendo ou esticando tudo para caber entre 0 e 1. O menor valor vira 0, o maior vira 1, e o resto fica no meio.",
+    "titulo": "Escala Mínimo-Máximo (MinMaxScaler)",
+    "vantagens": [
+      "Mantém todos os valores numa faixa conhecida e fácil de interpretar.",
+      "Preserva a forma da distribuição original.",
+      "Simples e bom para entradas de redes neurais."
+    ]
+  },
+  "normalizer": {
+    "conceitos": [
+      {
+        "desc": "Medida do 'tamanho' de uma amostra; L2 é a distância euclidiana até a origem.",
+        "nome": "Norma de um vetor"
+      },
+      {
+        "desc": "Opera linha a linha, não coluna a coluna como os scalers.",
+        "nome": "Normalização por amostra"
+      },
+      {
+        "desc": "Comparação de direção entre vetores, facilitada quando todos têm norma 1.",
+        "nome": "Similaridade de cosseno"
+      }
+    ],
+    "descricao": "Diferente dos scalers que trabalham coluna a coluna, o Normalizer atua linha a linha (por amostra), reescalando cada vetor de exemplo para ter norma unitária (L2 por padrão). Cada amostra é dividida pela sua própria norma, de modo que todas fiquem com o mesmo comprimento. É muito usado em texto (TF-IDF) e em modelos que comparam vetores por similaridade de cosseno. Como cada linha é tratada isoladamente, não precisa de estatísticas de treino — o fit é trivial.",
+    "desvantagens": [
+      "Não escala por feature, então diferenças de unidade entre colunas permanecem.",
+      "Pode descartar informação útil contida na magnitude.",
+      "Menos intuitivo que escalar coluna a coluna."
+    ],
+    "dicas": [
+      "Combine com representações TF-IDF em problemas de texto.",
+      "Experimente norm='l1' para somar 1 (proporções) ou 'max' para dividir pelo maior valor.",
+      "Lembre que o efeito é por linha; não substitui um scaler por coluna."
+    ],
+    "exemplo": "Vetor [3, 4]: a norma L2 é sqrt(9 + 16) = 5, então o vetor normalizado vira [3/5, 4/5] = [0,6, 0,8], com comprimento 1.",
+    "exemplo_codigo": "from sklearn.preprocessing import Normalizer\nimport numpy as np\n\nX = np.array([[3.0, 4.0], [1.0, 0.0], [2.0, 2.0]])\nnorm = Normalizer(norm='l2')\nX_norm = norm.fit_transform(X)\nprint(X_norm)  # cada linha tem comprimento 1",
+    "formula": "x' = x / ||x||,  ||x||_2 = sqrt(x1² + x2² + ... + xn²)",
+    "hiperparametros_doc": [
+      {
+        "default": "'l2'",
+        "descricao": "Tipo de norma usada para reescalar cada amostra.",
+        "efeito": "'l2' usa distância euclidiana; 'l1' soma dos absolutos; 'max' o maior valor absoluto.",
+        "nome": "norm",
+        "quando_ajustar": "Use 'l1' para interpretar como proporções; 'l2' para similaridade de cosseno.",
+        "tipo": "enum"
+      },
+      {
+        "default": "True",
+        "descricao": "Faz uma cópia dos dados em vez de alterar no local.",
+        "efeito": "Se False, tenta normalizar in-place para economizar memória.",
+        "nome": "copy",
+        "quando_ajustar": "Raramente necessário; ajuste só por restrição de memória.",
+        "tipo": "bool"
+      }
+    ],
+    "intuicao": "Pense em cada amostra como uma seta no espaço: o Normalizer mantém a direção da seta mas força todas a terem o mesmo tamanho. Assim duas amostras com o mesmo padrão, mas em intensidades diferentes, passam a ser comparáveis.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.Normalizer.html",
+    "naoUsarQuando": [
+      "Você precisa padronizar features por coluna (use StandardScaler/MinMaxScaler).",
+      "A magnitude total de cada amostra carrega informação importante.",
+      "Os dados têm features em unidades muito diferentes que precisam de escala por coluna."
+    ],
+    "quandoUsar": [
+      "Dados de texto representados por TF-IDF ou contagem de palavras.",
+      "Quando importa a direção/proporção do vetor e não sua magnitude total.",
+      "Modelos que usam similaridade de cosseno ou distância entre vetores."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "tipo": "doc",
+        "titulo": "Normalizer — scikit-learn documentation",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.Normalizer.html"
+      }
+    ],
+    "resumo_basico": "Imagine que cada pessoa descreve seus gostos com uma lista de números (filmes, músicas, jogos). O Normalizer ajusta cada lista para que o 'tamanho total' dela seja sempre o mesmo, como redimensionar setas para que todas tenham o mesmo comprimento. Assim, o que importa é a direção do gosto, não o quanto a pessoa respondeu no total.",
+    "titulo": "Normalização por amostra (Normalizer)",
+    "vantagens": [
+      "Ótimo para dados de texto e vetores esparsos.",
+      "Torna amostras comparáveis por direção, independentemente da magnitude.",
+      "Não depende de estatísticas de treino, evitando vazamento de dados."
+    ]
+  },
+  "onehot_encoder": {
+    "conceitos": [
+      {
+        "desc": "Categoria sem ordem natural, como cor ou cidade.",
+        "nome": "Variável nominal"
+      },
+      {
+        "desc": "Cada categoria vira uma coluna com valores 0 ou 1.",
+        "nome": "Coluna binária (dummy)"
+      },
+      {
+        "desc": "Valor novo no teste, tratado por handle_unknown='ignore'.",
+        "nome": "Categoria desconhecida"
+      }
+    ],
+    "descricao": "O OneHotEncoder transforma variáveis categóricas em colunas binárias, uma por categoria, marcando 1 na coluna correspondente e 0 nas demais. Isso evita impor uma ordem falsa entre categorias nominais (sem ordem natural). É indicado antes de modelos lineares, SVM, KNN e redes neurais, que interpretariam números inteiros como grandezas ordenadas. Pode tratar categorias desconhecidas no teste (handle_unknown) e descartar colunas redundantes (drop) para evitar multicolinearidade.",
+    "desvantagens": [
+      "Gera muitas colunas quando há muitas categorias (alta dimensionalidade).",
+      "Resultado esparso pode consumir memória se sparse_output não for usado com cuidado.",
+      "Pode introduzir multicolinearidade se nenhuma coluna for descartada."
+    ],
+    "dicas": [
+      "Use handle_unknown='ignore' para não quebrar com categorias novas no teste.",
+      "Use drop='first' ou 'if_binary' para reduzir colunas redundantes em modelos lineares.",
+      "Para muitas categorias raras, considere min_frequency/max_categories para agrupá-las."
+    ],
+    "exemplo": "A coluna cor com valores [vermelho, verde, azul] vira três colunas: vermelho [1,0,0], verde [0,1,0] e azul [0,0,1].",
+    "exemplo_codigo": "from sklearn.preprocessing import OneHotEncoder\nimport numpy as np\n\nX = np.array([['vermelho'], ['verde'], ['azul'], ['verde']])\nenc = OneHotEncoder(sparse_output=False, handle_unknown='ignore')\nX_oh = enc.fit_transform(X)\nprint(enc.categories_)\nprint(X_oh)",
+    "formula": "",
+    "hiperparametros_doc": [
+      {
+        "default": "None",
+        "descricao": "Estratégia para descartar uma categoria por coluna e evitar redundância.",
+        "efeito": "'first' remove a primeira categoria; 'if_binary' só remove em colunas binárias.",
+        "nome": "drop",
+        "quando_ajustar": "Use em modelos lineares para evitar multicolinearidade.",
+        "tipo": "enum"
+      },
+      {
+        "default": "True",
+        "descricao": "Retorna matriz esparsa em vez de densa.",
+        "efeito": "Se False, devolve um array NumPy denso, mais fácil de inspecionar.",
+        "nome": "sparse_output",
+        "quando_ajustar": "Coloque False ao explorar dados ou com poucas categorias.",
+        "tipo": "bool"
+      },
+      {
+        "default": "'error'",
+        "descricao": "Como lidar com categorias não vistas no treino.",
+        "efeito": "'ignore' zera a codificação de categorias novas em vez de gerar erro.",
+        "nome": "handle_unknown",
+        "quando_ajustar": "Use 'ignore' quando o teste pode conter categorias novas.",
+        "tipo": "enum"
+      },
+      {
+        "default": "None",
+        "descricao": "Frequência mínima para uma categoria não ser tratada como rara.",
+        "efeito": "Agrupa categorias pouco frequentes em uma só 'infrequent'.",
+        "nome": "min_frequency",
+        "quando_ajustar": "Use quando há muitas categorias raras a consolidar.",
+        "tipo": "int"
+      },
+      {
+        "default": "None",
+        "descricao": "Limite máximo de colunas de saída por feature de entrada.",
+        "efeito": "Limita a explosão de colunas agrupando o excedente em 'infrequent'.",
+        "nome": "max_categories",
+        "quando_ajustar": "Use para controlar a dimensionalidade com muitas categorias.",
+        "tipo": "int"
+      }
+    ],
+    "intuicao": "Em vez de dar números que sugerem ordem, ele dá a cada categoria sua própria coluna independente. Assim o modelo aprende o efeito de cada opção sem assumir que uma é 'maior' que a outra.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.OneHotEncoder.html",
+    "naoUsarQuando": [
+      "A categoria tem ordem natural relevante (use OrdinalEncoder).",
+      "Há centenas/milhares de categorias (explode o número de colunas).",
+      "O modelo é baseado em árvores que já lida bem com inteiros categóricos."
+    ],
+    "quandoUsar": [
+      "Variáveis categóricas nominais (sem ordem) como cor, bairro ou marca.",
+      "Antes de modelos lineares, SVM, KNN ou redes neurais.",
+      "Quando o número de categorias por coluna é pequeno ou moderado."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "tipo": "doc",
+        "titulo": "OneHotEncoder — scikit-learn documentation",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.OneHotEncoder.html"
+      }
+    ],
+    "resumo_basico": "Como explicar para o computador que alguém gosta de 'pizza', 'sushi' ou 'taco'? Ele só entende números, mas dizer pizza=1, sushi=2, taco=3 faria parecer que taco é 'maior' que pizza, o que não faz sentido. O One-Hot cria uma caixinha de sim/não para cada opção: 'é pizza? sim/não', 'é sushi? sim/não'. Cada categoria vira uma coluna separada com 0 ou 1.",
+    "titulo": "Codificação One-Hot (OneHotEncoder)",
+    "vantagens": [
+      "Não impõe ordem falsa entre categorias nominais.",
+      "Funciona bem com modelos lineares e baseados em distância.",
+      "Trata categorias desconhecidas no teste de forma segura."
+    ]
+  },
+  "ordinal_encoder": {
+    "conceitos": [
+      {
+        "desc": "Categoria com ordem natural, como pequeno < médio < grande.",
+        "nome": "Variável ordinal"
+      },
+      {
+        "desc": "Sequência usada para atribuir os inteiros; pode ser definida manualmente.",
+        "nome": "Ordem das categorias"
+      },
+      {
+        "desc": "Categoria nova no teste, codificada via unknown_value.",
+        "nome": "Valor desconhecido"
+      }
+    ],
+    "descricao": "O OrdinalEncoder converte cada categoria em um número inteiro, atribuindo 0, 1, 2... às categorias de cada coluna. É apropriado para variáveis ordinais (com ordem natural, como nível de escolaridade) e também muito usado como entrada para modelos baseados em árvores, que lidam bem com inteiros. Por padrão a ordem é alfabética, mas pode-se fixar a ordem correta via o parâmetro categories. Suporta tratar categorias desconhecidas (handle_unknown + unknown_value).",
+    "desvantagens": [
+      "Impõe ordem falsa se aplicado a categorias nominais.",
+      "Modelos lineares podem interpretar mal as distâncias entre os inteiros.",
+      "Por padrão a ordem é alfabética, que pode não refletir a ordem real."
+    ],
+    "dicas": [
+      "Defina categories explicitamente para garantir a ordem correta.",
+      "Para categorias novas no teste, use handle_unknown='use_encoded_value' e unknown_value=-1.",
+      "Prefira One-Hot quando a variável for nominal e o modelo for linear."
+    ],
+    "exemplo": "Tamanho [pequeno, médio, grande] com ordem definida vira [0, 1, 2]; assim grande (2) é maior que pequeno (0), refletindo a realidade.",
+    "exemplo_codigo": "from sklearn.preprocessing import OrdinalEncoder\nimport numpy as np\n\nX = np.array([['pequeno'], ['grande'], ['medio'], ['pequeno']])\nenc = OrdinalEncoder(categories=[['pequeno', 'medio', 'grande']])\nX_ord = enc.fit_transform(X)\nprint(X_ord.ravel())  # [0. 2. 1. 0.]",
+    "formula": "",
+    "hiperparametros_doc": [
+      {
+        "default": "'auto'",
+        "descricao": "Categorias por feature, automáticas ou definidas manualmente em ordem.",
+        "efeito": "Permite fixar a ordem correta dos níveis em vez da ordem alfabética.",
+        "nome": "categories",
+        "quando_ajustar": "Sempre que a ordem natural importar (ex.: baixo, médio, alto).",
+        "tipo": "enum"
+      },
+      {
+        "default": "'error'",
+        "descricao": "Como lidar com categorias não vistas no treino.",
+        "efeito": "'use_encoded_value' codifica categorias novas com unknown_value.",
+        "nome": "handle_unknown",
+        "quando_ajustar": "Use quando o teste puder conter categorias novas.",
+        "tipo": "enum"
+      },
+      {
+        "default": "None",
+        "descricao": "Inteiro atribuído a categorias desconhecidas.",
+        "efeito": "Define o código (ex.: -1) usado para valores novos.",
+        "nome": "unknown_value",
+        "quando_ajustar": "Obrigatório quando handle_unknown='use_encoded_value'.",
+        "tipo": "int"
+      },
+      {
+        "default": "nan",
+        "descricao": "Valor usado para codificar dados ausentes (NaN).",
+        "efeito": "Permite mapear valores faltantes para um inteiro específico.",
+        "nome": "encoded_missing_value",
+        "quando_ajustar": "Ajuste quando quiser tratar ausências como uma categoria própria.",
+        "tipo": "float"
+      }
+    ],
+    "intuicao": "Quando a categoria tem uma escada natural (baixo, médio, alto), representá-la por 0, 1, 2 preserva essa relação de ordem. Mas cuidado: para categorias sem ordem (como cores), esses números enganam o modelo, então ali o One-Hot é melhor.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.OrdinalEncoder.html",
+    "naoUsarQuando": [
+      "A categoria é nominal, sem ordem (use OneHotEncoder).",
+      "Modelos lineares ou de distância, que interpretariam os números como grandezas.",
+      "A ordem natural não é conhecida e seria imposta arbitrariamente."
+    ],
+    "quandoUsar": [
+      "Variáveis com ordem natural (escolaridade, tamanho, nível de satisfação).",
+      "Como entrada para modelos baseados em árvores (Random Forest, Gradient Boosting).",
+      "Quando você quer manter uma única coluna em vez de muitas (como no One-Hot)."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "tipo": "doc",
+        "titulo": "OrdinalEncoder — scikit-learn documentation",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.OrdinalEncoder.html"
+      }
+    ],
+    "resumo_basico": "Algumas categorias têm ordem natural, como 'pequeno', 'médio' e 'grande' num copo de refrigerante. Faz sentido dizer pequeno=0, médio=1, grande=2, porque grande é realmente maior. O OrdinalEncoder transforma essas categorias ordenadas em números que respeitam essa sequência. É como dar uma 'nota de posição' a cada categoria.",
+    "titulo": "Codificação Ordinal (OrdinalEncoder)",
+    "vantagens": [
+      "Mantém uma única coluna, economizando dimensionalidade.",
+      "Preserva a ordem natural quando ela existe.",
+      "Excelente entrada para modelos baseados em árvores."
+    ]
+  },
+  "polynomial_features": {
+    "conceitos": [
+      {
+        "desc": "Maior potência gerada; controla a complexidade das curvas.",
+        "nome": "Grau do polinômio"
+      },
+      {
+        "desc": "Produto entre duas features diferentes, como x1·x2.",
+        "nome": "Termo de interação"
+      },
+      {
+        "desc": "Coluna de 1s que age como intercepto em modelos lineares.",
+        "nome": "Termo de viés"
+      }
+    ],
+    "descricao": "O PolynomialFeatures gera novas features que são combinações polinomiais das originais até um certo grau: potências (x², x³) e produtos entre features (x1·x2). Isso permite que modelos lineares capturem relações não lineares e interações entre variáveis. Por padrão usa grau 2 e inclui o termo de viés (coluna de 1s). Costuma vir antes de uma regressão linear; cuidado com a explosão do número de colunas em graus altos.",
+    "desvantagens": [
+      "Número de features cresce muito com o grau e a quantidade de colunas.",
+      "Aumenta o risco de overfitting.",
+      "As novas features ficam em escalas muito diferentes (escalone depois)."
+    ],
+    "dicas": [
+      "Comece com degree=2 e aumente só se necessário.",
+      "Adicione um StandardScaler depois, pois x² muda muito de escala.",
+      "Use interaction_only=True para gerar só interações, sem potências puras."
+    ],
+    "exemplo": "Com uma única feature x e grau 2 (include_bias=True), x=3 gera as colunas [1, 3, 9], ou seja, [1, x, x²].",
+    "exemplo_codigo": "from sklearn.preprocessing import PolynomialFeatures\nimport numpy as np\n\nX = np.array([[2.0, 3.0]])\npoly = PolynomialFeatures(degree=2, include_bias=True)\nX_poly = poly.fit_transform(X)\nprint(poly.get_feature_names_out())\nprint(X_poly)  # [[1. 2. 3. 4. 6. 9.]]",
+    "formula": "para [a, b], grau 2: [1, a, b, a², a·b, b²]",
+    "hiperparametros_doc": [
+      {
+        "default": "2",
+        "descricao": "Grau máximo das features polinomiais geradas.",
+        "efeito": "Graus maiores criam curvas mais flexíveis, mas muito mais colunas.",
+        "nome": "degree",
+        "quando_ajustar": "Aumente para capturar curvas mais complexas, com cautela contra overfitting.",
+        "tipo": "int"
+      },
+      {
+        "default": "False",
+        "descricao": "Gera apenas termos de interação, sem potências da mesma feature.",
+        "efeito": "Se True, exclui x², x³ e mantém só produtos de features distintas.",
+        "nome": "interaction_only",
+        "quando_ajustar": "Use quando interessam interações, não potências individuais.",
+        "tipo": "bool"
+      },
+      {
+        "default": "True",
+        "descricao": "Inclui a coluna de 1s (termo de viés/intercepto).",
+        "efeito": "Se False, não adiciona a coluna constante.",
+        "nome": "include_bias",
+        "quando_ajustar": "Desligue se o modelo seguinte já adiciona seu próprio intercepto.",
+        "tipo": "bool"
+      }
+    ],
+    "intuicao": "Um modelo linear só desenha retas, mas se você der a ele x² e x³ como novas colunas, ele consegue combinar essas peças e formar curvas. O grau controla o quão 'curvada' a relação pode ficar.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.PolynomialFeatures.html",
+    "naoUsarQuando": [
+      "Há muitas features (o número de colunas explode rapidamente).",
+      "O modelo já captura não linearidades (árvores, redes neurais).",
+      "Risco alto de overfitting com poucos dados e grau elevado."
+    ],
+    "quandoUsar": [
+      "Quando a relação entre features e alvo parece curva (não linear).",
+      "Para permitir que modelos lineares capturem interações entre variáveis.",
+      "Em regressão polinomial combinada com regressão linear/Ridge."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "tipo": "doc",
+        "titulo": "PolynomialFeatures — scikit-learn documentation",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.PolynomialFeatures.html"
+      }
+    ],
+    "resumo_basico": "Às vezes a relação entre as coisas não é uma linha reta: o quanto você estuda e sua nota podem subir em curva, não numa reta. O PolynomialFeatures cria novas colunas elevando e multiplicando as que você já tem (como x² ou x vezes y), dando ao modelo o poder de desenhar curvas. É como dar lápis de cor extras para o modelo desenhar formas mais complexas.",
+    "titulo": "Features Polinomiais (PolynomialFeatures)",
+    "vantagens": [
+      "Permite que modelos lineares aprendam relações curvas.",
+      "Captura interações entre variáveis automaticamente.",
+      "Simples de combinar em Pipeline com regressão."
+    ]
+  },
+  "power_transformer": {
+    "conceitos": [
+      {
+        "desc": "Medida de quão torta é a distribuição; o transformer busca reduzi-la.",
+        "nome": "Assimetria (skewness)"
+      },
+      {
+        "desc": "Método que aceita valores positivos, negativos e zero.",
+        "nome": "Yeo-Johnson"
+      },
+      {
+        "desc": "Método mais antigo que exige valores estritamente positivos.",
+        "nome": "Box-Cox"
+      }
+    ],
+    "descricao": "O PowerTransformer aplica uma transformação de potência (Yeo-Johnson por padrão, ou Box-Cox) para tornar os dados mais próximos de uma distribuição normal (gaussiana), reduzindo assimetria e estabilizando a variância. O parâmetro da transformação é estimado por máxima verossimilhança no fit. Box-Cox exige valores estritamente positivos; Yeo-Johnson aceita zeros e negativos. Por padrão também padroniza a saída (média 0, variância 1). É útil antes de modelos que assumem normalidade.",
+    "desvantagens": [
+      "Menos interpretável que escalas simples.",
+      "Box-Cox só funciona com valores estritamente positivos.",
+      "Pode exagerar a transformação em dados pequenos ou ruidosos."
+    ],
+    "dicas": [
+      "Use 'yeo-johnson' (padrão) quando houver zeros ou negativos.",
+      "Mantenha standardize=True para já obter média 0 e variância 1.",
+      "Compare com um log simples ou RobustScaler para ver o que ajuda mais."
+    ],
+    "exemplo": "Dados muito assimétricos como [1, 2, 3, 100] (com cauda longa) ficam mais simétricos e centrados após a transformação, facilitando modelos que esperam distribuição normal.",
+    "exemplo_codigo": "from sklearn.preprocessing import PowerTransformer\nimport numpy as np\n\nX = np.array([[1.0], [2.0], [3.0], [100.0]])\npt = PowerTransformer(method='yeo-johnson', standardize=True)\nX_trans = pt.fit_transform(X)\nprint(X_trans.ravel())\nprint('lambdas:', pt.lambdas_)",
+    "formula": "Box-Cox: x^(λ) = (x^λ - 1) / λ  (λ ≠ 0);  Yeo-Johnson generaliza para x ≤ 0",
+    "hiperparametros_doc": [
+      {
+        "default": "'yeo-johnson'",
+        "descricao": "Método de transformação de potência aplicado.",
+        "efeito": "'yeo-johnson' aceita negativos/zero; 'box-cox' exige valores positivos.",
+        "nome": "method",
+        "quando_ajustar": "Use 'box-cox' apenas com dados estritamente positivos.",
+        "tipo": "enum"
+      },
+      {
+        "default": "True",
+        "descricao": "Aplica padronização (média 0, variância 1) após a transformação.",
+        "efeito": "Se False, mantém a escala transformada sem padronizar.",
+        "nome": "standardize",
+        "quando_ajustar": "Desligue se for padronizar em um passo separado depois.",
+        "tipo": "bool"
+      },
+      {
+        "default": "True",
+        "descricao": "Faz uma cópia dos dados em vez de alterar no local.",
+        "efeito": "Se False, tenta transformar in-place para economizar memória.",
+        "nome": "copy",
+        "quando_ajustar": "Raramente necessário; ajuste só por restrição de memória.",
+        "tipo": "bool"
+      }
+    ],
+    "intuicao": "Distribuições muito tortas (assimétricas) atrapalham vários modelos. A transformação de potência encontra o 'expoente' que melhor desentorta os dados, deixando-os mais simétricos e em forma de sino, o que costuma ajudar o aprendizado.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.PowerTransformer.html",
+    "naoUsarQuando": [
+      "Os dados já são razoavelmente simétricos.",
+      "Modelos baseados em árvores, que não exigem normalidade.",
+      "Box-Cox com dados que contêm zeros ou negativos (use Yeo-Johnson)."
+    ],
+    "quandoUsar": [
+      "Quando as features são muito assimétricas e o modelo assume normalidade.",
+      "Para estabilizar a variância antes de modelos lineares ou gaussianos.",
+      "Quando log simples não basta para corrigir a forma da distribuição."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "tipo": "doc",
+        "titulo": "PowerTransformer — scikit-learn documentation",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.PowerTransformer.html"
+      }
+    ],
+    "resumo_basico": "Imagine um gráfico todo amontoado de um lado e com uma cauda comprida do outro, tipo a renda das pessoas: a maioria ganha pouco e poucos ganham muito. O PowerTransformer 'estica e amassa' esses dados para que fiquem mais simétricos, parecendo um sino bem comportado. É como ajustar uma foto torta até ela ficar equilibrada.",
+    "titulo": "Transformação de Potência (PowerTransformer)",
+    "vantagens": [
+      "Reduz assimetria e aproxima os dados de uma normal.",
+      "Estabiliza a variância, ajudando vários modelos.",
+      "Yeo-Johnson lida com valores negativos e zeros."
+    ]
+  },
+  "robust_scaler": {
+    "conceitos": [
+      {
+        "desc": "Valor central dos dados ordenados; resiste a outliers, diferente da média.",
+        "nome": "Mediana"
+      },
+      {
+        "desc": "Distância entre o percentil 25 e o 75; mede a dispersão central ignorando extremos.",
+        "nome": "Amplitude interquartil (IQR)"
+      },
+      {
+        "desc": "Propriedade de não ser afetado por poucos valores muito grandes ou pequenos.",
+        "nome": "Robustez"
+      }
+    ],
+    "descricao": "O RobustScaler escala as features usando estatísticas robustas a outliers: subtrai a mediana e divide pela amplitude interquartil (IQR, entre os percentis 25 e 75). Como mediana e IQR quase não são afetados por valores extremos, a escala fica estável mesmo com outliers. É a escolha recomendada quando os dados têm valores atípicos que estragariam o StandardScaler. Use dentro de um Pipeline, com fit no treino e transform no teste.",
+    "desvantagens": [
+      "Não garante média 0 nem variância 1.",
+      "A saída não fica numa faixa fixa.",
+      "Pode ser menos intuitivo de interpretar que o z-score."
+    ],
+    "dicas": [
+      "Use quando boxplots mostrarem muitos pontos fora dos 'bigodes'.",
+      "Ajuste quantile_range para caudas ainda mais pesadas, ex.: (10, 90).",
+      "Combine com PowerTransformer se também quiser reduzir a assimetria."
+    ],
+    "exemplo": "Salários [2000, 2500, 3000, 3500, 100000]: a mediana é 3000 e o IQR é cerca de 1000. O salário de 100000 vira (100000 - 3000) / 1000 = 97, claramente um outlier, sem distorcer a escala dos demais.",
+    "exemplo_codigo": "from sklearn.preprocessing import RobustScaler\nimport numpy as np\n\nX = np.array([[2000.0], [2500.0], [3000.0], [3500.0], [100000.0]])\nscaler = RobustScaler()\nX_escalado = scaler.fit_transform(X)\nprint(X_escalado.ravel())\nprint('mediana:', scaler.center_, 'IQR:', scaler.scale_)",
+    "formula": "x' = (x - mediana) / IQR,  onde IQR = Q3 - Q1",
+    "hiperparametros_doc": [
+      {
+        "default": "True",
+        "descricao": "Centraliza os dados subtraindo a mediana.",
+        "efeito": "Se False, não subtrai a mediana (útil para dados esparsos).",
+        "nome": "with_centering",
+        "quando_ajustar": "Desligue para matrizes esparsas e preservar os zeros.",
+        "tipo": "bool"
+      },
+      {
+        "default": "True",
+        "descricao": "Escala os dados dividindo pela amplitude interquartil.",
+        "efeito": "Se False, apenas centraliza sem ajustar a dispersão.",
+        "nome": "with_scaling",
+        "quando_ajustar": "Desligue quando só quiser centralizar.",
+        "tipo": "bool"
+      },
+      {
+        "default": "(25.0, 75.0)",
+        "descricao": "Par de percentis (q_min, q_max) usado para calcular a escala.",
+        "efeito": "Faixas mais largas (ex.: 10, 90) toleram caudas mais pesadas.",
+        "nome": "quantile_range",
+        "quando_ajustar": "Ajuste conforme a quantidade e intensidade dos outliers.",
+        "tipo": "enum"
+      },
+      {
+        "default": "False",
+        "descricao": "Escala para que dados normalmente distribuídos tenham variância 1.",
+        "efeito": "Se True, aproxima a escala do comportamento do StandardScaler.",
+        "nome": "unit_variance",
+        "quando_ajustar": "Ligue quando quiser variância unitária mantendo robustez.",
+        "tipo": "bool"
+      }
+    ],
+    "intuicao": "Em vez da média (que um único bilionário desloca), usa a mediana, o valor do meio, que resiste a extremos. E em vez do desvio-padrão, usa a distância entre o 25% e o 75% dos dados, que também ignora os pontos malucos das pontas.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.RobustScaler.html",
+    "naoUsarQuando": [
+      "Os dados são limpos e simétricos (StandardScaler basta e é mais comum).",
+      "Modelos baseados em árvores, que não dependem de escala.",
+      "Você precisa garantir uma faixa fixa de saída (use MinMaxScaler)."
+    ],
+    "quandoUsar": [
+      "Quando os dados contêm outliers que distorceriam média e desvio-padrão.",
+      "Features com distribuições assimétricas ou com caudas longas.",
+      "Como alternativa ao StandardScaler em dados 'sujos' do mundo real."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "tipo": "doc",
+        "titulo": "RobustScaler — scikit-learn documentation",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.RobustScaler.html"
+      }
+    ],
+    "resumo_basico": "Imagina calcular a 'mesada média' da sua turma, mas um colega é filho de milionário e ganha uma fortuna: ele sozinho estraga a média. O RobustScaler ignora esses casos extremos e usa o 'meio' dos dados para escalar, então um valor maluco não bagunça tudo. É a escala que não se deixa enganar por exceções.",
+    "titulo": "Escala Robusta (RobustScaler)",
+    "vantagens": [
+      "Muito resistente a outliers por usar mediana e IQR.",
+      "Mantém a escala estável em dados ruidosos do mundo real.",
+      "Bom substituto direto do StandardScaler quando há valores atípicos."
+    ]
+  },
+  "simple_imputer": {
+    "conceitos": [
+      {
+        "desc": "Posição sem dado que muitos modelos não conseguem processar.",
+        "nome": "Valor ausente (NaN)"
+      },
+      {
+        "desc": "Regra para preencher: média, mediana, mais frequente ou constante.",
+        "nome": "Estratégia de imputação"
+      },
+      {
+        "desc": "Risco evitado ao calcular a estatística só no treino.",
+        "nome": "Vazamento de dados"
+      }
+    ],
+    "descricao": "O SimpleImputer trata valores ausentes (NaN) substituindo-os por uma estatística calculada a partir de cada coluna no treino: média, mediana, valor mais frequente ou uma constante. A estatística é aprendida no fit (apenas no treino) e aplicada no transform, evitando vazamento de dados. É um passo essencial antes de modelos que não aceitam valores faltantes. Normalmente é colocado no início do Pipeline, antes de scalers e encoders.",
+    "desvantagens": [
+      "Ignora relações entre colunas ao preencher.",
+      "A média pode ser distorcida por outliers (prefira mediana).",
+      "Pode reduzir a variância real dos dados."
+    ],
+    "dicas": [
+      "Use strategy='median' quando houver outliers nas colunas numéricas.",
+      "Use strategy='most_frequent' ou 'constant' para colunas categóricas.",
+      "Ative add_indicator=True para marcar onde havia valores faltantes."
+    ],
+    "exemplo": "Idades [15, 16, NaN, 17] com strategy='mean': o NaN é preenchido com a média (15+16+17)/3 = 16, resultando em [15, 16, 16, 17].",
+    "exemplo_codigo": "from sklearn.impute import SimpleImputer\nimport numpy as np\n\nX = np.array([[15.0], [16.0], [np.nan], [17.0]])\nimp = SimpleImputer(strategy='mean')\nX_cheio = imp.fit_transform(X)\nprint(X_cheio.ravel())  # [15. 16. 16. 17.]",
+    "formula": "x_faltante = média (ou mediana, ou moda) da coluna no treino",
+    "hiperparametros_doc": [
+      {
+        "default": "'mean'",
+        "descricao": "Estatística usada para preencher os valores ausentes.",
+        "efeito": "'mean'/'median' para números; 'most_frequent'/'constant' também para categorias.",
+        "nome": "strategy",
+        "quando_ajustar": "Use 'median' com outliers e 'most_frequent' para categóricos.",
+        "tipo": "enum"
+      },
+      {
+        "default": "nan",
+        "descricao": "Placeholder que representa um valor ausente.",
+        "efeito": "Define qual valor é considerado faltante (ex.: 0 ou -1).",
+        "nome": "missing_values",
+        "quando_ajustar": "Ajuste quando o ausente for codificado por um valor específico.",
+        "tipo": "float"
+      },
+      {
+        "default": "None",
+        "descricao": "Valor usado quando strategy='constant'.",
+        "efeito": "Define o valor fixo a preencher; 0 para números, 'missing_value' para texto.",
+        "nome": "fill_value",
+        "quando_ajustar": "Use junto de strategy='constant' para um preenchimento personalizado.",
+        "tipo": "str"
+      },
+      {
+        "default": "False",
+        "descricao": "Adiciona colunas indicando onde havia valores ausentes.",
+        "efeito": "Se True, anexa um MissingIndicator à saída.",
+        "nome": "add_indicator",
+        "quando_ajustar": "Ligue quando a presença de ausência for informativa para o modelo.",
+        "tipo": "bool"
+      }
+    ],
+    "intuicao": "Em vez de jogar fora linhas incompletas (perdendo dados), ele preenche o buraco com um valor típico daquela coluna. Para números, a média ou mediana; para categorias, a opção mais comum.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.impute.SimpleImputer.html",
+    "naoUsarQuando": [
+      "Não há valores faltantes (passo desnecessário).",
+      "A ausência em si é informativa e precisa ser modelada (considere add_indicator).",
+      "É preciso uma imputação sofisticada que considere outras colunas (use IterativeImputer/KNNImputer)."
+    ],
+    "quandoUsar": [
+      "Quando o conjunto tem valores ausentes e o modelo não os aceita.",
+      "Antes de scalers/encoders, no início do Pipeline.",
+      "Quando descartar linhas incompletas perderia dados demais."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "tipo": "doc",
+        "titulo": "SimpleImputer — scikit-learn documentation",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.impute.SimpleImputer.html"
+      }
+    ],
+    "resumo_basico": "Sabe quando você responde um questionário e deixa algumas perguntas em branco? Os modelos de IA não gostam de espaços vazios. O SimpleImputer preenche essas lacunas com um chute razoável, como a média da turma ou a resposta mais comum. É como completar as perguntas em branco com o palpite mais sensato.",
+    "titulo": "Preenchimento de Faltantes (SimpleImputer)",
+    "vantagens": [
+      "Resolve valores ausentes de forma simples e rápida.",
+      "Várias estratégias para dados numéricos e categóricos.",
+      "Evita vazamento ao aprender a estatística só no treino."
+    ]
+  },
+  "standard_scaler": {
+    "conceitos": [
+      {
+        "desc": "Valor central da coluna, subtraído de cada ponto para centralizar os dados em zero.",
+        "nome": "Média (μ)"
+      },
+      {
+        "desc": "Mede o espalhamento dos dados; divide-se por ele para que a dispersão vire 1.",
+        "nome": "Desvio-padrão (σ)"
+      },
+      {
+        "desc": "Resultado da transformação: quantos desvios-padrão um valor está da média.",
+        "nome": "Z-score"
+      }
+    ],
+    "descricao": "O StandardScaler padroniza cada coluna (feature) removendo a média e escalando para variância unitária. Para cada valor calcula z = (x - μ) / σ, usando a média μ e o desvio-padrão σ aprendidos no conjunto de treino (fit) e aplicados depois no teste (transform). Deve ser usado dentro de um Pipeline, logo após a separação treino/teste, para evitar vazamento de dados. É essencial para modelos sensíveis à escala, como regressão logística, SVM, KNN e redes neurais.",
+    "desvantagens": [
+      "Sensível a outliers, pois média e desvio são afetados por valores extremos.",
+      "Não limita os valores a uma faixa fixa (diferente do MinMaxScaler).",
+      "Assume distribuição razoavelmente simétrica para fazer mais sentido."
+    ],
+    "dicas": [
+      "Sempre faça o fit apenas no treino e o transform no teste, dentro de um Pipeline.",
+      "Para dados esparsos use with_mean=False para não quebrar a esparsidade.",
+      "Verifique outliers antes; se houver muitos, considere RobustScaler ou PowerTransformer."
+    ],
+    "exemplo": "Notas de uma turma com média 6 e desvio-padrão 2: uma nota 8 vira z = (8 - 6) / 2 = 1, ou seja, está 1 desvio-padrão acima da média. Uma nota 4 vira z = -1.",
+    "exemplo_codigo": "from sklearn.preprocessing import StandardScaler\nimport numpy as np\n\nX = np.array([[10.0], [20.0], [30.0], [40.0]])\nscaler = StandardScaler()\nX_escalado = scaler.fit_transform(X)\nprint(X_escalado.ravel())\nprint('media:', scaler.mean_, 'desvio:', scaler.scale_)",
+    "formula": "z = (x - μ) / σ",
+    "hiperparametros_doc": [
+      {
+        "default": "True",
+        "descricao": "Centraliza os dados subtraindo a média antes de escalar.",
+        "efeito": "Se False, não subtrai a média (útil para dados esparsos).",
+        "nome": "with_mean",
+        "quando_ajustar": "Desligue ao trabalhar com matrizes esparsas para preservar os zeros.",
+        "tipo": "bool"
+      },
+      {
+        "default": "True",
+        "descricao": "Escala os dados para variância unitária dividindo pelo desvio-padrão.",
+        "efeito": "Se False, apenas centraliza sem ajustar a dispersão.",
+        "nome": "with_std",
+        "quando_ajustar": "Desligue quando quiser só centralizar sem mexer na escala.",
+        "tipo": "bool"
+      },
+      {
+        "default": "True",
+        "descricao": "Faz uma cópia dos dados em vez de alterar no local.",
+        "efeito": "Se False, tenta escalar in-place para economizar memória.",
+        "nome": "copy",
+        "quando_ajustar": "Ajuste apenas em cenários de muita memória; raramente necessário.",
+        "tipo": "bool"
+      }
+    ],
+    "intuicao": "Quando você mede 'quantos desvios-padrão acima da média', cada característica vira um número comparável, sem importar a unidade original. Tecnicamente isso centraliza os dados em zero e ajusta a dispersão para 1, o que ajuda os algoritmos a tratarem todas as features com o mesmo peso.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html",
+    "naoUsarQuando": [
+      "Há muitos outliers extremos, que distorcem a média e o desvio (prefira RobustScaler).",
+      "O modelo é baseado em árvores (Random Forest, árvore de decisão), que ignoram escala.",
+      "Você precisa preservar zeros em dados esparsos (centralizar destrói a esparsidade)."
+    ],
+    "quandoUsar": [
+      "Modelos sensíveis à escala como SVM, KNN, regressão logística e redes neurais.",
+      "Quando as features têm unidades ou faixas muito diferentes (ex.: idade e salário).",
+      "Quando os dados são aproximadamente simétricos/sem outliers extremos."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "tipo": "doc",
+        "titulo": "StandardScaler — scikit-learn documentation",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html"
+      }
+    ],
+    "resumo_basico": "Imagina que você quer comparar a altura dos seus amigos com a nota deles na prova: são coisas em escalas bem diferentes, e fica injusto. A padronização coloca tudo numa mesma régua, medindo cada valor em 'quantos passos' ele está acima ou abaixo da média. Assim, valores muito diferentes (como centímetros e notas) passam a falar a mesma língua.",
+    "titulo": "Padronização (StandardScaler)",
+    "vantagens": [
+      "Coloca todas as features na mesma escala, melhorando a convergência do treino.",
+      "Resultado interpretável: média 0 e desvio-padrão 1.",
+      "Padrão amplamente usado e bem suportado em quase todos os modelos."
+    ]
+  }
+}

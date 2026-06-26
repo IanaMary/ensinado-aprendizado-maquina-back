@@ -3,6 +3,10 @@
 #  - pré-processamento como elemento de 1ª classe (bloco `execucao` em db.pre_processamento)
 #  - conteúdo educacional de amostra (campo `conteudo`)
 #
+# SUPERSEDED (conteúdo): o bloco `conteudo` deste script foi SUBSTITUÍDO pelo seed
+# versionado em app/conteudo/*.json (scripts/deploy/seed_conteudo.py). Mantido aqui
+# apenas pela parte de `execucao`. Não dependa mais deste script para `conteudo`.
+#
 # Diferente do seed-mongodb.sh, este script NÃO faz deleteMany: usa upsert/$set e
 # preserva o `habilitado` já configurado pelo professor (via $setOnInsert). Seguro
 # para rodar em produção sem perder customizações ou o catálogo existente.

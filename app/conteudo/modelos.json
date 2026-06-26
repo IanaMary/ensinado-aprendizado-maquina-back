@@ -1,0 +1,3172 @@
+{
+  "adaboost": {
+    "conceitos": [
+      {
+        "desc": "Treinar modelos em sequência, cada um corrigindo os erros do conjunto anterior.",
+        "nome": "Boosting"
+      },
+      {
+        "desc": "Um modelo simples que acerta só um pouco melhor que o acaso; o padrão do AdaBoost é uma árvore com max_depth=1 (um toco).",
+        "nome": "Modelo fraco (weak learner)"
+      },
+      {
+        "desc": "Exemplos errados recebem peso maior para o próximo modelo focar neles.",
+        "nome": "Pesos das amostras"
+      },
+      {
+        "desc": "A resposta final combina os modelos, dando mais peso aos que acertaram mais.",
+        "nome": "Votação ponderada"
+      }
+    ],
+    "descricao": "A AdaBoostClassifier (Adaptive Boosting) treina uma sequência de modelos fracos (por padrão árvores de decisão bem rasas, com max_depth=1, chamadas \"tocos\"/stumps) de forma adaptativa. A cada rodada, os exemplos classificados errado ganham mais peso, fazendo o próximo modelo focar neles. No final, as previsões são combinadas por uma votação ponderada, em que os modelos mais precisos pesam mais.\n\nBoosting transforma modelos fracos em um classificador forte. Funciona muito bem quando o modelo base é simples, mas é sensível a ruído e a exemplos atípicos (outliers), porque eles recebem peso cada vez maior e podem distorcer o treino.",
+    "desvantagens": [
+      "Sensível a ruído e outliers.",
+      "Treino sequencial (mais difícil de paralelizar).",
+      "Pode fazer overfitting se houver muitos estimadores e dados ruidosos."
+    ],
+    "dicas": [
+      "Mantenha o estimador base simples (o padrão é uma árvore com max_depth=1).",
+      "Ajuste juntos n_estimators e learning_rate: mais estimadores com taxa menor costuma ser mais estável.",
+      "Limpe outliers antes, pois o AdaBoost os enfatiza.",
+      "Fixe random_state para reprodutibilidade."
+    ],
+    "exemplo": "from sklearn.ensemble import AdaBoostClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)\n\nmodelo = AdaBoostClassifier(n_estimators=50, learning_rate=1.0, random_state=42)\nmodelo.fit(X_train, y_train)\nprint(modelo.score(X_test, y_test))",
+    "exemplo_codigo": "from sklearn.ensemble import AdaBoostClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = AdaBoostClassifier(n_estimators=50, random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "50",
+        "descricao": "Número máximo de modelos fracos treinados em sequência.",
+        "efeito": "Mais estimadores podem aumentar a precisão até certo ponto; em excesso, com dados ruidosos, podem causar overfitting.",
+        "faixa": "inteiro >= 1",
+        "nome": "n_estimators",
+        "quando_ajustar": "Aumente (100, 200) se o modelo estiver fraco; ajuste junto com learning_rate.",
+        "tipo": "int"
+      },
+      {
+        "default": "1.0",
+        "descricao": "Peso aplicado a cada modelo a cada rodada de boosting.",
+        "efeito": "Valores menores fazem cada modelo contribuir menos, exigindo mais estimadores, mas deixando o treino mais estável.",
+        "faixa": "float > 0",
+        "nome": "learning_rate",
+        "quando_ajustar": "Reduza (ex.: 0.1, 0.5) e aumente n_estimators para um aprendizado mais cuidadoso.",
+        "tipo": "float"
+      },
+      {
+        "default": "None",
+        "descricao": "O modelo fraco usado como base do boosting.",
+        "efeito": "None usa uma árvore rasa (toco); trocar por um modelo um pouco mais profundo muda a capacidade do conjunto.",
+        "nome": "estimator",
+        "opcoes": [
+          "None (DecisionTreeClassifier com max_depth=1)",
+          "outro classificador que aceite pesos de amostra"
+        ],
+        "quando_ajustar": "Quando o toco padrão for fraco demais; teste uma árvore com max_depth 2 ou 3.",
+        "tipo": "objeto estimador ou None"
+      }
+    ],
+    "intuicao": "Em vez de muitos especialistas independentes (como na floresta), aqui os modelos aprendem em sequência, corrigindo os erros uns dos outros. Cada novo modelo é o \"reforço\" que ataca os casos difíceis que sobraram.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.AdaBoostClassifier.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/classifier/classification_report.html",
+    "naoUsarQuando": [
+      "Quando os dados têm muito ruído ou outliers (o AdaBoost dá peso demais a eles).",
+      "Quando você precisa de treino muito rápido (é sequencial, não paraleliza fácil).",
+      "Quando precisa de interpretabilidade simples."
+    ],
+    "quandoUsar": [
+      "Quando você quer transformar um modelo simples em um classificador mais forte.",
+      "Quando os dados são relativamente limpos (pouco ruído).",
+      "Em problemas de classificação onde a precisão de um modelo único é baixa."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "estimator=None, n_estimators=50, learning_rate=1.0, random_state=None. Se estimator=None, o base é DecisionTreeClassifier com max_depth=1.",
+        "tipo": "doc",
+        "titulo": "sklearn.ensemble.AdaBoostClassifier",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.AdaBoostClassifier.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "O princípio central do AdaBoost é ajustar uma sequência de modelos fracos sobre versões repetidamente modificadas dos dados.",
+        "tipo": "doc",
+        "titulo": "Ensemble methods - AdaBoost (User Guide)",
+        "url": "https://scikit-learn.org/stable/modules/ensemble.html"
+      }
+    ],
+    "resumo_basico": "O AdaBoost monta um time de modelos simples, um de cada vez, em que cada novo membro presta mais atenção justamente nos exemplos que o time errou antes. É como estudar para uma prova focando nas questões que você costuma errar. No fim, todos votam, mas quem acerta mais tem voto com mais peso.",
+    "titulo": "AdaBoost",
+    "vantagens": [
+      "Costuma melhorar bastante modelos simples.",
+      "Poucos hiperparâmetros principais para ajustar.",
+      "Não exige normalizar os atributos.",
+      "Foca automaticamente nos exemplos difíceis."
+    ]
+  },
+  "arvore_decisao": {
+    "conceitos": [
+      {
+        "desc": "Nó é um ponto onde a árvore faz uma pergunta; folha é o ponto final que dá a resposta (a classe prevista).",
+        "nome": "Nó e folha"
+      },
+      {
+        "desc": "Medida de quão misturadas estão as classes em um nó. A árvore escolhe divisões que reduzem essa mistura.",
+        "nome": "Impureza (Gini/Entropia)"
+      },
+      {
+        "desc": "Quantos níveis de perguntas a árvore tem. Mais profundidade = regras mais detalhadas (e mais risco de decorar).",
+        "nome": "Profundidade"
+      },
+      {
+        "desc": "Quando a árvore aprende detalhes demais do treino e erra em dados novos. Limitar o tamanho ajuda a evitar.",
+        "nome": "Overfitting"
+      }
+    ],
+    "descricao": "A DecisionTreeClassifier aprende uma sequência de regras simples (\"se atributo X for menor que um valor, vá por aqui; senão, por ali\") organizadas em forma de árvore. Em cada nó, o algoritmo escolhe a pergunta que melhor separa as classes, medindo a \"impureza\" com o critério Gini (padrão) ou entropia. O processo se repete até as folhas ficarem puras ou até atingir os limites de tamanho que você definir.\n\nÉ um modelo muito fácil de interpretar, porque você consegue desenhar e ler as regras aprendidas. Por outro lado, se deixada crescer sem limites, ela tende a decorar os dados de treino (overfitting), por isso é comum controlar a profundidade ou o tamanho mínimo das folhas.",
+    "desvantagens": [
+      "Tende a fazer overfitting se crescer sem limites.",
+      "Pequenas mudanças nos dados podem gerar árvores bem diferentes (instável).",
+      "Costuma ter precisão menor que ensembles como Random Forest."
+    ],
+    "dicas": [
+      "Comece controlando max_depth para evitar decorar os dados.",
+      "Aumente min_samples_leaf para deixar as regras mais robustas.",
+      "Use random_state para resultados reproduzíveis.",
+      "Visualize a árvore para entender as regras aprendidas."
+    ],
+    "exemplo": "from sklearn.tree import DecisionTreeClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)\n\nmodelo = DecisionTreeClassifier(max_depth=3, random_state=42)\nmodelo.fit(X_train, y_train)\nprint(modelo.score(X_test, y_test))",
+    "exemplo_codigo": "from sklearn.tree import DecisionTreeClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = DecisionTreeClassifier(max_depth=3, random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "gini",
+        "descricao": "Função usada para medir a qualidade de uma divisão (impureza).",
+        "efeito": "Muda como a árvore decide qual pergunta separa melhor as classes; na prática os resultados costumam ser parecidos.",
+        "nome": "criterion",
+        "opcoes": [
+          "gini",
+          "entropy",
+          "log_loss"
+        ],
+        "quando_ajustar": "Raramente. Experimente 'entropy' se quiser comparar, mas o ganho costuma ser pequeno.",
+        "tipo": "str"
+      },
+      {
+        "default": "None",
+        "descricao": "Profundidade máxima da árvore (número de níveis de perguntas).",
+        "efeito": "Limita o quanto a árvore cresce; valores menores reduzem overfitting, valores maiores deixam aprender detalhes.",
+        "faixa": "None (sem limite) ou inteiro >= 1",
+        "nome": "max_depth",
+        "quando_ajustar": "Quase sempre, para evitar que a árvore decore o treino. Comece testando 3 a 10.",
+        "tipo": "int ou None"
+      },
+      {
+        "default": "2",
+        "descricao": "Número mínimo de amostras necessárias para dividir um nó.",
+        "efeito": "Valores maiores impedem divisões com poucos exemplos, deixando a árvore mais simples.",
+        "faixa": "inteiro >= 2, ou float em (0, 1] como fração das amostras",
+        "nome": "min_samples_split",
+        "quando_ajustar": "Quando a árvore parece complexa demais ou está fazendo overfitting.",
+        "tipo": "int ou float"
+      },
+      {
+        "default": "1",
+        "descricao": "Número mínimo de amostras que uma folha (resposta final) deve ter.",
+        "efeito": "Valores maiores deixam as regras mais robustas e suavizam as previsões.",
+        "faixa": "inteiro >= 1, ou float em (0, 1] como fração das amostras",
+        "nome": "min_samples_leaf",
+        "quando_ajustar": "Para reduzir overfitting, especialmente com dados ruidosos. Teste 5, 10, 20.",
+        "tipo": "int ou float"
+      },
+      {
+        "default": "None",
+        "descricao": "Quantos atributos considerar ao procurar a melhor divisão em cada nó.",
+        "efeito": "None usa todos os atributos; restringir adiciona aleatoriedade e pode reduzir overfitting.",
+        "nome": "max_features",
+        "opcoes": [
+          "sqrt",
+          "log2",
+          "None"
+        ],
+        "quando_ajustar": "Em geral deixe None numa árvore única; é mais usado dentro de florestas.",
+        "tipo": "int, float, str ou None"
+      }
+    ],
+    "intuicao": "Pense num fluxograma de perguntas: a cada pergunta o conjunto de exemplos vai se dividindo em grupos cada vez mais parecidos entre si. A árvore busca, em cada divisão, a pergunta que deixa os grupos mais \"puros\" possível (com exemplos da mesma classe juntos).",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeClassifier.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/classifier/classification_report.html",
+    "naoUsarQuando": [
+      "Quando você precisa de máxima precisão e tem dados complexos (prefira floresta ou ensembles).",
+      "Quando os dados têm muito ruído (a árvore tende a decorar).",
+      "Quando relações são suaves/contínuas e curvas (a árvore faz cortes em degraus)."
+    ],
+    "quandoUsar": [
+      "Quando você precisa explicar a decisão para alguém (regras legíveis).",
+      "Quando os dados misturam números e categorias e têm relações de \"se/então\".",
+      "Como modelo simples de referência para começar.",
+      "Quando não quer se preocupar muito com escala/normalização dos atributos."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "criterion='gini', splitter='best', max_depth=None, min_samples_split=2, min_samples_leaf=1, max_features=None.",
+        "tipo": "doc",
+        "titulo": "sklearn.tree.DecisionTreeClassifier",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeClassifier.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "Decision Trees são um método não paramétrico de aprendizado supervisionado para classificação e regressão.",
+        "tipo": "doc",
+        "titulo": "Decision Trees (User Guide)",
+        "url": "https://scikit-learn.org/stable/modules/tree.html"
+      }
+    ],
+    "resumo_basico": "Imagine um jogo de adivinhação em que você faz perguntas de sim ou não para descobrir uma resposta. A árvore de decisão faz exatamente isso: vai perguntando coisas sobre os dados (\"o número é maior que 5?\") e, a cada resposta, escolhe um caminho. No final de tantos galhos, ela chega numa folha que diz a qual grupo aquela coisa pertence.",
+    "titulo": "Árvore de Decisão",
+    "vantagens": [
+      "Muito fácil de interpretar e visualizar.",
+      "Não exige normalizar ou padronizar os atributos.",
+      "Lida com atributos numéricos e categóricos.",
+      "Treino e predição rápidos."
+    ]
+  },
+  "huber": {
+    "conceitos": [
+      {
+        "desc": "Função de erro híbrida: quadrática perto de zero e linear longe de zero, controlada por epsilon.",
+        "nome": "Perda de Huber"
+      },
+      {
+        "desc": "O limiar que separa um ponto 'normal' de um outlier. Quanto menor, mais pontos são tratados como outliers.",
+        "nome": "Epsilon"
+      },
+      {
+        "desc": "Penaliza coeficientes grandes ao quadrado, ajudando a evitar overfitting.",
+        "nome": "Regularização L2 (alpha)"
+      },
+      {
+        "desc": "Capacidade do modelo de não ser distorcido por poucos pontos muito fora da curva.",
+        "nome": "Robustez"
+      }
+    ],
+    "descricao": "A HuberRegressor é uma regressão linear robusta que combina o melhor de dois mundos: para erros pequenos usa a perda quadrática (como mínimos quadrados, eficiente quando os dados são bem-comportados) e para erros grandes usa a perda linear (como o valor absoluto, que reduz o peso de outliers). O ponto de transição entre os dois regimes é controlado por epsilon. Inclui regularização L2 (alpha) e otimiza usando L-BFGS-B.",
+    "desvantagens": [
+      "Continua sendo um modelo linear.",
+      "Sensível à escala das variáveis: recomenda-se padronizar antes.",
+      "A escolha de epsilon pode exigir tentativa e erro.",
+      "Pode não convergir em max_iter iterações se os dados forem difíceis."
+    ],
+    "dicas": [
+      "Padronize as variáveis de entrada antes de treinar (a perda de Huber é sensível à escala).",
+      "Comece com epsilon=1.35 (valor recomendado pela literatura) e diminua para tornar o modelo mais robusto.",
+      "Aumente max_iter se receber aviso de não convergência.",
+      "Ajuste alpha para controlar overfitting, como em outras regressões regularizadas."
+    ],
+    "exemplo": "Estimar a nota de uma prova a partir das horas de estudo: a maioria dos alunos segue um padrão, mas um aluno estudou 10 horas e tirou nota baixa porque passou mal no dia. Com Huber, esse caso fora da curva não entorta a linha; ele recebe peso reduzido, e o modelo continua descrevendo bem o comportamento típico da turma.",
+    "exemplo_codigo": "from sklearn.linear_model import HuberRegressor\nfrom sklearn.datasets import load_diabetes\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_diabetes(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = HuberRegressor(epsilon=1.35)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "1.35",
+        "descricao": "Controla quantos exemplos são classificados como outliers. Quanto menor, mais robusto a outliers. Deve estar em [1, inf).",
+        "efeito": "Define o limiar entre erro tratado ao quadrado e erro tratado linearmente; menor = mais pontos tratados como outliers.",
+        "faixa": "epsilon >= 1",
+        "nome": "epsilon",
+        "quando_ajustar": "Diminua (mais perto de 1) para aumentar a robustez; aumente para se aproximar da regressão por mínimos quadrados.",
+        "tipo": "float"
+      },
+      {
+        "default": "100",
+        "descricao": "Número máximo de iterações do otimizador scipy.optimize.minimize (método L-BFGS-B).",
+        "efeito": "Mais iterações dão mais chance de convergir, ao custo de tempo.",
+        "faixa": "max_iter >= 1",
+        "nome": "max_iter",
+        "quando_ajustar": "Aumente se aparecer aviso de não convergência.",
+        "tipo": "int"
+      },
+      {
+        "default": "0.0001",
+        "descricao": "Força da regularização L2 ao quadrado (penalidade = alpha * ||w||^2). Deve estar em [0, inf).",
+        "efeito": "Valores maiores encolhem os coeficientes e reduzem overfitting.",
+        "faixa": "alpha >= 0",
+        "nome": "alpha",
+        "quando_ajustar": "Aumente se houver overfitting; diminua se houver underfitting.",
+        "tipo": "float"
+      },
+      {
+        "default": "False",
+        "descricao": "Reutiliza os atributos de um modelo já treinado para acelerar o próximo treino.",
+        "efeito": "Acelera treinos repetidos partindo da solução anterior.",
+        "nome": "warm_start",
+        "opcoes": [
+          true,
+          false
+        ],
+        "quando_ajustar": "Ative ao treinar várias vezes em sequência com pequenas mudanças.",
+        "tipo": "bool"
+      },
+      {
+        "default": "True",
+        "descricao": "Se deve ajustar o intercepto.",
+        "efeito": "Se False, a linha passa pela origem.",
+        "nome": "fit_intercept",
+        "opcoes": [
+          true,
+          false
+        ],
+        "quando_ajustar": "Deixe True salvo se os dados já estiverem centrados.",
+        "tipo": "bool"
+      },
+      {
+        "default": "1e-05",
+        "descricao": "Critério de parada da iteração: max{abs(proj_g_i)} <= tol.",
+        "efeito": "Valores menores exigem convergência mais precisa (mais lento).",
+        "faixa": "tol > 0",
+        "nome": "tol",
+        "quando_ajustar": "Raramente; diminua para mais precisão ou aumente para acelerar.",
+        "tipo": "float"
+      }
+    ],
+    "intuicao": "Na regressão comum, um outlier eleva o erro ao quadrado e domina a otimização, entortando a linha. Huber define um limiar (epsilon): erros menores que esse limiar são tratados ao quadrado (sensibilidade fina), e erros maiores recebem peso apenas linear (são 'aparados'). O resultado é uma linha que ajusta bem a maioria dos pontos sem ser sequestrada pelos extremos. Diferente do RANSAC, ela não descarta os outliers: apenas dá menos importância a eles.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.HuberRegressor.html",
+    "naoUsarQuando": [
+      "Quando a relação é fortemente não linear.",
+      "Quando há outliers extremos e abundantes (RANSAC pode ser melhor).",
+      "Quando não há outliers e a regressão linear simples já basta.",
+      "Quando a escala das variáveis é muito desigual e você não padronizou os dados."
+    ],
+    "quandoUsar": [
+      "Quando há outliers moderados e você quer um modelo linear robusto sem descartá-los.",
+      "Quando precisa de algo mais estável que a regressão linear comum, mas mais rápido que abordagens que reamostram.",
+      "Quando os outliers estão principalmente na variável alvo (y).",
+      "Quando deseja controle fino sobre quão sensível o modelo é a extremos (via epsilon)."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "class sklearn.linear_model.HuberRegressor(*, epsilon=1.35, max_iter=100, alpha=0.0001, warm_start=False, fit_intercept=True, tol=1e-05)",
+        "tipo": "doc",
+        "titulo": "HuberRegressor",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.HuberRegressor.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "The HuberRegressor differs from using SGDRegressor with loss set to huber by applying a linear loss to samples classified as outliers.",
+        "tipo": "doc",
+        "titulo": "Robustness regression: outliers and modeling errors",
+        "url": "https://scikit-learn.org/stable/modules/linear_model.html#robustness-regression-outliers-and-modeling-errors"
+      }
+    ],
+    "resumo_basico": "Pense em uma linha que tenta acompanhar uma nuvem de pontos. Se um ponto está perto, ela se importa muito com ele; se um ponto está muito longe (um maluco fora da curva), ela se importa só um pouco, para não ser enganada. A Regressão de Huber faz exatamente isso: pontos próximos contam ao quadrado e pontos distantes contam de forma mais suave. Assim a linha não é puxada por casos extremos.",
+    "titulo": "Regressão de Huber (HuberRegressor)",
+    "vantagens": [
+      "Robusta a outliers sem descartá-los completamente.",
+      "Mais eficiente que métodos baseados em reamostragem.",
+      "Permite ajustar a sensibilidade a outliers via epsilon.",
+      "Inclui regularização L2 embutida (alpha)."
+    ]
+  },
+  "k_means": {
+    "conceitos": [
+      {
+        "desc": "Um conjunto de dados que são parecidos entre si e foram colocados juntos pelo algoritmo.",
+        "nome": "Cluster (grupo)"
+      },
+      {
+        "desc": "O ponto central de um grupo, calculado como a média de todos os pontos daquele grupo.",
+        "nome": "Centroide"
+      },
+      {
+        "desc": "O algoritmo aprende sozinho, sem receber as respostas certas (rótulos) de antemão.",
+        "nome": "Não supervisionado"
+      },
+      {
+        "desc": "Medida de quão longe um ponto está do centroide; o K-Means coloca cada ponto no centroide mais próximo.",
+        "nome": "Distância"
+      },
+      {
+        "desc": "Momento em que os centroides quase param de se mexer e o agrupamento fica estável.",
+        "nome": "Convergência"
+      }
+    ],
+    "descricao": "O K-Means é um algoritmo de agrupamento (clustering) não supervisionado: ele recebe dados sem rótulos e tenta dividi-los em k grupos, em que k é um número escolhido por você. Para cada grupo existe um ponto central chamado centroide, que representa a média dos pontos daquele grupo. O algoritmo funciona repetindo dois passos: primeiro, cada ponto é colocado no grupo cujo centroide está mais perto dele; depois, cada centroide é recalculado como a média dos pontos que entraram no seu grupo.\n\nEsse vai e volta se repete até os centroides quase pararem de se mexer (convergência) ou até atingir o número máximo de iterações. O objetivo matemático é deixar os pontos de cada grupo o mais próximo possível do seu centroide, ou seja, minimizar a variância dentro de cada grupo. Como o resultado depende de onde os centroides começam, o sklearn usa a inicialização 'k-means++' e roda o processo algumas vezes, escolhendo o melhor resultado.",
+    "desvantagens": [
+      "Você precisa escolher o número de grupos (k) antes.",
+      "O resultado pode mudar dependendo de onde os centroides começam.",
+      "Tem dificuldade com grupos de formato estranho ou tamanhos muito diferentes.",
+      "É sensível a outliers e a escalas diferentes entre as características."
+    ],
+    "dicas": [
+      "Normalize os dados antes (por exemplo com o StandardScaler) para que nenhuma característica domine a distância.",
+      "Teste vários valores de k e use o método do cotovelo ou o silhouette para escolher o melhor.",
+      "Defina random_state para conseguir repetir o mesmo resultado.",
+      "Deixe o n_init no padrão para o algoritmo rodar mais de uma vez e evitar resultados ruins."
+    ],
+    "exemplo": "Uma escola quer organizar os alunos em grupos de estudo por estilo de aprendizado, mas não sabe quais grupos existem. Usando notas, tempo de estudo e participação, o K-Means com k=3 separa a turma em três grupinhos parecidos, ajudando o professor a montar atividades sob medida para cada grupo.",
+    "exemplo_codigo": "from sklearn.cluster import KMeans\nfrom sklearn.datasets import make_blobs\n\nX, _ = make_blobs(n_samples=300, centers=3, random_state=42)\n\nmodelo = KMeans(n_clusters=3, n_init='auto', random_state=42)\nmodelo.fit(X)\nprint(modelo.cluster_centers_)\nprint(modelo.predict(X[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "8",
+        "descricao": "Número de grupos (clusters) que o algoritmo deve formar e, ao mesmo tempo, número de centroides.",
+        "efeito": "Mais grupos deixam cada grupo menor e mais específico; menos grupos juntam dados mais variados.",
+        "faixa": "2 ou mais",
+        "nome": "n_clusters",
+        "quando_ajustar": "Sempre ajuste de acordo com quantos grupos você espera encontrar nos dados.",
+        "tipo": "int"
+      },
+      {
+        "default": "'k-means++'",
+        "descricao": "Forma de escolher onde os centroides começam.",
+        "efeito": "O 'k-means++' espalha melhor os centroides iniciais e costuma dar resultados melhores e mais rápidos que o 'random'.",
+        "nome": "init",
+        "opcoes": [
+          "k-means++",
+          "random"
+        ],
+        "quando_ajustar": "Quase sempre deixe no padrão; mude para 'random' apenas para experimentos.",
+        "tipo": "str"
+      },
+      {
+        "default": "'auto'",
+        "descricao": "Quantas vezes o algoritmo roda do zero com centroides diferentes, escolhendo o melhor resultado.",
+        "efeito": "Mais repetições reduzem a chance de um resultado ruim, mas deixam o treino mais lento.",
+        "faixa": "1 ou mais (ou 'auto')",
+        "nome": "n_init",
+        "quando_ajustar": "Aumente se os resultados variarem muito entre execuções.",
+        "tipo": "str ou int"
+      },
+      {
+        "default": "300",
+        "descricao": "Número máximo de iterações (vai e volta) em uma única execução.",
+        "efeito": "Mais iterações dão mais tempo para os centroides se estabilizarem.",
+        "faixa": "1 ou mais",
+        "nome": "max_iter",
+        "quando_ajustar": "Aumente se o algoritmo não estiver convergindo (parando) a tempo.",
+        "tipo": "int"
+      },
+      {
+        "default": "0.0001",
+        "descricao": "Tolerância: o quanto os centroides podem se mexer para o algoritmo considerar que já parou.",
+        "efeito": "Valores menores exigem que os centroides parem mais firmemente antes de encerrar.",
+        "faixa": "0.0 ou mais",
+        "nome": "tol",
+        "quando_ajustar": "Raramente; ajuste fino apenas se precisar de mais precisão ou velocidade.",
+        "tipo": "float"
+      },
+      {
+        "default": "'lloyd'",
+        "descricao": "Variante do cálculo do K-Means usada por baixo dos panos.",
+        "efeito": "O 'elkan' pode ser mais rápido em alguns dados densos, mas usa mais memória.",
+        "nome": "algorithm",
+        "opcoes": [
+          "lloyd",
+          "elkan"
+        ],
+        "quando_ajustar": "Quase sempre deixe no padrão 'lloyd'.",
+        "tipo": "str"
+      },
+      {
+        "default": "None",
+        "descricao": "Semente de aleatoriedade que torna o resultado repetível.",
+        "efeito": "Fixar um número faz o algoritmo dar sempre o mesmo agrupamento.",
+        "faixa": "qualquer número inteiro",
+        "nome": "random_state",
+        "quando_ajustar": "Defina um número fixo quando quiser repetir exatamente o mesmo experimento.",
+        "tipo": "int ou None"
+      }
+    ],
+    "intuicao": "Pense em colocar k bandeiras espalhadas no pátio da escola. Cada aluno corre para a bandeira mais perto dele. Depois, cada bandeira anda até o meio do grupo de alunos que escolheu ela. Os alunos olham de novo e talvez troquem de bandeira. Isso se repete até ninguém mais querer trocar de grupo: pronto, os grupinhos estão formados.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/cluster/silhouette.html",
+    "naoUsarQuando": [
+      "Quando os grupos têm formatos alongados, curvados ou bem diferentes de tamanho.",
+      "Quando você não faz ideia de quantos grupos existem (é preciso definir k).",
+      "Quando há muitos valores muito fora do padrão (outliers), que puxam os centroides.",
+      "Quando as características estão em escalas muito diferentes e não foram normalizadas."
+    ],
+    "quandoUsar": [
+      "Quando você quer descobrir grupos naturais nos dados sem ter rótulos prontos.",
+      "Quando os grupos têm formato mais ou menos redondo e tamanho parecido.",
+      "Para separar clientes, alunos ou objetos por semelhança (segmentação).",
+      "Quando você tem uma boa ideia de quantos grupos quer formar."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "The number of clusters to form as well as the number of centroids to generate.",
+        "tipo": "doc",
+        "titulo": "sklearn.cluster.KMeans",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "The KMeans algorithm clusters data by trying to separate samples in n groups of equal variance, minimizing a criterion known as the inertia or within-cluster sum-of-squares.",
+        "tipo": "doc",
+        "titulo": "Clustering",
+        "url": "https://scikit-learn.org/stable/modules/clustering.html"
+      }
+    ],
+    "resumo_basico": "Imagine que você quer separar a turma em grupinhos sem saber nada sobre cada aluno, só observando quem se parece com quem. O K-Means faz exatamente isso: ele junta dados que são parecidos em grupos chamados clusters. Você só diz quantos grupinhos quer formar, e ele descobre sozinho quem fica com quem. Ninguém precisa dar as respostas certas antes (por isso dizemos que é aprendizado não supervisionado).",
+    "titulo": "K-Means (Agrupamento)",
+    "vantagens": [
+      "É simples de entender e explicar.",
+      "É rápido, mesmo com muitos dados.",
+      "Funciona bem quando os grupos são redondos e separados.",
+      "Está disponível e bem documentado no scikit-learn."
+    ]
+  },
+  "knn": {
+    "conceitos": [
+      {
+        "desc": "Um exemplo do conjunto de treino que tem características parecidas (pequena distância) com o ponto que queremos classificar.",
+        "nome": "Vizinho mais próximo"
+      },
+      {
+        "desc": "Uma medida de quão diferentes dois exemplos são. A padrão é a Euclidiana (a 'linha reta' entre dois pontos).",
+        "nome": "Distância"
+      },
+      {
+        "desc": "A classe escolhida é aquela que aparece mais vezes entre os k vizinhos.",
+        "nome": "Votação majoritária"
+      },
+      {
+        "desc": "O modelo não aprende nada no treino; ele só guarda os dados e faz todo o trabalho na hora de prever.",
+        "nome": "Lazy learning (aprendizado preguiçoso)"
+      },
+      {
+        "desc": "Como o KNN usa distâncias, características com números grandes pesam mais; por isso normalizar os dados é importante.",
+        "nome": "Escala dos atributos"
+      }
+    ],
+    "descricao": "O KNeighborsClassifier é um classificador baseado em instâncias (lazy learning): ele não constrói um modelo durante o treino, apenas guarda os exemplos. Para classificar um novo ponto, ele calcula a distância até todos os exemplos guardados, seleciona os k mais próximos e atribui a classe por votação majoritária entre esses vizinhos. A distância padrão é a de Minkowski com p=2, que equivale à distância Euclidiana.\n\nPor depender de distâncias, o KNN é muito sensível à escala das características: atributos com valores grandes dominam o cálculo. Por isso é recomendável padronizar ou normalizar os dados antes de treinar. O parâmetro 'weights' permite que vizinhos mais próximos tenham mais peso no voto do que vizinhos distantes.",
+    "desvantagens": [
+      "Previsão lenta e que consome memória em bases grandes.",
+      "Muito sensível à escala dos atributos e a ruído.",
+      "Sofre com a 'maldição da dimensionalidade' (muitos atributos).",
+      "Escolher o k certo exige experimentação."
+    ],
+    "dicas": [
+      "Padronize ou normalize os dados antes de treinar (ex.: StandardScaler ou MinMaxScaler).",
+      "Use um valor ímpar de k em problemas de 2 classes para evitar empates.",
+      "Teste vários valores de k com validação cruzada e veja qual generaliza melhor.",
+      "Experimente weights='distance' para dar mais peso aos vizinhos mais próximos.",
+      "Reduza o número de atributos irrelevantes para melhorar as distâncias."
+    ],
+    "exemplo": "Você tem uma cestinha de frutas e quer ensinar o computador a separar maçãs de laranjas usando dois números: peso e tamanho. Pegando uma fruta nova, o KNN (com k=5) olha as 5 frutas conhecidas mais parecidas em peso e tamanho. Se 4 delas forem laranjas e 1 for maçã, ele diz: 'essa é uma laranja!'.",
+    "exemplo_codigo": "from sklearn.neighbors import KNeighborsClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_iris(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = KNeighborsClassifier(n_neighbors=5)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": 5,
+        "descricao": "Número de vizinhos (k) usados na votação para classificar um ponto novo.",
+        "efeito": "k pequeno deixa o modelo sensível a ruído (fronteiras irregulares, risco de overfitting); k grande suaviza a decisão, mas pode ignorar padrões locais (risco de underfitting).",
+        "faixa": "1 a ~30 (tipicamente)",
+        "nome": "n_neighbors",
+        "opcoes": [],
+        "quando_ajustar": "Teste vários valores com validação cruzada; em problemas de 2 classes prefira k ímpar para evitar empates.",
+        "tipo": "int"
+      },
+      {
+        "default": "uniform",
+        "descricao": "Define se todos os vizinhos votam igual ou se os mais próximos têm mais peso.",
+        "efeito": "Com 'uniform' cada um dos k vizinhos vale o mesmo; com 'distance' vizinhos mais próximos pesam mais (peso proporcional ao inverso da distância).",
+        "faixa": "",
+        "nome": "weights",
+        "opcoes": [
+          "uniform",
+          "distance"
+        ],
+        "quando_ajustar": "Use 'distance' quando exemplos mais próximos forem mais confiáveis ou quando k for grande.",
+        "tipo": "str"
+      },
+      {
+        "default": "auto",
+        "descricao": "Algoritmo usado para encontrar os vizinhos mais próximos.",
+        "efeito": "Afeta apenas a velocidade da busca, não o resultado. 'auto' escolhe a melhor opção com base nos dados; 'brute' compara com todos os pontos.",
+        "faixa": "",
+        "nome": "algorithm",
+        "opcoes": [
+          "auto",
+          "ball_tree",
+          "kd_tree",
+          "brute"
+        ],
+        "quando_ajustar": "Geralmente deixe em 'auto'; ajuste só para otimizar desempenho em casos especiais.",
+        "tipo": "str"
+      },
+      {
+        "default": 30,
+        "descricao": "Tamanho da folha passado às estruturas BallTree/KDTree, afetando velocidade e memória da busca.",
+        "efeito": "Muda a velocidade da construção e da consulta e o uso de memória, sem alterar as previsões.",
+        "faixa": "10 a 50 (tipicamente)",
+        "nome": "leaf_size",
+        "opcoes": [],
+        "quando_ajustar": "Raramente precisa mexer; ajuste apenas para afinar desempenho.",
+        "tipo": "int"
+      },
+      {
+        "default": 2,
+        "descricao": "Parâmetro de potência da distância de Minkowski.",
+        "efeito": "p=1 usa distância de Manhattan (em 'quarteirões'); p=2 usa distância Euclidiana (linha reta).",
+        "faixa": "1 (Manhattan) a 2 (Euclidiana)",
+        "nome": "p",
+        "opcoes": [],
+        "quando_ajustar": "Use p=1 quando as características somam contribuições independentes; teste ambos se não tiver certeza.",
+        "tipo": "float"
+      },
+      {
+        "default": "minkowski",
+        "descricao": "A métrica de distância usada para medir a proximidade entre os pontos.",
+        "efeito": "Define como a 'distância' é calculada. Com p=2 e 'minkowski' equivale à Euclidiana.",
+        "faixa": "",
+        "nome": "metric",
+        "opcoes": [
+          "minkowski",
+          "euclidean",
+          "manhattan",
+          "precomputed"
+        ],
+        "quando_ajustar": "Normalmente mantenha 'minkowski'; mude se um tipo de distância específico fizer mais sentido para o seu problema.",
+        "tipo": "str"
+      }
+    ],
+    "intuicao": "A ideia central é 'diga-me com quem andas e te direi quem és'. Para decidir a categoria de um exemplo desconhecido, você procura os k exemplos conhecidos mais parecidos (mais próximos) e deixa que eles 'votem' na resposta. Se entre os 5 vizinhos mais próximos, 3 são gatos e 2 são cachorros, o novo bichinho é classificado como gato.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KNeighborsClassifier.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/classifier/confusion_matrix.html",
+    "naoUsarQuando": [
+      "Conjuntos de dados muito grandes, pois prever exige comparar com todos os exemplos.",
+      "Dados com muitas características (alta dimensão), onde as distâncias ficam pouco informativas.",
+      "Quando os atributos têm escalas muito diferentes e não foram normalizados.",
+      "Quando há muitos atributos irrelevantes que atrapalham o cálculo de distância."
+    ],
+    "quandoUsar": [
+      "Quando os dados têm poucas características e exemplos parecidos tendem a ter a mesma classe.",
+      "Como um modelo simples de referência (baseline) para comparar com modelos mais complexos.",
+      "Quando você quer um método fácil de explicar e sem suposições sobre o formato dos dados.",
+      "Quando o conjunto de treino não é gigantesco (a previsão fica lenta com muitos exemplos)."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "Classifier implementing the k-nearest neighbors vote.",
+        "tipo": "doc",
+        "titulo": "Documentação scikit-learn: KNeighborsClassifier",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KNeighborsClassifier.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "",
+        "tipo": "doc",
+        "titulo": "Guia do usuário: Nearest Neighbors",
+        "url": "https://scikit-learn.org/stable/modules/neighbors.html"
+      }
+    ],
+    "resumo_basico": "Imagine que você acabou de chegar numa escola nova e quer saber a qual turma você combina mais. Você olha para os colegas que estão mais pertinho de você e vê de qual turma a maioria deles é. O KNN faz exatamente isso: para adivinhar a categoria de algo novo, ele olha os 'vizinhos' mais parecidos e escolhe a categoria que mais aparece entre eles. Quem anda com a maioria, ganha o voto!",
+    "titulo": "K Vizinhos Mais Próximos (Classificação)",
+    "vantagens": [
+      "Muito simples de entender e explicar.",
+      "Não faz suposições sobre a distribuição dos dados.",
+      "Treino instantâneo: só guarda os exemplos.",
+      "Funciona bem com fronteiras de decisão complexas e irregulares."
+    ]
+  },
+  "knn_regressor": {
+    "conceitos": [
+      {
+        "desc": "A previsão é montada a partir dos valores dos vizinhos próximos, não de uma fórmula global.",
+        "nome": "Interpolação local"
+      },
+      {
+        "desc": "O valor previsto é a média dos valores-alvo dos k exemplos mais próximos.",
+        "nome": "Média dos vizinhos"
+      },
+      {
+        "desc": "Medida de quão parecidos dois exemplos são; a padrão é a Euclidiana.",
+        "nome": "Distância"
+      },
+      {
+        "desc": "Com weights='distance', vizinhos mais próximos influenciam mais a média que os distantes.",
+        "nome": "Média ponderada"
+      },
+      {
+        "desc": "O modelo não treina de fato; só guarda os exemplos e calcula tudo na hora de prever.",
+        "nome": "Lazy learning (aprendizado preguiçoso)"
+      }
+    ],
+    "descricao": "O KNeighborsRegressor prevê valores numéricos usando os k exemplos mais próximos: a previsão é a média (ou média ponderada pela distância) dos valores-alvo desses vizinhos. Assim como o classificador, é um método baseado em instâncias que apenas guarda os dados no treino e calcula as distâncias na hora de prever.\n\nO modelo é muito sensível à escala dos atributos, então normalizar os dados é recomendável. O parâmetro 'weights' controla se os vizinhos contribuem igualmente para a média ou se os mais próximos pesam mais, o que costuma deixar a previsão mais suave e precisa.",
+    "desvantagens": [
+      "Previsão lenta e que usa muita memória em bases grandes.",
+      "Sensível à escala dos atributos e a ruído.",
+      "Não extrapola: previsões ficam limitadas à faixa de valores vistos no treino.",
+      "Escolher o k certo exige experimentação."
+    ],
+    "dicas": [
+      "Padronize ou normalize os dados antes de treinar.",
+      "Teste vários valores de k com validação cruzada.",
+      "Experimente weights='distance' para suavizar a previsão e dar mais peso aos vizinhos próximos.",
+      "Remova atributos irrelevantes para melhorar o cálculo das distâncias.",
+      "Lembre-se de que o KNN não prevê bem valores muito acima ou abaixo do que viu no treino."
+    ],
+    "exemplo": "Você quer adivinhar quantos sorvetes uma loja vai vender amanhã, sabendo só a temperatura prevista. O KNN (com k=3) procura os 3 dias do passado com temperatura mais parecida com a de amanhã e faz a média de sorvetes vendidos naqueles dias. Essa média é o palpite dele!",
+    "exemplo_codigo": "from sklearn.neighbors import KNeighborsRegressor\nfrom sklearn.datasets import load_diabetes\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_diabetes(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = KNeighborsRegressor(n_neighbors=5)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": 5,
+        "descricao": "Número de vizinhos (k) cujos valores são usados na média para prever o alvo.",
+        "efeito": "k pequeno deixa a previsão sensível a ruído (curva irregular); k grande suaviza demais e pode ignorar padrões locais.",
+        "faixa": "1 a ~30 (tipicamente)",
+        "nome": "n_neighbors",
+        "opcoes": [],
+        "quando_ajustar": "Teste vários valores com validação cruzada e escolha o que dá menor erro.",
+        "tipo": "int"
+      },
+      {
+        "default": "uniform",
+        "descricao": "Define se todos os vizinhos contribuem igual na média ou se os mais próximos pesam mais.",
+        "efeito": "Com 'uniform' faz média simples dos k vizinhos; com 'distance' faz média ponderada pelo inverso da distância (vizinhos próximos pesam mais).",
+        "faixa": "",
+        "nome": "weights",
+        "opcoes": [
+          "uniform",
+          "distance"
+        ],
+        "quando_ajustar": "Use 'distance' para previsões mais suaves quando exemplos próximos forem mais relevantes.",
+        "tipo": "str"
+      },
+      {
+        "default": "auto",
+        "descricao": "Algoritmo usado para encontrar os vizinhos mais próximos.",
+        "efeito": "Afeta apenas a velocidade da busca, não o resultado. 'auto' decide a melhor opção a partir dos dados.",
+        "faixa": "",
+        "nome": "algorithm",
+        "opcoes": [
+          "auto",
+          "ball_tree",
+          "kd_tree",
+          "brute"
+        ],
+        "quando_ajustar": "Normalmente deixe em 'auto'; mude só para otimizar desempenho.",
+        "tipo": "str"
+      },
+      {
+        "default": 30,
+        "descricao": "Tamanho da folha das estruturas BallTree/KDTree, afetando velocidade e memória da busca.",
+        "efeito": "Muda velocidade e uso de memória da busca, sem alterar as previsões.",
+        "faixa": "10 a 50 (tipicamente)",
+        "nome": "leaf_size",
+        "opcoes": [],
+        "quando_ajustar": "Raramente precisa mexer; ajuste apenas para afinar desempenho.",
+        "tipo": "int"
+      },
+      {
+        "default": 2,
+        "descricao": "Parâmetro de potência da distância de Minkowski.",
+        "efeito": "p=1 usa distância de Manhattan; p=2 usa distância Euclidiana (linha reta).",
+        "faixa": "1 (Manhattan) a 2 (Euclidiana)",
+        "nome": "p",
+        "opcoes": [],
+        "quando_ajustar": "Teste ambos se não tiver certeza de qual distância representa melhor o problema.",
+        "tipo": "float"
+      },
+      {
+        "default": "minkowski",
+        "descricao": "A métrica de distância usada para medir a proximidade entre os pontos.",
+        "efeito": "Define como a distância é calculada. Com p=2 e 'minkowski' equivale à Euclidiana.",
+        "faixa": "",
+        "nome": "metric",
+        "opcoes": [
+          "minkowski",
+          "euclidean",
+          "manhattan",
+          "precomputed"
+        ],
+        "quando_ajustar": "Normalmente mantenha 'minkowski'; mude conforme a necessidade do problema.",
+        "tipo": "str"
+      }
+    ],
+    "intuicao": "Para estimar um número de algo desconhecido, pergunte aos exemplos mais parecidos qual é o número deles e tire a média. Se você quer saber quanto tempo levará para terminar uma corrida, olhe pessoas com preparo físico parecido com o seu e faça a média dos tempos delas.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KNeighborsRegressor.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/regressor/residuals.html",
+    "naoUsarQuando": [
+      "Conjuntos de dados muito grandes, pois cada previsão compara com todos os exemplos.",
+      "Dados com muitas características (alta dimensão).",
+      "Quando os atributos têm escalas diferentes e não foram normalizados.",
+      "Quando você precisa prever valores fora da faixa observada (KNN não extrapola)."
+    ],
+    "quandoUsar": [
+      "Quando você quer prever um número e exemplos parecidos têm valores parecidos.",
+      "Como modelo simples de referência (baseline) para regressão.",
+      "Quando a relação entre atributos e alvo é local e irregular (não uma linha reta).",
+      "Quando o conjunto de treino não é muito grande."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "The target is predicted by local interpolation of the targets associated of the nearest neighbors in the training set.",
+        "tipo": "doc",
+        "titulo": "Documentação scikit-learn: KNeighborsRegressor",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KNeighborsRegressor.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "",
+        "tipo": "doc",
+        "titulo": "Guia do usuário: Nearest Neighbors",
+        "url": "https://scikit-learn.org/stable/modules/neighbors.html"
+      }
+    ],
+    "resumo_basico": "Quer adivinhar o preço de uma casa nova? Você olha as casas mais parecidas e vizinhas (mesmo tamanho, mesmo bairro) e faz uma média dos preços delas. O KNN de regressão faz isso: para prever um número, ele acha os exemplos mais próximos e tira a média dos valores deles. Os vizinhos parecidos dão a melhor pista do valor!",
+    "titulo": "K Vizinhos Mais Próximos (Regressão)",
+    "vantagens": [
+      "Simples de entender e de explicar.",
+      "Não assume nenhuma forma específica da relação entre dados e alvo.",
+      "Treino instantâneo: só guarda os exemplos.",
+      "Captura padrões locais complexos."
+    ]
+  },
+  "mlp": {
+    "conceitos": [
+      {
+        "desc": "Unidade que recebe vários números, soma com pesos e aplica uma função de ativação para gerar uma saída.",
+        "nome": "Neurônio"
+      },
+      {
+        "desc": "Camada de neurônios entre a entrada e a saída; é onde a rede aprende padrões mais complexos.",
+        "nome": "Camada escondida"
+      },
+      {
+        "desc": "Números que medem a força de cada conexão; treinar é ajustar esses pesos.",
+        "nome": "Pesos"
+      },
+      {
+        "desc": "Regra que decide quanto sinal o neurônio deixa passar (por padrão a 'relu').",
+        "nome": "Função de ativação"
+      },
+      {
+        "desc": "Método que ajusta os pesos a cada rodada para diminuir o erro (por padrão o 'adam').",
+        "nome": "Otimizador (solver)"
+      },
+      {
+        "desc": "Uma passada completa pelos dados de treino; controlada por max_iter.",
+        "nome": "Época (iteração)"
+      }
+    ],
+    "descricao": "O MLPClassifier (Multi-layer Perceptron Classifier) é uma rede neural artificial para tarefas de classificação. Ele tem uma camada de entrada (os dados), uma ou mais camadas escondidas de neurônios e uma camada de saída que dá a categoria prevista. Durante o treino, ele ajusta os pesos das conexões entre os neurônios para reduzir os erros, usando um algoritmo de otimização (por padrão o 'adam').",
+    "desvantagens": [
+      "É uma caixa-preta: difícil explicar a decisão.",
+      "Sensível à escala dos dados; quase sempre exige normalização antes.",
+      "Tem muitos ajustes (hiperparâmetros) e pode demorar para treinar.",
+      "Pode dar resultados diferentes a cada execução por causa da inicialização aleatória."
+    ],
+    "dicas": [
+      "Normalize/escalone as características antes (por exemplo, com StandardScaler).",
+      "Comece com a arquitetura padrão (uma camada de 100 neurônios) e só aumente se precisar.",
+      "Se o treino parar antes de aprender, aumente max_iter ou ligue early_stopping.",
+      "Defina random_state para conseguir repetir o mesmo resultado.",
+      "Se a rede decorar (overfitting), aumente alpha (regularização)."
+    ],
+    "exemplo": "Você quer descobrir se um aluno vai passar ou não com base em horas de estudo, notas anteriores e frequência. Depois de normalizar os dados, treina um MLPClassifier; a rede combina essas características nas camadas escondidas e aprende a prever 'passa' ou 'não passa' para novos alunos.",
+    "exemplo_codigo": "from sklearn.neural_network import MLPClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_iris(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = MLPClassifier(hidden_layer_sizes=(100,), max_iter=1000, random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))",
+    "hiperparametros_doc": [
+      {
+        "default": "(100,)",
+        "descricao": "Quantidade de neurônios em cada camada escondida; cada número é uma camada.",
+        "efeito": "Mais/maiores camadas aumentam a capacidade de aprender padrões complexos, mas custam mais tempo e podem causar overfitting.",
+        "faixa": "ex.: (100,), (50, 50), (64, 32, 16)",
+        "nome": "hidden_layer_sizes",
+        "quando_ajustar": "Aumente quando o problema for difícil e houver muitos dados; diminua se a rede estiver decorando.",
+        "tipo": "tuple de int"
+      },
+      {
+        "default": "'relu'",
+        "descricao": "Função de ativação dos neurônios das camadas escondidas.",
+        "efeito": "Define a não linearidade da rede; 'relu' costuma treinar rápido e bem na maioria dos casos.",
+        "nome": "activation",
+        "opcoes": [
+          "identity",
+          "logistic",
+          "tanh",
+          "relu"
+        ],
+        "quando_ajustar": "Experimente 'tanh' se a 'relu' não convergir bem; 'identity' deixa a rede praticamente linear.",
+        "tipo": "str"
+      },
+      {
+        "default": "'adam'",
+        "descricao": "Algoritmo que ajusta os pesos durante o treino.",
+        "efeito": "'adam' funciona bem em geral; 'lbfgs' pode ser melhor para conjuntos pequenos; 'sgd' dá mais controle fino.",
+        "nome": "solver",
+        "opcoes": [
+          "lbfgs",
+          "sgd",
+          "adam"
+        ],
+        "quando_ajustar": "Use 'lbfgs' com poucos dados; mantenha 'adam' para conjuntos médios/grandes.",
+        "tipo": "str"
+      },
+      {
+        "default": "0.0001",
+        "descricao": "Força da regularização L2 (penaliza pesos grandes para evitar decorar).",
+        "efeito": "Valores maiores deixam o modelo mais simples e menos propenso a overfitting; muito alto causa underfitting.",
+        "faixa": "0.00001 a 1.0",
+        "nome": "alpha",
+        "quando_ajustar": "Aumente se a rede estiver decorando os dados de treino.",
+        "tipo": "float"
+      },
+      {
+        "default": "'constant'",
+        "descricao": "Como a taxa de aprendizado muda ao longo do treino (só com solver='sgd').",
+        "efeito": "'constant' mantém fixa; 'adaptive' reduz quando o treino para de melhorar.",
+        "nome": "learning_rate",
+        "opcoes": [
+          "constant",
+          "invscaling",
+          "adaptive"
+        ],
+        "quando_ajustar": "Use 'adaptive' com solver='sgd' se o treino estagnar.",
+        "tipo": "str"
+      },
+      {
+        "default": "200",
+        "descricao": "Número máximo de iterações (épocas) de treino.",
+        "efeito": "Mais iterações dão mais tempo para a rede convergir, mas aumentam o tempo de treino.",
+        "faixa": "100 a 1000+",
+        "nome": "max_iter",
+        "quando_ajustar": "Aumente se aparecer aviso de que o modelo não convergiu.",
+        "tipo": "int"
+      }
+    ],
+    "intuicao": "Imagine uma fila de pessoas passando um recado, e cada pessoa pode reforçar ou enfraquecer o que ouviu antes de passar adiante. As camadas escondidas funcionam assim: cada neurônio combina os sinais que recebe, decide o quanto deixa passar (a 'ativação') e envia para a próxima camada. Treinar a rede é descobrir os melhores 'pesos' para que o recado final acerte a categoria certa.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.neural_network.MLPClassifier.html",
+    "naoUsarQuando": [
+      "Quando há poucos dados de treino (a rede tende a decorar em vez de aprender).",
+      "Quando você precisa explicar facilmente por que o modelo decidiu algo (é uma 'caixa-preta').",
+      "Quando um modelo mais simples (como árvore ou regressão logística) já resolve bem.",
+      "Quando você não pode escalonar/normalizar as características (sem isso o treino fica instável)."
+    ],
+    "quandoUsar": [
+      "Quando os padrões nos dados são complexos e não lineares (uma reta simples não separa as classes).",
+      "Quando você tem uma quantidade razoável de exemplos para treinar.",
+      "Em problemas com muitas características (colunas) que interagem entre si.",
+      "Quando você consegue normalizar os dados antes (a rede aprende melhor assim)."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "MLPClassifier(hidden_layer_sizes=(100,), activation='relu', *, solver='adam', alpha=0.0001, ...). This model optimizes the log-loss function using LBFGS or stochastic gradient descent.",
+        "tipo": "doc",
+        "titulo": "MLPClassifier",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.neural_network.MLPClassifier.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "Multi-layer Perceptron (MLP) is a supervised learning algorithm that learns a function by training on a dataset, given a set of features and a target.",
+        "tipo": "doc",
+        "titulo": "Neural network models (supervised)",
+        "url": "https://scikit-learn.org/stable/modules/neural_networks_supervised.html"
+      }
+    ],
+    "resumo_basico": "O MLPClassifier é como um mini-cérebro de computador feito de muitos neurônios ligados em camadas. Você mostra exemplos para ele e os neurônios vão ajustando suas conexões até aprender a separar as coisas em grupos, como dizer se uma foto é de gato ou de cachorro. Quanto mais exemplos bons você dá, melhor ele aprende.",
+    "titulo": "Rede Neural (MLP) para Classificação",
+    "vantagens": [
+      "Aprende relações complexas e não lineares entre as características.",
+      "Funciona para classificação binária e de várias classes.",
+      "Pode melhorar muito com mais camadas e neurônios em problemas difíceis."
+    ]
+  },
+  "mlp_regressor": {
+    "conceitos": [
+      {
+        "desc": "Unidade que recebe vários números, soma com pesos e aplica uma função de ativação para gerar uma saída.",
+        "nome": "Neurônio"
+      },
+      {
+        "desc": "Camada de neurônios entre a entrada e a saída; é onde a rede aprende padrões mais complexos.",
+        "nome": "Camada escondida"
+      },
+      {
+        "desc": "Números que medem a força de cada conexão; treinar é ajustar esses pesos.",
+        "nome": "Pesos"
+      },
+      {
+        "desc": "Diferente da classificação, a camada de saída produz um número (valor previsto), não uma categoria.",
+        "nome": "Saída contínua"
+      },
+      {
+        "desc": "Mede o quanto a previsão erra; o treino tenta deixá-lo o menor possível.",
+        "nome": "Erro quadrático (loss)"
+      },
+      {
+        "desc": "Método que ajusta os pesos a cada rodada para diminuir o erro (por padrão o 'adam').",
+        "nome": "Otimizador (solver)"
+      }
+    ],
+    "descricao": "O MLPRegressor (Multi-layer Perceptron Regressor) é uma rede neural artificial para tarefas de regressão, ou seja, prever valores contínuos. Tem uma camada de entrada, uma ou mais camadas escondidas de neurônios e uma camada de saída que produz um número. Durante o treino, ajusta os pesos para minimizar o erro quadrático ('squared_error') usando, por padrão, o otimizador 'adam'.",
+    "desvantagens": [
+      "É uma caixa-preta: difícil explicar a previsão.",
+      "Muito sensível à escala dos dados; quase sempre exige normalização.",
+      "Tem muitos hiperparâmetros e pode demorar para treinar.",
+      "Resultados podem variar entre execuções por causa da inicialização aleatória."
+    ],
+    "dicas": [
+      "Normalize/escalone as características (e considere escalonar o alvo) antes de treinar.",
+      "Comece com a arquitetura padrão (uma camada de 100 neurônios) e só aumente se precisar.",
+      "Se aparecer aviso de não convergência, aumente max_iter ou ligue early_stopping.",
+      "Defina random_state para reproduzir os mesmos resultados.",
+      "Se a rede decorar, aumente alpha para regularizar mais."
+    ],
+    "exemplo": "Você quer prever a temperatura de amanhã usando umidade, pressão e temperatura de hoje. Depois de normalizar os dados, treina um MLPRegressor; as camadas escondidas combinam essas características e a saída devolve um número estimado para a temperatura.",
+    "exemplo_codigo": "from sklearn.neural_network import MLPRegressor\nfrom sklearn.datasets import load_diabetes\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_diabetes(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = MLPRegressor(hidden_layer_sizes=(100,), max_iter=2000, random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))",
+    "hiperparametros_doc": [
+      {
+        "default": "(100,)",
+        "descricao": "Quantidade de neurônios em cada camada escondida; cada número é uma camada.",
+        "efeito": "Mais/maiores camadas aumentam a capacidade de aprender padrões complexos, mas custam mais tempo e podem causar overfitting.",
+        "faixa": "ex.: (100,), (50, 50), (64, 32, 16)",
+        "nome": "hidden_layer_sizes",
+        "quando_ajustar": "Aumente quando o problema for difícil e houver muitos dados; diminua se a rede estiver decorando.",
+        "tipo": "tuple de int"
+      },
+      {
+        "default": "'relu'",
+        "descricao": "Função de ativação dos neurônios das camadas escondidas.",
+        "efeito": "Define a não linearidade da rede; 'relu' costuma treinar rápido e bem na maioria dos casos.",
+        "nome": "activation",
+        "opcoes": [
+          "identity",
+          "logistic",
+          "tanh",
+          "relu"
+        ],
+        "quando_ajustar": "Experimente 'tanh' se a 'relu' não convergir bem; 'identity' deixa a rede praticamente linear.",
+        "tipo": "str"
+      },
+      {
+        "default": "'adam'",
+        "descricao": "Algoritmo que ajusta os pesos durante o treino.",
+        "efeito": "'adam' funciona bem em geral; 'lbfgs' pode ser melhor para conjuntos pequenos; 'sgd' dá mais controle fino.",
+        "nome": "solver",
+        "opcoes": [
+          "lbfgs",
+          "sgd",
+          "adam"
+        ],
+        "quando_ajustar": "Use 'lbfgs' com poucos dados; mantenha 'adam' para conjuntos médios/grandes.",
+        "tipo": "str"
+      },
+      {
+        "default": "0.0001",
+        "descricao": "Força da regularização L2 (penaliza pesos grandes para evitar decorar).",
+        "efeito": "Valores maiores deixam o modelo mais simples e menos propenso a overfitting; muito alto causa underfitting.",
+        "faixa": "0.00001 a 1.0",
+        "nome": "alpha",
+        "quando_ajustar": "Aumente se a rede estiver decorando os dados de treino.",
+        "tipo": "float"
+      },
+      {
+        "default": "'constant'",
+        "descricao": "Como a taxa de aprendizado muda ao longo do treino (só com solver='sgd').",
+        "efeito": "'constant' mantém fixa; 'adaptive' reduz quando o treino para de melhorar.",
+        "nome": "learning_rate",
+        "opcoes": [
+          "constant",
+          "invscaling",
+          "adaptive"
+        ],
+        "quando_ajustar": "Use 'adaptive' com solver='sgd' se o treino estagnar.",
+        "tipo": "str"
+      },
+      {
+        "default": "200",
+        "descricao": "Número máximo de iterações (épocas) de treino.",
+        "efeito": "Mais iterações dão mais tempo para a rede convergir, mas aumentam o tempo de treino.",
+        "faixa": "100 a 1000+",
+        "nome": "max_iter",
+        "quando_ajustar": "Aumente se aparecer aviso de que o modelo não convergiu.",
+        "tipo": "int"
+      }
+    ],
+    "intuicao": "Pense em vários ajudantes em sequência estimando o preço de uma casa: o primeiro olha o tamanho, o segundo combina com o bairro, o terceiro com o número de quartos, e assim por diante. Cada neurônio mistura os sinais que recebe e passa adiante; treinar a rede é encontrar os melhores pesos para que o número final fique o mais perto possível do valor verdadeiro.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.neural_network.MLPRegressor.html",
+    "naoUsarQuando": [
+      "Quando há poucos dados (a rede decora em vez de generalizar).",
+      "Quando você precisa explicar claramente como chegou ao número previsto.",
+      "Quando um modelo simples como regressão linear já resolve bem.",
+      "Quando não é possível escalonar/normalizar as características."
+    ],
+    "quandoUsar": [
+      "Quando você quer prever um número (preço, temperatura, nota) e a relação é complexa/não linear.",
+      "Quando há uma boa quantidade de exemplos com a resposta numérica certa.",
+      "Em problemas com muitas características que interagem de formas complicadas.",
+      "Quando você consegue normalizar entradas (e às vezes a saída) antes de treinar."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "MLPRegressor(hidden_layer_sizes=(100,), activation='relu', *, solver='adam', alpha=0.0001, ...). This model optimizes the squared error using LBFGS or stochastic gradient descent.",
+        "tipo": "doc",
+        "titulo": "MLPRegressor",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.neural_network.MLPRegressor.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "Class MLPRegressor implements a multi-layer perceptron (MLP) that trains using backpropagation with no activation function in the output layer.",
+        "tipo": "doc",
+        "titulo": "Neural network models (supervised)",
+        "url": "https://scikit-learn.org/stable/modules/neural_networks_supervised.html"
+      }
+    ],
+    "resumo_basico": "O MLPRegressor é como um mini-cérebro de computador feito de neurônios em camadas, mas em vez de escolher uma categoria, ele chuta um número. Você mostra exemplos com a resposta certa (um valor) e os neurônios ajustam suas conexões até aprender a prever números novos, como o preço de uma casa. Quanto melhores os exemplos, mais perto do valor real ele acerta.",
+    "titulo": "Rede Neural (MLP) para Regressão",
+    "vantagens": [
+      "Captura relações não lineares entre as características e o valor previsto.",
+      "Flexível: a arquitetura pode crescer para problemas mais difíceis.",
+      "Funciona com muitas características numéricas ao mesmo tempo."
+    ]
+  },
+  "naive_bayes": {
+    "conceitos": [
+      {
+        "desc": "Uma regra que atualiza a probabilidade de uma hipótese (a classe) depois de ver evidências (as características). Em linguagem simples: começa com um palpite inicial e ajusta conforme as pistas aparecem.",
+        "nome": "Teorema de Bayes"
+      },
+      {
+        "desc": "O palpite inicial sobre cada classe antes de olhar as características. Por exemplo, se 70 por cento dos e-mails são spam, o spam já começa mais provável.",
+        "nome": "Probabilidade a priori"
+      },
+      {
+        "desc": "A chance de observar os valores das características supondo que a amostra pertence a uma certa classe.",
+        "nome": "Verossimilhança"
+      },
+      {
+        "desc": "O modelo finge que cada característica não influencia as outras. Isso raramente é verdade, mas facilita muito a conta e ainda funciona bem.",
+        "nome": "Suposição ingênua de independência"
+      },
+      {
+        "desc": "A curva em forma de sino usada para descrever os valores de cada característica dentro de uma classe, com uma média e uma variância.",
+        "nome": "Distribuição normal (Gaussiana)"
+      }
+    ],
+    "descricao": "O Naive Bayes Gaussiano é um classificador probabilístico baseado no Teorema de Bayes. Ele estima, para cada classe, a probabilidade de uma amostra pertencer a ela combinando a probabilidade a priori da classe com a verossimilhança das características observadas. A versão Gaussiana assume que os valores de cada característica, dentro de uma mesma classe, seguem uma distribuição normal (curva em forma de sino), descrita por uma média e uma variância calculadas a partir dos dados de treino.\n\nA palavra \"ingênuo\" (naive) vem da suposição de que todas as características são independentes entre si dado o rótulo da classe. Isso quase nunca é verdade no mundo real, mas simplifica enormemente os cálculos: basta multiplicar as probabilidades de cada característica. O resultado é um modelo muito rápido de treinar e de prever, que funciona surpreendentemente bem em muitos problemas, especialmente com muitas características.",
+    "desvantagens": [
+      "A suposição de independência entre características quase nunca é verdadeira.",
+      "As probabilidades que ele estima costumam ser pouco confiáveis em valor exato.",
+      "Pode ter desempenho ruim quando as características são fortemente correlacionadas."
+    ],
+    "dicas": [
+      "Use como baseline rápido antes de testar modelos mais pesados.",
+      "Se uma característica tiver variância quase zero, o parâmetro var_smoothing ajuda a evitar erros numéricos.",
+      "Padronizar os dados não é obrigatório, mas observar a forma das distribuições ajuda a saber se a versão Gaussiana é adequada."
+    ],
+    "exemplo": "Classificar flores de íris em três espécies usando comprimento e largura das pétalas e sépalas. O modelo aprende a média e a variância de cada medida em cada espécie e, para uma flor nova, calcula qual espécie é mais provável.",
+    "exemplo_codigo": "from sklearn.naive_bayes import GaussianNB\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = GaussianNB()\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "None",
+        "descricao": "Probabilidades a priori das classes. Se você definir, elas não são ajustadas a partir dos dados. Se deixar como None, o modelo aprende as proporções de cada classe a partir do treino.",
+        "efeito": "Controla o palpite inicial sobre o quanto cada classe é comum antes de olhar as características.",
+        "faixa": "valores que somam 1, um por classe",
+        "nome": "priors",
+        "quando_ajustar": "Ajuste apenas quando você já conhece, por fora dos dados, a frequência real de cada classe e o treino não a representa bem.",
+        "tipo": "array de tamanho (n_classes,) ou None"
+      },
+      {
+        "default": "1e-9",
+        "descricao": "Uma pequena fração da maior variância entre todas as características que é somada a todas as variâncias, para dar estabilidade aos cálculos e evitar divisões por valores muito pequenos.",
+        "efeito": "Valores maiores deixam o modelo mais tolerante a características com variância muito baixa, suavizando as curvas.",
+        "faixa": "valores pequenos e positivos, por exemplo de 1e-12 a 1e-3",
+        "nome": "var_smoothing",
+        "quando_ajustar": "Aumente um pouco se aparecerem erros numéricos ou se alguma característica tiver valores quase iguais dentro de uma classe.",
+        "tipo": "float"
+      }
+    ],
+    "intuicao": "Para cada classe possível, o modelo pergunta: \"qual a chance de eu ver exatamente esses valores se a resposta fosse esta classe?\". Ele multiplica as chances de cada característica (tratando-as como independentes) e ainda leva em conta o quão comum cada classe é. No final, escolhe a classe com a maior probabilidade combinada.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.naive_bayes.GaussianNB.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/classifier/classification_report.html",
+    "naoUsarQuando": [
+      "Quando as características são muito dependentes umas das outras, pois a suposição ingênua atrapalha.",
+      "Quando você precisa de probabilidades muito precisas e bem calibradas (o Naive Bayes costuma exagerar nelas).",
+      "Quando os dados não se parecem nem um pouco com curvas em forma de sino, sem nenhum tratamento."
+    ],
+    "quandoUsar": [
+      "Quando você precisa de um modelo rápido para treinar e prever, mesmo com muitos dados.",
+      "Quando há muitas características numéricas.",
+      "Como ponto de partida (baseline) para comparar com modelos mais complexos.",
+      "Quando o conjunto de dados de treino é pequeno, pois ele precisa de poucos exemplos para estimar as probabilidades."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "Gaussian Naive Bayes (GaussianNB). Can perform online updates to model parameters via partial_fit.",
+        "tipo": "doc",
+        "titulo": "GaussianNB",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.naive_bayes.GaussianNB.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "Naive Bayes methods are a set of supervised learning algorithms based on applying Bayes' theorem with the 'naive' assumption of conditional independence between every pair of features given the value of the class variable.",
+        "tipo": "doc",
+        "titulo": "Naive Bayes",
+        "url": "https://scikit-learn.org/stable/modules/naive_bayes.html"
+      }
+    ],
+    "resumo_basico": "Imagine que você adivinha se uma fruta é uma maçã ou uma laranja só olhando a cor e o tamanho. O Naive Bayes faz isso com probabilidade: ele calcula a chance de cada resposta e escolhe a mais provável. Ele é chamado de \"ingênuo\" porque finge que cada pista (cor, tamanho) não tem nada a ver uma com a outra, mesmo que tenham. Mesmo sendo simples assim, ele costuma acertar bastante.",
+    "titulo": "Naive Bayes Gaussiano",
+    "vantagens": [
+      "Muito rápido para treinar e para fazer previsões.",
+      "Funciona bem mesmo com poucos exemplos de treino.",
+      "Lida bem com um número grande de características.",
+      "Simples de entender e de implementar."
+    ]
+  },
+  "pca": {
+    "conceitos": [
+      {
+        "desc": "A quantidade de características (colunas) que cada dado tem; muitas dimensões dificultam a análise.",
+        "nome": "Dimensionalidade"
+      },
+      {
+        "desc": "Uma nova direção, combinação das características originais, que captura bastante da variação dos dados.",
+        "nome": "Componente principal"
+      },
+      {
+        "desc": "Quanto da informação original cada componente principal consegue representar.",
+        "nome": "Variância explicada"
+      },
+      {
+        "desc": "Trocar muitas características por poucas, mantendo o que mais importa.",
+        "nome": "Redução de dimensionalidade"
+      },
+      {
+        "desc": "Transformar os dados originais nas novas direções escolhidas pelo PCA.",
+        "nome": "Projeção"
+      }
+    ],
+    "descricao": "O PCA (Análise de Componentes Principais) é uma técnica de redução de dimensionalidade. Quando os dados têm muitas características (colunas), fica difícil visualizar e treinar modelos. O PCA encontra novas direções, chamadas componentes principais, que capturam a maior parte da variação dos dados. A primeira componente é a direção em que os dados mais se espalham; a segunda é a próxima direção mais importante e independente da primeira, e assim por diante.\n\nTecnicamente, o PCA centraliza os dados e usa a decomposição em valores singulares (SVD) para projetar tudo em um espaço com menos dimensões, preservando o máximo de variância possível. Você pode pedir quantas componentes quer manter, ou pedir que ele guarde componentes suficientes para reter uma certa porcentagem da informação. É muito usado para visualizar dados em 2D ou 3D e para acelerar e simplificar outros modelos.",
+    "desvantagens": [
+      "As novas componentes são difíceis de interpretar, pois misturam várias características.",
+      "Só captura relações lineares entre os dados.",
+      "Pode descartar informações úteis se você guardar poucas componentes.",
+      "É sensível à escala das características, exigindo normalização antes."
+    ],
+    "dicas": [
+      "Normalize ou padronize os dados antes (por exemplo com o StandardScaler) para que nenhuma característica domine.",
+      "Use a variância explicada para decidir quantas componentes manter (por exemplo, o suficiente para 95%).",
+      "Para visualizar, escolha n_components=2 ou 3.",
+      "Defina random_state ao usar os solvers 'arpack' ou 'randomized' para resultados repetíveis."
+    ],
+    "exemplo": "Uma escola tem uma tabela com 20 notas e medidas de cada aluno e quer fazer um gráfico simples mostrando quais alunos se parecem. Usando o PCA com n_components=2, as 20 características viram apenas duas, permitindo desenhar todos os alunos num gráfico de dois eixos, onde alunos parecidos ficam perto uns dos outros.",
+    "exemplo_codigo": "from sklearn.decomposition import PCA\nfrom sklearn.datasets import load_iris\n\nX, y = load_iris(return_X_y=True)\n\npca = PCA(n_components=2)\nX_2d = pca.fit_transform(X)\nprint(X_2d[:5])\nprint(pca.explained_variance_ratio_)",
+    "hiperparametros_doc": [
+      {
+        "default": "None",
+        "descricao": "Quantas componentes principais manter (ou quanta variância preservar).",
+        "efeito": "Menos componentes resumem mais (mas perdem detalhe); um valor entre 0 e 1 guarda componentes até atingir aquela fração de informação.",
+        "faixa": "inteiro de 1 ao número de características, ou fração entre 0 e 1",
+        "nome": "n_components",
+        "quando_ajustar": "Use 2 ou 3 para visualizar; use uma fração como 0.95 para manter 95% da informação.",
+        "tipo": "int, float ou str"
+      },
+      {
+        "default": "False",
+        "descricao": "Se as componentes devem ser reescaladas para terem variância igual (unitária).",
+        "efeito": "Quando True, deixa as componentes na mesma escala, o que pode ajudar alguns modelos seguintes.",
+        "nome": "whiten",
+        "opcoes": [
+          "True",
+          "False"
+        ],
+        "quando_ajustar": "Ative apenas se o próximo modelo se beneficiar de componentes na mesma escala.",
+        "tipo": "bool"
+      },
+      {
+        "default": "'auto'",
+        "descricao": "Algoritmo usado para calcular a decomposição (SVD) por baixo dos panos.",
+        "efeito": "O 'auto' escolhe o método mais adequado ao tamanho dos dados; alguns são mais rápidos com muitos dados.",
+        "nome": "svd_solver",
+        "opcoes": [
+          "auto",
+          "full",
+          "covariance_eigh",
+          "arpack",
+          "randomized"
+        ],
+        "quando_ajustar": "Quase sempre deixe em 'auto'; ajuste só para otimizar casos muito grandes.",
+        "tipo": "str"
+      },
+      {
+        "default": "0.0",
+        "descricao": "Tolerância para os valores singulares (usada com o solver 'arpack').",
+        "efeito": "Valores maiores podem acelerar o cálculo aproximado, com menos precisão.",
+        "faixa": "0.0 ou mais",
+        "nome": "tol",
+        "quando_ajustar": "Raramente; só ao usar o solver 'arpack' e precisar ajustar velocidade.",
+        "tipo": "float"
+      },
+      {
+        "default": "None",
+        "descricao": "Semente de aleatoriedade que torna o resultado repetível com solvers aleatórios.",
+        "efeito": "Fixar um número garante o mesmo resultado nos solvers 'arpack' ou 'randomized'.",
+        "faixa": "qualquer número inteiro",
+        "nome": "random_state",
+        "quando_ajustar": "Defina um número fixo quando usar esses solvers e quiser repetir o experimento.",
+        "tipo": "int ou None"
+      }
+    ],
+    "intuicao": "Pense na sombra de um objeto 3D projetada numa parede. Se você girar o objeto até a sombra mostrar o máximo de detalhes, essa é a melhor direção para olhar. O PCA escolhe automaticamente esses melhores ângulos para resumir muitos números em poucos, jogando fora o que quase não muda nada.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/features/pca.html",
+    "naoUsarQuando": [
+      "Quando você precisa entender o significado exato de cada característica original (as componentes são misturas).",
+      "Quando as relações entre as características são muito não lineares (o PCA é linear).",
+      "Quando há poucas características e nenhuma sobra de informação para resumir.",
+      "Quando os dados não foram colocados em escalas comparáveis (uma característica grande pode dominar)."
+    ],
+    "quandoUsar": [
+      "Quando há muitas características e você quer simplificar os dados.",
+      "Para visualizar dados complexos em 2D ou 3D.",
+      "Para acelerar o treino de outros modelos reduzindo o número de colunas.",
+      "Quando muitas características parecem repetir a mesma informação (estão correlacionadas)."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "Linear dimensionality reduction using Singular Value Decomposition of the data to project it to a lower dimensional space.",
+        "tipo": "doc",
+        "titulo": "sklearn.decomposition.PCA",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "PCA is used to decompose a multivariate dataset in a set of successive orthogonal components that explain a maximum amount of the variance.",
+        "tipo": "doc",
+        "titulo": "Decomposing signals in components",
+        "url": "https://scikit-learn.org/stable/modules/decomposition.html"
+      }
+    ],
+    "resumo_basico": "Imagine que você tem uma tabela gigante com dezenas de características de cada aluno e quer resumir tudo em poucos números, sem perder o que mais importa. O PCA faz isso: ele junta muitas características em poucas, mantendo as informações que mais diferenciam os dados. É como tirar uma boa foto de um objeto: você troca as três dimensões por uma imagem que ainda mostra o essencial.",
+    "titulo": "PCA (Análise de Componentes Principais)",
+    "vantagens": [
+      "Reduz a quantidade de características mantendo o essencial.",
+      "Facilita a visualização de dados complexos.",
+      "Pode deixar outros modelos mais rápidos e simples.",
+      "Ajuda a remover ruído e informação repetida."
+    ]
+  },
+  "perceptron": {
+    "conceitos": [
+      {
+        "desc": "Separa as classes com uma linha (ou plano) reta no espaço dos dados.",
+        "nome": "Modelo linear"
+      },
+      {
+        "desc": "Só ajusta os pesos quando erra um exemplo; quando acerta, não muda nada.",
+        "nome": "Aprendizado por erro"
+      },
+      {
+        "desc": "Diferente da regressão logística, ele dá só a classe, não a confiança.",
+        "nome": "Sem probabilidade"
+      },
+      {
+        "desc": "É equivalente ao SGDClassifier com perda 'perceptron' e passo constante.",
+        "nome": "Caso especial do SGD"
+      },
+      {
+        "desc": "Só converge perfeitamente se os dados puderem ser separados por uma linha reta.",
+        "nome": "Separabilidade linear"
+      }
+    ],
+    "descricao": "O Perceptron é um dos algoritmos de classificação mais antigos e simples. Ele é um modelo linear que, na prática, é um caso especial do SGDClassifier (com loss='perceptron' e taxa de aprendizado constante). Ele não usa regularização por padrão e só corrige os pesos quando comete um erro. É ótimo para entender a ideia básica por trás do aprendizado de máquina, mas hoje é mais usado como ferramenta de ensino do que em problemas reais.",
+    "desvantagens": [
+      "Não fornece probabilidades, só a classe.",
+      "Não converge se os dados não forem separáveis por uma linha reta.",
+      "Sem regularização por padrão, pode ser sensível a ruído.",
+      "Geralmente tem desempenho inferior a modelos mais modernos."
+    ],
+    "dicas": [
+      "Padronize os atributos antes de treinar (por exemplo, com StandardScaler).",
+      "Defina random_state para resultados reproduzíveis.",
+      "Se quiser probabilidades, prefira a regressão logística ou o SGD com loss='log_loss'.",
+      "Ajuste eta0 (tamanho do passo) se o aprendizado ficar instável.",
+      "Use-o principalmente para entender a base; para resultados, compare com outros modelos."
+    ],
+    "exemplo": "from sklearn.linear_model import Perceptron\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_treino, X_teste, y_treino, y_teste = train_test_split(X, y, random_state=42)\n\nmodelo = make_pipeline(\n    StandardScaler(),\n    Perceptron(eta0=1.0, max_iter=1000, random_state=42)\n)\nmodelo.fit(X_treino, y_treino)\nprint('Acuracia:', modelo.score(X_teste, y_teste))",
+    "exemplo_codigo": "from sklearn.linear_model import Perceptron\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_iris(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = Perceptron(random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "None",
+        "descricao": "Tipo de regularização (freio) aplicada aos pesos. Por padrão, o perceptron não usa nenhuma.",
+        "efeito": "Sem regularização (None) o modelo segue o comportamento clássico; com 'l2'/'l1' ele fica mais protegido contra decorar os dados.",
+        "nome": "penalty",
+        "opcoes": [
+          "None",
+          "l2",
+          "l1",
+          "elasticnet"
+        ],
+        "quando_ajustar": "Ative ('l2' ou 'l1') se o modelo estiver instável ou decorando dados com ruído.",
+        "tipo": "str ou None"
+      },
+      {
+        "default": "0.0001",
+        "descricao": "Força da regularização, usada apenas quando há penalty diferente de None.",
+        "efeito": "Quanto maior, mais o modelo é freado (mais simples).",
+        "faixa": ">= 0 (ex.: 1e-5 a 1e-1)",
+        "nome": "alpha",
+        "quando_ajustar": "Ajuste apenas se tiver ativado uma penalty; aumente para combater o decorar.",
+        "tipo": "float"
+      },
+      {
+        "default": "1000",
+        "descricao": "Número máximo de passagens completas pelos dados de treino (épocas).",
+        "efeito": "Mais iterações dão mais chance de convergir, mas demoram mais.",
+        "faixa": ">= 1 (ex.: 1000 a 5000)",
+        "nome": "max_iter",
+        "quando_ajustar": "Aumente quando aparecer aviso de que o modelo não convergiu.",
+        "tipo": "int"
+      },
+      {
+        "default": "1.0",
+        "descricao": "Tamanho do passo (taxa de aprendizado constante) usado para corrigir os pesos a cada erro.",
+        "efeito": "Passos maiores aprendem mais rápido, mas podem ficar instáveis; passos menores são mais suaves e lentos.",
+        "faixa": "> 0 (ex.: 0.1 a 1.0)",
+        "nome": "eta0",
+        "quando_ajustar": "Diminua se o aprendizado ficar pulando demais (instável).",
+        "tipo": "float"
+      },
+      {
+        "default": "0.001",
+        "descricao": "Critério de parada: se a melhora entre épocas ficar menor que esse valor, o treino para.",
+        "efeito": "Valores menores fazem o treino continuar por mais tempo buscando melhoras pequenas.",
+        "faixa": "> 0 (ex.: 1e-4 a 1e-2)",
+        "nome": "tol",
+        "quando_ajustar": "Diminua para treinar com mais precisão; aumente para parar mais cedo.",
+        "tipo": "float ou None"
+      }
+    ],
+    "intuicao": "Pense num professor corrigindo a posição de uma régua sobre a mesa para separar duas pilhas de cartas. Cada vez que uma carta cai do lado errado, ele empurra a régua um pouquinho. Se a carta está do lado certo, ele não mexe. Depois de muitas correções, a régua fica num lugar que separa bem as duas pilhas (se isso for possível com uma linha reta).",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Perceptron.html",
+    "naoUsarQuando": [
+      "Quando você precisa de probabilidades de cada classe.",
+      "Quando os dados não podem ser separados por uma linha reta.",
+      "Quando quer o melhor desempenho possível (modelos modernos costumam ir melhor).",
+      "Quando há muito ruído nos dados (o perceptron pode nunca estabilizar)."
+    ],
+    "quandoUsar": [
+      "Para aprender e demonstrar a ideia básica de um classificador que aprende com erros.",
+      "Quando os dados são (ou quase são) separáveis por uma linha reta.",
+      "Quando você quer um modelo extremamente simples e rápido como ponto de partida.",
+      "Em aulas, para entender a origem das redes neurais."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "Perceptron is a classification algorithm which shares the same underlying implementation with SGDClassifier. Perceptron() is equivalent to SGDClassifier(loss='perceptron', eta0=1, learning_rate='constant', penalty=None).",
+        "tipo": "doc",
+        "titulo": "Perceptron",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Perceptron.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "The Perceptron is another simple classification algorithm suitable for large scale learning. It does not require a learning rate, is not regularized (penalized), and updates its model only on mistakes.",
+        "tipo": "doc",
+        "titulo": "Linear Models — Perceptron",
+        "url": "https://scikit-learn.org/stable/modules/linear_model.html#perceptron"
+      }
+    ],
+    "resumo_basico": "É o avô das redes neurais: um modelinho simples que aprende a separar duas turmas traçando uma linha reta. Toda vez que ele erra um exemplo, ele empurra a linha um pouco para o lado certo. Quando acerta, deixa como está. Repetindo isso muitas vezes, ele vai melhorando.",
+    "titulo": "Perceptron",
+    "vantagens": [
+      "Muito simples de entender e implementar.",
+      "Treina rápido e usa pouca memória.",
+      "Ótimo para fins didáticos: mostra como uma máquina aprende com erros.",
+      "Funciona bem quando as classes são linearmente separáveis."
+    ]
+  },
+  "qda": {
+    "conceitos": [
+      {
+        "desc": "A linha que separa as classes pode ser curva, não apenas reta. Por isso o nome \"quadrático\".",
+        "nome": "Fronteira de decisão quadrática"
+      },
+      {
+        "desc": "Cada classe tem sua própria descrição de formato e orientação da nuvem de pontos, em vez de todas dividirem a mesma.",
+        "nome": "Matriz de covariância por classe"
+      },
+      {
+        "desc": "Uma forma de descrever uma nuvem de pontos em várias dimensões ao mesmo tempo, com um centro e um espalhamento.",
+        "nome": "Distribuição normal multivariada"
+      },
+      {
+        "desc": "O LDA obriga todas as classes a terem o mesmo formato de nuvem (fronteira reta); o QDA libera cada classe a ter o seu (fronteira curva).",
+        "nome": "Diferença para o LDA"
+      }
+    ],
+    "descricao": "A Análise de Discriminante Quadrático (QDA) é um classificador que modela cada classe como uma distribuição normal multivariada, ou seja, uma nuvem de pontos com um centro (média) e um formato próprio (matriz de covariância). A grande diferença em relação ao discriminante linear (LDA) é que o QDA permite que cada classe tenha sua própria matriz de covariância, em vez de compartilhar uma só entre todas.\n\nComo cada classe pode ter um formato e uma orientação diferentes, a fronteira de decisão entre as classes deixa de ser uma reta e passa a ser uma curva (uma superfície quadrática). Isso dá ao QDA mais flexibilidade para separar grupos com formatos diferentes, mas também exige mais dados, pois é preciso estimar uma matriz de covariância completa para cada classe.",
+    "desvantagens": [
+      "Precisa de mais dados, pois estima uma matriz de covariância para cada classe.",
+      "Pode se ajustar demais (overfitting) quando há poucos exemplos por classe.",
+      "Funciona mal quando há muitas características e poucas amostras."
+    ],
+    "dicas": [
+      "Compare sempre com o LDA: se as classes têm formatos parecidos, o LDA pode ir melhor com menos dados.",
+      "O parâmetro reg_param ajuda a estabilizar as estimativas quando os dados são escassos.",
+      "Garanta um número razoável de exemplos em cada classe antes de confiar no resultado."
+    ],
+    "exemplo": "Separar dois tipos de sementes em que um grupo forma uma nuvem alongada e o outro uma nuvem mais redonda. O QDA aprende o formato de cada nuvem e traça uma fronteira curva que se encaixa melhor do que uma linha reta.",
+    "exemplo_codigo": "from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = QuadraticDiscriminantAnalysis()\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "None",
+        "descricao": "Probabilidades a priori das classes. Se deixado como None, o modelo estima as proporções de cada classe a partir dos dados de treino.",
+        "efeito": "Define o quanto cada classe é considerada comum antes de olhar as características.",
+        "faixa": "valores que somam 1, um por classe",
+        "nome": "priors",
+        "quando_ajustar": "Ajuste apenas quando você conhece, por fora dos dados, a frequência real de cada classe.",
+        "tipo": "array de tamanho (n_classes,) ou None"
+      },
+      {
+        "default": "0.0",
+        "descricao": "Parâmetro de regularização que suaviza (encolhe) as estimativas de covariância de cada classe, tornando-as mais estáveis.",
+        "efeito": "Valores maiores deixam as fronteiras menos sensíveis a ruído e ajudam quando há poucos dados, ao custo de menos flexibilidade.",
+        "faixa": "de 0.0 a 1.0",
+        "nome": "reg_param",
+        "quando_ajustar": "Aumente um pouco quando houver poucos exemplos por classe ou quando o modelo parecer instável ou sofrer overfitting.",
+        "tipo": "float"
+      },
+      {
+        "default": "False",
+        "descricao": "Define se as matrizes de covariância de cada classe são guardadas após o treino, para inspeção posterior.",
+        "efeito": "Quando True, as matrizes ficam disponíveis no atributo covariance_, usando um pouco mais de memória.",
+        "nome": "store_covariance",
+        "opcoes": [
+          "True",
+          "False"
+        ],
+        "quando_ajustar": "Ative apenas se você quiser analisar as matrizes de covariância depois do treino.",
+        "tipo": "bool"
+      },
+      {
+        "default": "1e-4",
+        "descricao": "Limite usado para detectar deficiência de posto (rank), ou seja, características que praticamente não trazem informação nova.",
+        "efeito": "Controla a sensibilidade na hora de descartar direções pouco informativas dos dados.",
+        "faixa": "valores pequenos e positivos, por exemplo de 1e-6 a 1e-2",
+        "nome": "tol",
+        "quando_ajustar": "Raramente precisa mudar; ajuste apenas se houver avisos sobre colinearidade ou características quase repetidas.",
+        "tipo": "float"
+      }
+    ],
+    "intuicao": "O QDA aprende, para cada classe, onde fica o seu centro e qual o formato da sua nuvem de pontos. Para classificar um ponto novo, ele verifica em qual nuvem esse ponto se encaixa melhor, levando em conta tanto a distância até o centro quanto a forma da nuvem. Como as nuvens podem ter formatos diferentes, as fronteiras entre as classes ficam curvas.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis.html",
+    "naoUsarQuando": [
+      "Quando há poucos exemplos por classe, pois não dá para estimar bem cada matriz de covariância.",
+      "Quando todas as classes têm formatos parecidos, caso em que o LDA, mais simples, costuma bastar.",
+      "Quando há muitas características em relação ao número de amostras, levando a estimativas instáveis."
+    ],
+    "quandoUsar": [
+      "Quando as classes têm formatos ou espalhamentos claramente diferentes.",
+      "Quando uma fronteira reta não separa bem os grupos.",
+      "Quando você tem dados suficientes para estimar a forma de cada classe com confiança."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "Quadratic Discriminant Analysis. A classifier with a quadratic decision boundary, generated by fitting class conditional densities to the data and using Bayes' rule.",
+        "tipo": "doc",
+        "titulo": "QuadraticDiscriminantAnalysis",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "Linear Discriminant Analysis and Quadratic Discriminant Analysis are two classic classifiers, with, as their names suggest, a linear and a quadratic decision surface, respectively.",
+        "tipo": "doc",
+        "titulo": "Linear and Quadratic Discriminant Analysis",
+        "url": "https://scikit-learn.org/stable/modules/lda_qda.html"
+      }
+    ],
+    "resumo_basico": "Imagine separar bolinhas azuis e vermelhas espalhadas numa mesa. Em vez de traçar uma linha reta entre elas, o QDA pode desenhar uma curva, que se adapta melhor ao formato de cada grupo. Cada cor pode ter um formato e um tamanho de mancha diferente. Assim, ele acerta melhor quando os grupos têm formas distintas.",
+    "titulo": "Análise de Discriminante Quadrático (QDA)",
+    "vantagens": [
+      "Permite fronteiras curvas, separando classes com formatos diferentes.",
+      "Mais flexível que o LDA por não impor um formato comum a todas as classes.",
+      "Tem base estatística clara e é rápido de treinar."
+    ]
+  },
+  "quantile": {
+    "conceitos": [
+      {
+        "desc": "Um valor que divide os dados em proporções. A mediana (0.5) deixa metade dos dados de cada lado; o quantil 0.9 deixa 90% abaixo dele.",
+        "nome": "Quantil"
+      },
+      {
+        "desc": "A função de erro usada: pune de forma diferente erros para cima e para baixo, dependendo do quantil escolhido.",
+        "nome": "Perda pinball (quantílica)"
+      },
+      {
+        "desc": "Termo de regularização que ajuda a evitar coeficientes grandes demais e pode zerar coeficientes pouco úteis.",
+        "nome": "Penalização L1 (alpha)"
+      },
+      {
+        "desc": "Técnica matemática usada para resolver o problema de otimização; por isso há a escolha de um 'solver'.",
+        "nome": "Programação linear"
+      }
+    ],
+    "descricao": "A QuantileRegressor ajusta um modelo linear que prevê um quantil condicional da variável alvo (por padrão a mediana, quantil 0.5), em vez da média como na regressão linear comum. Minimiza a perda pinball (também chamada de perda quantílica) com penalização L1, resolvendo o problema como programação linear. Por trabalhar com quantis e usar uma perda baseada em valor absoluto, é mais robusta a outliers e permite estimar diferentes faixas da distribuição (por exemplo, o quantil 0.1 e o 0.9 para formar uma faixa de previsão).",
+    "desvantagens": [
+      "Mais lenta que a regressão linear comum (resolve programação linear).",
+      "Continua sendo um modelo linear: não captura relações curvas.",
+      "Precisa rodar uma vez por quantil para obter várias faixas.",
+      "A escolha de solver e alpha pode exigir ajuste."
+    ],
+    "dicas": [
+      "Use quantile=0.5 para a mediana; 0.1 e 0.9 para uma faixa de 80%.",
+      "Mantenha o solver padrão 'highs' (mais rápido e moderno desde a versão 1.4).",
+      "Comece com alpha pequeno (ex.: 0.0) se não quiser regularização e aumente se houver overfitting.",
+      "Padronize as variáveis de entrada quando elas tiverem escalas muito diferentes."
+    ],
+    "exemplo": "Prever o tempo de entrega de uma pizzaria: a média pode ser enganada por uma entrega que demorou 2 horas (carro quebrou). Usando quantile=0.5 você prevê o tempo mediano, mais realista; usando quantile=0.9 você estima 'em 90% das vezes a entrega chega em até X minutos', útil para dar uma promessa segura ao cliente.",
+    "exemplo_codigo": "from sklearn.linear_model import QuantileRegressor\nfrom sklearn.datasets import make_regression\nfrom sklearn.model_selection import train_test_split\n\nX, y = make_regression(n_samples=200, n_features=4, noise=10, random_state=42)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = QuantileRegressor(quantile=0.5, alpha=0.0, solver='highs')\nmodelo.fit(X_tr, y_tr)\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "0.5",
+        "descricao": "O quantil que o modelo tenta prever. Deve estar estritamente entre 0 e 1.",
+        "efeito": "Define qual fatia da distribuição é prevista: 0.5 é a mediana; valores maiores prevêem valores mais altos.",
+        "faixa": "0 < quantile < 1",
+        "nome": "quantile",
+        "quando_ajustar": "Ajuste para estimar faixas de previsão (ex.: 0.1 e 0.9) ou quando quer prever extremos em vez do centro.",
+        "tipo": "float"
+      },
+      {
+        "default": "1.0",
+        "descricao": "Constante de regularização que multiplica o termo de penalização L1.",
+        "efeito": "Valores maiores encolhem os coeficientes e podem zerar alguns, reduzindo overfitting; 0 desativa a regularização.",
+        "faixa": "alpha >= 0",
+        "nome": "alpha",
+        "quando_ajustar": "Diminua se o modelo estiver subajustado; aumente se houver overfitting ou muitas variáveis irrelevantes.",
+        "tipo": "float"
+      },
+      {
+        "default": "True",
+        "descricao": "Se deve ou não ajustar o intercepto.",
+        "efeito": "Se False, a linha é forçada a passar pela origem.",
+        "nome": "fit_intercept",
+        "opcoes": [
+          true,
+          false
+        ],
+        "quando_ajustar": "Deixe True na maioria dos casos; use False apenas se os dados já forem centrados ou a teoria exigir.",
+        "tipo": "bool"
+      },
+      {
+        "default": "'highs'",
+        "descricao": "Método usado pelo scipy.optimize.linprog para resolver a formulação de programação linear.",
+        "efeito": "Afeta velocidade e estabilidade numérica; 'highs' é o mais rápido e moderno (padrão desde a versão 1.4).",
+        "nome": "solver",
+        "opcoes": [
+          "highs-ds",
+          "highs-ipm",
+          "highs",
+          "interior-point",
+          "revised simplex"
+        ],
+        "quando_ajustar": "Raramente. Mantenha 'highs'; mude apenas se houver problema de compatibilidade do scipy.",
+        "tipo": "str"
+      },
+      {
+        "default": "None",
+        "descricao": "Parâmetros adicionais passados ao scipy.optimize.linprog como opções.",
+        "efeito": "Permite ajustar detalhes internos do solver.",
+        "nome": "solver_options",
+        "quando_ajustar": "Apenas usuários avançados que precisam controlar o solver.",
+        "tipo": "dict ou None"
+      }
+    ],
+    "intuicao": "A regressão comum (mínimos quadrados) penaliza o erro ao quadrado, então um único ponto muito distante 'puxa' a linha com força. A regressão quantílica penaliza o erro de forma assimétrica e linear: para a mediana, ela busca a linha que deixa metade dos pontos acima e metade abaixo. Como o erro não é elevado ao quadrado, pontos extremos pesam menos, e a linha fica mais estável. Mudando o quantil você pergunta coisas diferentes: 'qual o valor típico?' (0.5), 'qual valor raramente é ultrapassado?' (0.9), etc.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.QuantileRegressor.html",
+    "naoUsarQuando": [
+      "Quando a relação é claramente não linear (preferir modelos não lineares).",
+      "Quando você realmente quer a média condicional (use regressão linear comum).",
+      "Em conjuntos de dados muito grandes onde a programação linear fica lenta.",
+      "Quando não há outliers e os pressupostos da regressão linear comum são satisfeitos."
+    ],
+    "quandoUsar": [
+      "Quando você quer prever a mediana ou outra faixa específica, não a média.",
+      "Quando há outliers que distorceriam a regressão linear comum.",
+      "Quando precisa estimar intervalos de previsão (ex.: quantil 0.1 e 0.9).",
+      "Quando a relação entre variáveis é aproximadamente linear, mas com ruído assimétrico."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "class sklearn.linear_model.QuantileRegressor(*, quantile=0.5, alpha=1.0, fit_intercept=True, solver='highs', solver_options=None)",
+        "tipo": "doc",
+        "titulo": "QuantileRegressor",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.QuantileRegressor.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "QuantileRegressor estimates the median or other quantiles of the target conditional on the features, and is robust to outliers.",
+        "tipo": "doc",
+        "titulo": "Robustness regression: outliers and modeling errors",
+        "url": "https://scikit-learn.org/stable/modules/linear_model.html#robustness-regression-outliers-and-modeling-errors"
+      }
+    ],
+    "resumo_basico": "Imagine que você quer saber, não a altura média da turma, mas a altura que separa os mais baixos dos mais altos (a mediana). A Regressão Quantílica traça uma linha que tenta acertar uma 'fatia' específica dos dados, como a do meio. Por isso, alguns colegas muito altos ou muito baixos (os pontos fora da curva) não bagunçam tanto a resposta. É como escolher qual parte do grupo você quer descrever.",
+    "titulo": "Regressão Quantílica (QuantileRegressor)",
+    "vantagens": [
+      "Robusta a outliers na variável alvo.",
+      "Permite estimar diferentes quantis e construir faixas de previsão.",
+      "Modelo linear simples de interpretar.",
+      "Inclui regularização L1 embutida (alpha)."
+    ]
+  },
+  "random_forest": {
+    "conceitos": [
+      {
+        "desc": "Combinar vários modelos (árvores) para obter uma previsão melhor do que a de um modelo só.",
+        "nome": "Ensemble (conjunto)"
+      },
+      {
+        "desc": "Sortear amostras com reposição dos dados originais, para cada árvore treinar num conjunto um pouco diferente.",
+        "nome": "Bootstrap"
+      },
+      {
+        "desc": "A classe final é a mais votada entre as árvores.",
+        "nome": "Votação majoritária"
+      },
+      {
+        "desc": "Cada divisão olha só um subconjunto sorteado de atributos, deixando as árvores variadas.",
+        "nome": "Aleatoriedade de atributos"
+      }
+    ],
+    "descricao": "A RandomForestClassifier treina várias árvores de decisão (por padrão 100) e combina os votos delas para classificar. Para tornar as árvores diferentes entre si, cada uma é treinada sobre uma amostra sorteada dos dados (bootstrap) e, em cada divisão, considera apenas um subconjunto aleatório dos atributos (max_features='sqrt' por padrão).\n\nEssa combinação reduz bastante o overfitting típico de uma árvore isolada e costuma dar previsões mais precisas e estáveis. O preço é menos interpretabilidade (são muitas árvores) e maior custo de treino comparado a um modelo único.",
+    "desvantagens": [
+      "Mais difícil de interpretar (muitas árvores).",
+      "Treino mais lento e usa mais memória.",
+      "Modelos salvos podem ficar grandes."
+    ],
+    "dicas": [
+      "Comece com n_estimators=100 (padrão) e aumente se ainda melhorar.",
+      "Use n_jobs=-1 para treinar usando todos os núcleos da CPU.",
+      "Fixe random_state para resultados reproduzíveis.",
+      "Use class_weight='balanced' se as classes estiverem desbalanceadas."
+    ],
+    "exemplo": "from sklearn.ensemble import RandomForestClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)\n\nmodelo = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)\nmodelo.fit(X_train, y_train)\nprint(modelo.score(X_test, y_test))",
+    "exemplo_codigo": "from sklearn.ensemble import RandomForestClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = RandomForestClassifier(n_estimators=100, random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "100",
+        "descricao": "Número de árvores na floresta.",
+        "efeito": "Mais árvores costumam dar previsões mais estáveis, até estabilizar; também aumentam o tempo de treino.",
+        "faixa": "inteiro >= 1",
+        "nome": "n_estimators",
+        "quando_ajustar": "Aumente (200, 300) se ainda houver ganho; reduza se o treino estiver muito lento.",
+        "tipo": "int"
+      },
+      {
+        "default": "gini",
+        "descricao": "Função que mede a qualidade de uma divisão (impureza).",
+        "efeito": "Muda como cada árvore escolhe as divisões; o impacto costuma ser pequeno.",
+        "nome": "criterion",
+        "opcoes": [
+          "gini",
+          "entropy",
+          "log_loss"
+        ],
+        "quando_ajustar": "Raramente; deixe no padrão na maioria dos casos.",
+        "tipo": "str"
+      },
+      {
+        "default": "None",
+        "descricao": "Profundidade máxima de cada árvore.",
+        "efeito": "Limitar reduz o tamanho/overfitting de cada árvore; None deixa crescer até as folhas ficarem puras.",
+        "faixa": "None (sem limite) ou inteiro >= 1",
+        "nome": "max_depth",
+        "quando_ajustar": "Se o modelo estiver fazendo overfitting ou ficando muito pesado.",
+        "tipo": "int ou None"
+      },
+      {
+        "default": "sqrt",
+        "descricao": "Quantos atributos considerar em cada divisão de cada árvore.",
+        "efeito": "Controla a diversidade entre as árvores; 'sqrt' (padrão) costuma ir bem; None remove a aleatoriedade de atributos.",
+        "nome": "max_features",
+        "opcoes": [
+          "sqrt",
+          "log2",
+          "None"
+        ],
+        "quando_ajustar": "Ajuste fino para tentar melhorar precisão; geralmente o padrão 'sqrt' já é bom.",
+        "tipo": "str, int, float ou None"
+      },
+      {
+        "default": "2",
+        "descricao": "Número mínimo de amostras para dividir um nó.",
+        "efeito": "Valores maiores deixam as árvores mais simples.",
+        "faixa": "inteiro >= 2, ou float em (0, 1] como fração",
+        "nome": "min_samples_split",
+        "quando_ajustar": "Para reduzir overfitting ou tamanho das árvores.",
+        "tipo": "int ou float"
+      },
+      {
+        "default": "True",
+        "descricao": "Se as árvores são treinadas em amostras sorteadas com reposição.",
+        "efeito": "True ativa a amostragem que torna as árvores diferentes; False usa o conjunto inteiro em cada árvore.",
+        "nome": "bootstrap",
+        "opcoes": [
+          "True",
+          "False"
+        ],
+        "quando_ajustar": "Quase sempre deixe True (é o que torna a floresta uma floresta).",
+        "tipo": "bool"
+      }
+    ],
+    "intuicao": "Cada árvore é um \"especialista\" que aprendeu olhando para um pedaço diferente do problema. Sozinha, cada uma erra de um jeito; juntas, os erros se cancelam e a média (o voto) acerta mais. Esse é o efeito da \"sabedoria das multidões\".",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/classifier/classification_report.html",
+    "naoUsarQuando": [
+      "Quando você precisa explicar exatamente cada decisão (é menos interpretável).",
+      "Quando o tempo/memória de treino são muito limitados e há muitos dados.",
+      "Quando precisa de previsões em tempo real ultra-rápidas com modelo pequeno."
+    ],
+    "quandoUsar": [
+      "Quando você quer boa precisão sem ajustar muitos detalhes.",
+      "Quando os dados têm muitos atributos e relações complexas.",
+      "Como modelo forte de referência em problemas de classificação.",
+      "Quando uma árvore única está fazendo overfitting."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "n_estimators=100, criterion='gini', max_depth=None, max_features='sqrt', min_samples_split=2, bootstrap=True.",
+        "tipo": "doc",
+        "titulo": "sklearn.ensemble.RandomForestClassifier",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "Em florestas aleatórias, cada árvore é construída a partir de uma amostra sorteada com reposição do conjunto de treino.",
+        "tipo": "doc",
+        "titulo": "Ensemble methods (User Guide)",
+        "url": "https://scikit-learn.org/stable/modules/ensemble.html"
+      }
+    ],
+    "resumo_basico": "Em vez de confiar em uma única árvore de decisão, a floresta aleatória cria muitas árvores diferentes e deixa todas votarem na resposta. É como perguntar para uma turma inteira em vez de uma só pessoa: a opinião da maioria costuma errar menos. Cada árvore vê uma parte sorteada dos dados, então elas não pensam todas igual.",
+    "titulo": "Floresta Aleatória (Random Forest)",
+    "vantagens": [
+      "Geralmente mais precisa e estável que uma árvore única.",
+      "Reduz bastante o overfitting.",
+      "Lida bem com muitos atributos e dados com ruído.",
+      "Não exige normalizar os atributos."
+    ]
+  },
+  "ransac": {
+    "conceitos": [
+      {
+        "desc": "Inlier é o ponto que concorda com o modelo (resíduo pequeno); outlier é o que discorda e é descartado.",
+        "nome": "Inlier x Outlier"
+      },
+      {
+        "desc": "Quantidade de inliers que apoiam um modelo candidato. O modelo vencedor é o de maior consenso.",
+        "nome": "Consenso"
+      },
+      {
+        "desc": "Distância máxima para um ponto ser considerado inlier; por padrão usa a MAD (desvio absoluto mediano) do alvo.",
+        "nome": "Limiar de resíduo (residual_threshold)"
+      },
+      {
+        "desc": "Quantos pontos são sorteados em cada tentativa para ajustar o modelo candidato.",
+        "nome": "Amostra mínima (min_samples)"
+      }
+    ],
+    "descricao": "O RANSACRegressor (RANdom SAmple Consensus) é um método robusto que ajusta um modelo (por padrão uma regressão linear) repetindo várias vezes: em cada tentativa ele sorteia um subconjunto mínimo de pontos, ajusta o modelo só com eles, e conta quantos pontos do conjunto inteiro ficam dentro de um limiar de resíduo (os 'inliers'). Após muitas tentativas, escolhe o modelo com mais inliers e o reajusta usando apenas eles. Os pontos fora do limiar (outliers) são descartados do ajuste final.",
+    "desvantagens": [
+      "Resultado é aleatório: depende dos sorteios (fixe random_state para reprodutibilidade).",
+      "Exige escolher bem o limiar de resíduo, ou descarta pontos demais/de menos.",
+      "Pode ser lento com muitos max_trials.",
+      "Se os outliers formarem outro padrão coerente, pode escolher o modelo errado."
+    ],
+    "dicas": [
+      "Fixe random_state para obter resultados reproduzíveis.",
+      "Se deixar residual_threshold=None, o padrão é a MAD do alvo; ajuste manualmente se descartar pontos demais.",
+      "Aumente max_trials se suspeitar que poucos sorteios não encontraram o melhor modelo.",
+      "Inspecione o atributo inlier_mask_ depois do treino para ver quais pontos foram considerados confiáveis."
+    ],
+    "exemplo": "Medir a temperatura ao longo do dia com um sensor que às vezes falha e cospe valores absurdos (ex.: 200 graus). O RANSAC sorteia conjuntos de leituras, encontra a linha que a maioria das medições corretas segue e marca as leituras malucas como outliers, ajustando o modelo final só com as medições confiáveis.",
+    "exemplo_codigo": "from sklearn.linear_model import RANSACRegressor\nfrom sklearn.datasets import make_regression\nfrom sklearn.model_selection import train_test_split\n\nX, y = make_regression(n_samples=200, n_features=1, noise=10, random_state=42)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = RANSACRegressor(random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "None",
+        "descricao": "Estimador base ajustado em cada tentativa.",
+        "efeito": "Se None, usa LinearRegression. Pode-se passar outro regressor.",
+        "nome": "estimator",
+        "quando_ajustar": "Troque quando quiser ajustar um modelo base diferente da regressão linear.",
+        "tipo": "objeto estimador ou None"
+      },
+      {
+        "default": "None",
+        "descricao": "Número mínimo de amostras sorteadas em cada tentativa.",
+        "efeito": "Define o tamanho do grupo usado para ajustar cada modelo candidato.",
+        "faixa": "1 <= int <= n_amostras, ou 0 < float <= 1",
+        "nome": "min_samples",
+        "quando_ajustar": "Aumente se o ajuste por tentativa estiver instável; por padrão deriva do número de features.",
+        "tipo": "int (>=1) ou float em [0,1]"
+      },
+      {
+        "default": "None",
+        "descricao": "Resíduo máximo para um ponto ser classificado como inlier.",
+        "efeito": "Limiar menor descarta mais pontos como outliers; se None, usa a MAD do alvo.",
+        "faixa": "valor >= 0",
+        "nome": "residual_threshold",
+        "quando_ajustar": "Ajuste se o modelo estiver descartando pontos demais ou de menos.",
+        "tipo": "float ou None"
+      },
+      {
+        "default": "100",
+        "descricao": "Número máximo de iterações de seleção de amostra aleatória.",
+        "efeito": "Mais tentativas aumentam a chance de achar o melhor modelo, ao custo de tempo.",
+        "faixa": "max_trials >= 1",
+        "nome": "max_trials",
+        "quando_ajustar": "Aumente quando há muitos outliers ou o resultado varia muito entre execuções.",
+        "tipo": "int"
+      },
+      {
+        "default": "inf",
+        "descricao": "Número máximo de iterações que podem ser puladas por dados/modelo inválidos.",
+        "efeito": "Limita quantas tentativas inválidas são toleradas antes de parar.",
+        "faixa": "max_skips >= 0",
+        "nome": "max_skips",
+        "quando_ajustar": "Defina um limite finito ao usar is_data_valid/is_model_valid.",
+        "tipo": "int"
+      },
+      {
+        "default": "inf",
+        "descricao": "Para a busca se este número de inliers for encontrado.",
+        "efeito": "Permite parar cedo quando já há inliers suficientes.",
+        "faixa": "stop_n_inliers >= 1",
+        "nome": "stop_n_inliers",
+        "quando_ajustar": "Defina para acelerar quando você sabe quantos inliers esperar.",
+        "tipo": "int"
+      },
+      {
+        "default": "inf",
+        "descricao": "Para a busca se o score atingir este valor.",
+        "efeito": "Permite parada antecipada por qualidade do modelo.",
+        "nome": "stop_score",
+        "quando_ajustar": "Use para encerrar assim que um score satisfatório for alcançado.",
+        "tipo": "float"
+      },
+      {
+        "default": "0.99",
+        "descricao": "Nível de confiança para a convergência do RANSAC.",
+        "efeito": "Influencia o número de tentativas necessárias; maior = mais confiança e mais iterações.",
+        "faixa": "0 <= stop_probability <= 1",
+        "nome": "stop_probability",
+        "quando_ajustar": "Aumente para mais confiança no resultado; raramente precisa mudar.",
+        "tipo": "float"
+      },
+      {
+        "default": "'absolute_error'",
+        "descricao": "Função de perda usada para medir resíduos.",
+        "efeito": "Define como o resíduo de cada ponto é calculado.",
+        "nome": "loss",
+        "opcoes": [
+          "absolute_error",
+          "squared_error"
+        ],
+        "quando_ajustar": "Mude para 'squared_error' se quiser penalizar mais erros grandes.",
+        "tipo": "str ou callable"
+      },
+      {
+        "default": "None",
+        "descricao": "Semente do gerador aleatório para reprodutibilidade.",
+        "efeito": "Fixar garante que os sorteios sejam sempre os mesmos.",
+        "nome": "random_state",
+        "quando_ajustar": "Defina um inteiro sempre que precisar de resultados reproduzíveis.",
+        "tipo": "int, RandomState ou None"
+      }
+    ],
+    "intuicao": "Em vez de tentar agradar todos os pontos de uma vez (o que deixa os outliers entortarem a linha), o RANSAC adota a estratégia de 'votação': uma boa linha é aquela com a qual muitos pontos concordam. Sorteando pequenos grupos e medindo o consenso, ele encontra a estrutura seguida pela maioria e simplesmente ignora os pontos discordantes. Por isso suporta até proporções altas de outliers, contanto que exista uma maioria coerente.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.RANSACRegressor.html",
+    "naoUsarQuando": [
+      "Quando os outliers não são claramente separáveis dos pontos bons.",
+      "Quando o número de pontos é muito pequeno (o sorteio fica instável).",
+      "Quando a relação é fortemente não linear (a menos que o estimador base trate isso).",
+      "Quando precisa de resultado totalmente determinístico sem fixar random_state."
+    ],
+    "quandoUsar": [
+      "Quando há muitos outliers, até uma fração grande dos dados.",
+      "Quando existe um padrão claro seguido pela maioria dos pontos.",
+      "Quando você quer descartar (e não apenas amortecer) os pontos fora da curva.",
+      "Em problemas geométricos ou de ajuste de linha/plano com ruído grosseiro."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "class sklearn.linear_model.RANSACRegressor(estimator=None, *, min_samples=None, residual_threshold=None, is_data_valid=None, is_model_valid=None, max_trials=100, max_skips=inf, stop_n_inliers=inf, stop_score=inf, stop_probability=0.99, loss='absolute_error', random_state=None)",
+        "tipo": "doc",
+        "titulo": "RANSACRegressor",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.RANSACRegressor.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "RANSAC is a non-deterministic algorithm producing only a reasonable result with a certain probability, dependent on the number of iterations.",
+        "tipo": "doc",
+        "titulo": "Robustness regression: outliers and modeling errors",
+        "url": "https://scikit-learn.org/stable/modules/linear_model.html#robustness-regression-outliers-and-modeling-errors"
+      }
+    ],
+    "resumo_basico": "Imagine procurar a 'verdadeira' linha que passa pela maioria dos pontos, ignorando os encrenqueiros. O RANSAC faz isso por tentativa: sorteia uns poucos pontos, traça uma linha, vê quantos pontos concordam com ela e repete muitas vezes. No fim, fica com a linha que tem mais 'amigos' (pontos próximos), tratando o resto como bagunça. É como achar a regra que mais gente segue.",
+    "titulo": "Regressão RANSAC (RANSACRegressor)",
+    "vantagens": [
+      "Muito robusto: tolera alta proporção de outliers.",
+      "Identifica explicitamente quais pontos são inliers e outliers.",
+      "Funciona com diferentes estimadores base, não só linear.",
+      "Conceito simples e intuitivo (votação por consenso)."
+    ]
+  },
+  "regressao_linear": {
+    "conceitos": [
+      {
+        "desc": "Número que diz o quanto a resposta muda quando uma característica aumenta em 1 unidade. Fica guardado em coef_ depois do treino.",
+        "nome": "Coeficiente (peso/inclinação)"
+      },
+      {
+        "desc": "O valor de partida da linha, ou seja, a previsão quando todas as características valem zero. Fica em intercept_.",
+        "nome": "Intercepto"
+      },
+      {
+        "desc": "A regra usada para escolher a melhor linha: aquela que torna a soma dos quadrados dos erros (distâncias entre a linha e os pontos reais) a menor possível.",
+        "nome": "Mínimos quadrados"
+      },
+      {
+        "desc": "O que o modelo prevê é um número que pode variar suavemente (preço, temperatura, nota), e não uma categoria.",
+        "nome": "Variável alvo contínua"
+      }
+    ],
+    "descricao": "A Regressão Linear é o modelo mais básico para prever um número (valor contínuo). Ela supõe que existe uma relação em linha reta entre o que você conhece (as características, ou features) e o que quer prever (o alvo). O modelo aprende uma inclinação (o quanto a resposta sobe ou desce para cada unidade da característica) e um ponto de partida (o intercepto), de modo a tornar os erros de previsão os menores possíveis no conjunto de treino.",
+    "desvantagens": [
+      "Só captura relações em linha reta; falha quando os dados formam curvas.",
+      "É sensível a outliers (pontos muito fora do padrão).",
+      "Pode dar errado quando duas características carregam quase a mesma informação (multicolinearidade)."
+    ],
+    "dicas": [
+      "Padronize ou normalize as características quando elas estiverem em escalas muito diferentes, para comparar os pesos com mais justiça.",
+      "Olhe o gráfico de resíduos (erros): se houver um padrão claro de curva, a linha reta não é suficiente.",
+      "Se a relação parecer curva, experimente a Regressão Polinomial.",
+      "Se os pesos ficarem enormes ou o modelo decorar o treino, experimente a Ridge (com regularização)."
+    ],
+    "exemplo": "from sklearn.linear_model import LinearRegression\n\nmodelo = LinearRegression()  # fit_intercept=True, positive=False\nmodelo.fit(X_treino, y_treino)\n\nprevisoes = modelo.predict(X_teste)\nprint('Pesos (coeficientes):', modelo.coef_)\nprint('Intercepto:', modelo.intercept_)",
+    "exemplo_codigo": "from sklearn.linear_model import LinearRegression\nfrom sklearn.datasets import load_diabetes\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_diabetes(return_X_y=True)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = LinearRegression()\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "True",
+        "descricao": "Se o modelo deve calcular o intercepto (o ponto de partida da linha). Se for False, supõe-se que os dados já estão centrados (média zero).",
+        "efeito": "Com True, a linha pode subir ou descer livremente para se encaixar nos dados. Com False, a linha é forçada a passar pela origem (zero).",
+        "nome": "fit_intercept",
+        "opcoes": [
+          true,
+          false
+        ],
+        "quando_ajustar": "Deixe True quase sempre. Só use False se você sabe que, quando as características são zero, o alvo também deve ser zero.",
+        "tipo": "bool"
+      },
+      {
+        "default": "False",
+        "descricao": "Se ativado, força todos os coeficientes (pesos) a serem positivos.",
+        "efeito": "Com True, nenhuma característica pode ter efeito negativo sobre a previsão; só funciona com dados densos.",
+        "nome": "positive",
+        "opcoes": [
+          true,
+          false
+        ],
+        "quando_ajustar": "Use True apenas quando faz sentido pelo problema que todos os efeitos sejam de aumento (por exemplo, quantidades que só podem somar).",
+        "tipo": "bool"
+      },
+      {
+        "default": "True",
+        "descricao": "Se True, faz uma cópia dos dados de entrada X antes de treinar, em vez de modificar o original.",
+        "efeito": "Com True, seus dados originais ficam intactos. Com False, pode economizar memória, mas os dados de entrada podem ser sobrescritos.",
+        "nome": "copy_X",
+        "opcoes": [
+          true,
+          false
+        ],
+        "quando_ajustar": "Raramente precisa mexer. Mantenha True para segurança.",
+        "tipo": "bool"
+      }
+    ],
+    "intuicao": "Pense numa balança: cada característica tem um peso. Para prever a resposta, o modelo multiplica cada característica pelo seu peso, soma tudo e acrescenta um valor inicial (o intercepto). Aprender o modelo é encontrar os pesos e o intercepto que fazem a linha (ou plano, com várias características) chegar o mais perto possível dos pontos reais. O critério usado é deixar a soma dos erros ao quadrado a menor possível (mínimos quadrados).",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/regressor/residuals.html",
+    "naoUsarQuando": [
+      "Quando a relação entre dados e alvo é claramente curva ou complicada (uma reta não consegue acompanhar curvas).",
+      "Quando o objetivo é prever categorias (gato/cachorro, aprovado/reprovado) — aí o problema é de classificação.",
+      "Quando há muitos valores extremos (outliers), porque eles puxam a linha e atrapalham."
+    ],
+    "quandoUsar": [
+      "Quando você quer prever um número e suspeita que a relação entre as características e o alvo é mais ou menos uma linha reta.",
+      "Como primeiro modelo (linha de base) para comparar com modelos mais complexos.",
+      "Quando você quer um modelo simples e fácil de explicar, mostrando o peso de cada característica."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "LinearRegression fits a linear model with coefficients w = (w1, ..., wp) to minimize the residual sum of squares between the observed targets in the dataset, and the targets predicted by the linear approximation.",
+        "tipo": "doc",
+        "titulo": "LinearRegression — scikit-learn documentation",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "LinearRegression fits a linear model with coefficients to minimize the residual sum of squares between the observed targets in the dataset, and the targets predicted by the linear approximation.",
+        "tipo": "doc",
+        "titulo": "Linear Models — Ordinary Least Squares",
+        "url": "https://scikit-learn.org/stable/modules/linear_model.html"
+      }
+    ],
+    "resumo_basico": "Imagine que você marca vários pontinhos num gráfico (por exemplo: horas de estudo e nota da prova). A regressão linear desenha a melhor linha reta que passa o mais perto possível de todos esses pontos. Depois, você usa essa linha para adivinhar valores novos: dado um número de horas, a linha mostra a nota provável.",
+    "titulo": "Regressão Linear",
+    "vantagens": [
+      "Muito simples de entender e de explicar.",
+      "Treina rápido, mesmo com bastante dado.",
+      "Mostra o peso de cada característica, ajudando a interpretar o resultado.",
+      "Quase não tem hiperparâmetros para ajustar."
+    ]
+  },
+  "regressao_logistica": {
+    "conceitos": [
+      {
+        "desc": "Apesar do nome, a saída é uma classe (categoria), não um número contínuo.",
+        "nome": "Classificador (não regressor)"
+      },
+      {
+        "desc": "O modelo não só diz a classe, mas também o quanto tem certeza, de 0% a 100%.",
+        "nome": "Probabilidade"
+      },
+      {
+        "desc": "Curva em formato de S que transforma qualquer número numa probabilidade entre 0 e 1.",
+        "nome": "Função sigmoide"
+      },
+      {
+        "desc": "É a linha (ou plano) reta que separa as classes no espaço dos dados.",
+        "nome": "Fronteira de decisão linear"
+      },
+      {
+        "desc": "Um freio que impede o modelo de dar pesos exagerados e decorar os dados de treino.",
+        "nome": "Regularização"
+      }
+    ],
+    "descricao": "A regressão logística é um modelo linear usado para classificação. Ela calcula uma combinação dos atributos de entrada e passa o resultado por uma função (a sigmoide) que transforma esse número em uma probabilidade entre 0 e 1. Com base nessa probabilidade, o modelo decide a qual classe cada exemplo pertence. Funciona para duas classes (binária) e também para mais classes.",
+    "desvantagens": [
+      "Só consegue separar bem o que dá para dividir com uma linha (fronteira linear).",
+      "Pode ir mal com relações muito complexas entre as variáveis.",
+      "Sensível a atributos em escalas muito diferentes (melhor padronizar antes).",
+      "Pode não convergir em poucas iterações se os dados forem difíceis."
+    ],
+    "dicas": [
+      "Padronize os atributos (por exemplo, com StandardScaler) antes de treinar.",
+      "Se aparecer aviso de que não convergiu, aumente o max_iter.",
+      "Ajuste o C: valores menores deixam o modelo mais simples (mais regularização).",
+      "Use predict_proba para ver a confiança do modelo em cada classe.",
+      "Comece com os valores padrão e só depois ajuste um parâmetro por vez."
+    ],
+    "exemplo": "from sklearn.linear_model import LogisticRegression\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_treino, X_teste, y_treino, y_teste = train_test_split(X, y, random_state=42)\n\nmodelo = LogisticRegression(C=1.0, solver='lbfgs', max_iter=200)\nmodelo.fit(X_treino, y_treino)\n\nprint('Acuracia:', modelo.score(X_teste, y_teste))\nprint('Probabilidades do 1o exemplo:', modelo.predict_proba(X_teste[:1]))",
+    "exemplo_codigo": "from sklearn.linear_model import LogisticRegression\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_iris(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = LogisticRegression(max_iter=1000)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "1.0",
+        "descricao": "Controla a força da regularização: é o inverso dela. Valores menores apertam mais o freio (modelo mais simples).",
+        "efeito": "C grande deixa o modelo se ajustar mais aos dados (risco de decorar); C pequeno torna o modelo mais simples e geral.",
+        "faixa": "> 0 (ex.: 0.01 a 100)",
+        "nome": "C",
+        "quando_ajustar": "Quando o modelo está decorando demais (diminua C) ou está simples demais e errando muito (aumente C).",
+        "tipo": "float"
+      },
+      {
+        "default": "'lbfgs'",
+        "descricao": "Algoritmo usado para encontrar os melhores pesos.",
+        "efeito": "Cada solver tem velocidade e suporte diferentes a tipos de regularização e a problemas grandes.",
+        "nome": "solver",
+        "opcoes": [
+          "lbfgs",
+          "liblinear",
+          "newton-cg",
+          "newton-cholesky",
+          "sag",
+          "saga"
+        ],
+        "quando_ajustar": "Use 'liblinear' para conjuntos pequenos; 'saga' ou 'sag' para conjuntos grandes; 'lbfgs' é um bom padrão geral.",
+        "tipo": "str"
+      },
+      {
+        "default": "100",
+        "descricao": "Número máximo de passos (iterações) que o algoritmo tenta para encontrar a solução.",
+        "efeito": "Mais iterações dão mais chance de o modelo convergir, mas demoram mais.",
+        "faixa": ">= 1 (ex.: 100 a 1000)",
+        "nome": "max_iter",
+        "quando_ajustar": "Aumente quando aparecer um aviso de que o modelo não convergiu.",
+        "tipo": "int"
+      },
+      {
+        "default": "'l2' (historicamente; nas versoes mais novas o default e 'deprecated')",
+        "descricao": "Tipo de regularização aplicada aos pesos. ATENÇÃO: este parâmetro está DEPRECIADO a partir do scikit-learn 1.8 (default vira 'deprecated' e deve ser removido na 1.10); historicamente o padrão era 'l2'. Em versões atuais prefira controlar a regularização por C e l1_ratio.",
+        "efeito": "'l2' encolhe os pesos; 'l1' pode zerar pesos (seleciona atributos); 'elasticnet' mistura os dois.",
+        "nome": "penalty",
+        "opcoes": [
+          "l1",
+          "l2",
+          "elasticnet",
+          "None"
+        ],
+        "quando_ajustar": "Em versoes recentes, evite mexer aqui (esta sendo removido); use C para ajustar a regularizacao.",
+        "tipo": "str ou None"
+      },
+      {
+        "default": "(removido)",
+        "descricao": "Estrategia para problemas com mais de duas classes. ATENÇÃO: este parametro foi REMOVIDO das versoes recentes do scikit-learn; agora o tratamento de multiplas classes e automatico conforme o solver.",
+        "efeito": "Antes definia entre 'ovr' e 'multinomial'; hoje e decidido automaticamente.",
+        "nome": "multi_class",
+        "opcoes": [
+          "(nao existe mais nas versoes atuais)"
+        ],
+        "quando_ajustar": "Nao ajustar: o parametro nao existe mais nas versoes atuais.",
+        "tipo": "str"
+      }
+    ],
+    "intuicao": "Pense numa balança: cada característica empurra a decisão para um lado ou para o outro, com um peso. O modelo soma todos esses empurrões e, no final, decide para qual lado a balança pende. A função sigmoide pega esse total e o transforma numa probabilidade suave, em vez de um sim/não seco. Quanto mais longe da linha de separação, mais confiante fica a resposta.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/classifier/rocauc.html",
+    "naoUsarQuando": [
+      "Quando a relação entre os dados é muito curva e complicada (fronteira não linear).",
+      "Quando você quer prever um número contínuo (use regressão de verdade, como a linear).",
+      "Quando há muitíssimas variáveis irrelevantes sem nenhum ajuste de regularização.",
+      "Quando os atributos têm escalas muito diferentes e não foram padronizados (pode atrapalhar a convergência)."
+    ],
+    "quandoUsar": [
+      "Quando você precisa classificar em duas ou mais categorias.",
+      "Quando quer não só a resposta, mas também a probabilidade/confiança de cada classe.",
+      "Quando as classes podem ser separadas por uma linha (ou quase isso).",
+      "Como primeiro modelo simples e rápido para comparar com outros mais complexos."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "sklearn.linear_model.LogisticRegression — Logistic Regression (aka logit, MaxEnt) classifier.",
+        "tipo": "doc",
+        "titulo": "LogisticRegression",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "Logistic regression is implemented in LogisticRegression. Despite its name, it is implemented as a linear model for classification rather than regression.",
+        "tipo": "doc",
+        "titulo": "Linear Models — Logistic regression",
+        "url": "https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression"
+      }
+    ],
+    "resumo_basico": "Apesar do nome, ela serve para CLASSIFICAR, não para prever números. Imagine traçar uma linha no quadro que separa duas turmas: de um lado os que vão para a quadra, do outro os que ficam na sala. A regressão logística aprende onde desenhar essa linha e ainda diz o quanto tem certeza, tipo \"acho que é 80% time azul\".",
+    "titulo": "Regressão Logística",
+    "vantagens": [
+      "Simples de entender e rápido de treinar.",
+      "Entrega probabilidades, não só a classe.",
+      "Os pesos ajudam a interpretar quais características mais influenciam a decisão.",
+      "Funciona bem como linha de base (baseline) para comparar com modelos mais complexos."
+    ]
+  },
+  "regressao_polinomial": {
+    "conceitos": [
+      {
+        "desc": "Maior potência criada a partir das características. Grau 2 cria o quadrado; grau 3 cria o cubo; e assim por diante. Quanto maior, mais a curva pode se dobrar.",
+        "nome": "Grau (degree)"
+      },
+      {
+        "desc": "O PolynomialFeatures não é o modelo final: ele só fabrica colunas novas (potências e combinações) a partir das originais.",
+        "nome": "Transformação de características"
+      },
+      {
+        "desc": "Mesmo gerando curvas, o ajuste final é uma regressão linear sobre as novas colunas, por isso continua simples de treinar.",
+        "nome": "Modelo linear nos coeficientes"
+      },
+      {
+        "desc": "Graus muito altos deixam a curva tão flexível que ela decora o ruído do treino e erra em dados novos.",
+        "nome": "Overfitting por grau alto"
+      }
+    ],
+    "descricao": "A Regressão Polinomial combina dois passos: primeiro o PolynomialFeatures cria novas características elevando as originais a potências (x, x², x³, ...) e gerando combinações entre elas; depois uma Regressão Linear é treinada sobre essas novas características. Como o modelo final ainda é linear nos coeficientes, ele continua fácil de treinar, mas ganha a capacidade de representar curvas. O grau (degree) define até qual potência será criada e, por isso, o quanto a curva pode ser flexível.",
+    "desvantagens": [
+      "Graus altos causam overfitting com facilidade.",
+      "O número de termos cresce muito rápido quando há várias características.",
+      "Fica sensível a outliers, especialmente em graus altos.",
+      "Pode dar previsões estranhas fora da faixa de dados vista no treino (extrapolação ruim)."
+    ],
+    "dicas": [
+      "Comece com grau 2 e só aumente se a curva claramente não acompanhar os dados.",
+      "Padronize ou normalize as características: potências de números grandes ficam enormes e desequilibram o modelo.",
+      "Compare graus diferentes por validação cruzada e escolha o que vai melhor no teste, não no treino.",
+      "Se o grau alto causar overfitting, combine com regularização (por exemplo, Ridge sobre as características polinomiais)."
+    ],
+    "exemplo": "from sklearn.preprocessing import PolynomialFeatures\nfrom sklearn.linear_model import LinearRegression\nfrom sklearn.pipeline import make_pipeline\n\n# Cria potencias (grau 2) e depois ajusta uma regressao linear\nmodelo = make_pipeline(\n    PolynomialFeatures(degree=2),  # include_bias=True por padrao\n    LinearRegression()\n)\nmodelo.fit(X_treino, y_treino)\n\nprevisoes = modelo.predict(X_teste)",
+    "exemplo_codigo": "from sklearn.preprocessing import PolynomialFeatures\nfrom sklearn.linear_model import LinearRegression\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.datasets import make_regression\nfrom sklearn.model_selection import train_test_split\n\nX, y = make_regression(n_samples=200, n_features=1, noise=10, random_state=42)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = make_pipeline(PolynomialFeatures(degree=2), LinearRegression())\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "2",
+        "descricao": "Grau máximo das potências criadas a partir das características. É o hiperparâmetro-chave da regressão polinomial: define o quanto a curva pode se dobrar.",
+        "efeito": "Grau baixo (2) gera curvas suaves; grau alto deixa a curva muito flexível e propensa a overfitting.",
+        "faixa": "inteiro positivo (típico: 2 a 4; raramente acima disso)",
+        "nome": "degree",
+        "quando_ajustar": "Aumente quando a curva de grau menor não acompanha os dados; diminua se houver sinais de overfitting.",
+        "tipo": "int (ou tupla min_degree, max_degree)"
+      },
+      {
+        "default": "True",
+        "descricao": "Se inclui uma coluna de 1s (termo de viés), que funciona como o intercepto.",
+        "efeito": "Com True, é adicionada a coluna de 1s. Se a regressão linear seguinte já calcula o intercepto (fit_intercept=True), essa coluna fica redundante.",
+        "nome": "include_bias",
+        "opcoes": [
+          true,
+          false
+        ],
+        "quando_ajustar": "Pode deixar False quando o modelo linear seguinte já cuida do intercepto, para evitar duplicar o termo.",
+        "tipo": "bool"
+      },
+      {
+        "default": "False",
+        "descricao": "Se True, gera apenas combinações entre características diferentes (interações), sem incluir potências da mesma característica (como x²).",
+        "efeito": "Com True, cria termos como x1*x2, mas não x1² nem x2²; reduz o número de colunas.",
+        "nome": "interaction_only",
+        "opcoes": [
+          true,
+          false
+        ],
+        "quando_ajustar": "Use True quando interessam só os efeitos combinados entre características, e não as potências individuais.",
+        "tipo": "bool"
+      }
+    ],
+    "intuicao": "Pense em dobrar uma régua reta para ela acompanhar uma curva. Sozinha, a regressão linear só faz retas. Mas se você acrescentar colunas novas (o valor ao quadrado, ao cubo, etc.), a mesma regressão linear consegue desenhar curvas. Quanto maior o grau, mais a curva pode dobrar e se contorcer; só que, se exagerar, ela começa a decorar os pontos do treino (overfitting) e vai mal em dados novos.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.PolynomialFeatures.html",
+    "naoUsarQuando": [
+      "Quando a relação já é bem representada por uma reta (não complique sem necessidade).",
+      "Quando há muitas características: o número de termos polinomiais cresce muito rápido e o modelo fica pesado e propenso a overfitting.",
+      "Quando você precisa prever categorias (isso é classificação)."
+    ],
+    "quandoUsar": [
+      "Quando o gráfico dos dados mostra uma curva clara, e não uma reta.",
+      "Quando a regressão linear simples deixa um padrão sobrando nos resíduos (erros), sugerindo curvatura.",
+      "Quando você quer mais flexibilidade que a reta, mas ainda prefere um modelo simples e explicável."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "Generate polynomial and interaction features. Generate a new feature matrix consisting of all polynomial combinations of the features with degree less than or equal to the specified degree.",
+        "tipo": "doc",
+        "titulo": "PolynomialFeatures — scikit-learn documentation",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.PolynomialFeatures.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "One common pattern within machine learning is to use linear models trained on nonlinear functions of the data. This approach maintains the generally fast performance of linear methods, while allowing them to fit a much wider range of data.",
+        "tipo": "doc",
+        "titulo": "Linear Models — Polynomial regression: extending linear models with basis functions",
+        "url": "https://scikit-learn.org/stable/modules/linear_model.html"
+      }
+    ],
+    "resumo_basico": "Às vezes os pontos não formam uma reta, mas uma curva. A regressão polinomial resolve isso de um jeito esperto: ela cria potências das suas características (como o número ao quadrado, ao cubo) e depois ajusta uma regressão linear sobre elas. O resultado é uma linha que pode se curvar para acompanhar melhor os dados.",
+    "titulo": "Regressão Polinomial",
+    "vantagens": [
+      "Consegue capturar relações curvas, indo além da reta.",
+      "Continua sendo um modelo linear nos coeficientes, então treina rápido.",
+      "É fácil de entender: basta pensar em acrescentar potências das características."
+    ]
+  },
+  "ridge": {
+    "conceitos": [
+      {
+        "desc": "Penalidade baseada na soma dos quadrados dos pesos. Empurra os pesos para perto de zero (mas sem zerá-los), evitando exageros.",
+        "nome": "Regularização L2"
+      },
+      {
+        "desc": "Controla o quanto a penalidade pesa. Alto = pesos bem pequenos e modelo mais simples; baixo = quase uma regressão linear comum.",
+        "nome": "alpha (força da penalidade)"
+      },
+      {
+        "desc": "Quando o modelo decora o treino e vai mal em dados novos. A Ridge combate isso segurando o tamanho dos pesos.",
+        "nome": "Overfitting"
+      },
+      {
+        "desc": "Situação em que características carregam quase a mesma informação. A Ridge lida melhor com isso do que a regressão linear comum.",
+        "nome": "Multicolinearidade"
+      }
+    ],
+    "descricao": "A Regressão Ridge é uma regressão linear com regularização L2. Além de tentar acertar os pontos do treino, ela acrescenta uma penalidade que cresce conforme os coeficientes (pesos) ficam grandes. Assim, o modelo prefere pesos menores e mais equilibrados, o que reduz o risco de decorar o treino (overfitting) e melhora as previsões em dados novos, especialmente quando as características são muitas ou parecidas entre si.",
+    "desvantagens": [
+      "Ainda é um modelo linear: não captura curvas sozinha.",
+      "Encolhe os pesos, mas não os zera, então não faz seleção automática de características.",
+      "Exige escolher bem o alpha, o que pede testes (validação)."
+    ],
+    "dicas": [
+      "Padronize as características antes de usar Ridge: a penalidade L2 é sensível à escala, e padronizar deixa o efeito justo entre as características.",
+      "Teste vários valores de alpha (por exemplo 0.01, 0.1, 1, 10, 100) e escolha o melhor por validação cruzada.",
+      "Comece com o alpha padrão (1.0) e ajuste a partir do comportamento no teste.",
+      "Se quiser que algumas características desapareçam de vez, considere o Lasso em vez da Ridge."
+    ],
+    "exemplo": "from sklearn.linear_model import Ridge\n\nmodelo = Ridge(alpha=1.0)  # fit_intercept=True, solver='auto'\nmodelo.fit(X_treino, y_treino)\n\nprevisoes = modelo.predict(X_teste)\nprint('Pesos (coeficientes):', modelo.coef_)\nprint('Intercepto:', modelo.intercept_)",
+    "exemplo_codigo": "from sklearn.linear_model import Ridge\nfrom sklearn.datasets import load_diabetes\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_diabetes(return_X_y=True)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = Ridge(alpha=1.0)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "1.0",
+        "descricao": "Força da regularização L2: o quanto o modelo é penalizado por ter pesos grandes. Deve ser não negativo.",
+        "efeito": "Alpha alto deixa os pesos bem pequenos e o modelo mais simples e cauteloso; alpha perto de 0 deixa a Ridge quase igual à regressão linear comum.",
+        "faixa": "0.0 ou maior (típico: 0.001 a 100)",
+        "nome": "alpha",
+        "quando_ajustar": "Ajuste sempre que houver sinais de overfitting ou de características muito parecidas; teste vários valores por validação cruzada.",
+        "tipo": "float"
+      },
+      {
+        "default": "True",
+        "descricao": "Se o modelo deve calcular o intercepto (ponto de partida da linha).",
+        "efeito": "Com True, a linha pode subir ou descer livremente; com False, é forçada a passar pela origem.",
+        "nome": "fit_intercept",
+        "opcoes": [
+          true,
+          false
+        ],
+        "quando_ajustar": "Mantenha True quase sempre; só use False se os dados já estiverem centrados.",
+        "tipo": "bool"
+      },
+      {
+        "default": "'auto'",
+        "descricao": "O método de cálculo usado para resolver a regressão Ridge.",
+        "efeito": "Muda a forma de calcular a solução (velocidade e estabilidade), mas não o conceito do modelo. 'auto' escolhe sozinho com base nos dados.",
+        "nome": "solver",
+        "opcoes": [
+          "auto",
+          "svd",
+          "cholesky",
+          "sparse_cg",
+          "lsqr",
+          "sag",
+          "saga",
+          "lbfgs"
+        ],
+        "quando_ajustar": "Deixe em 'auto' na maioria dos casos; só troque em situações específicas de desempenho ou dados muito grandes/esparsos.",
+        "tipo": "str"
+      },
+      {
+        "default": "None",
+        "descricao": "Número máximo de iterações para os solvers iterativos (como gradiente conjugado).",
+        "efeito": "Limita quantas voltas o solver iterativo dá; só afeta solvers que iteram.",
+        "faixa": "None (deixa o solver decidir) ou um inteiro positivo",
+        "nome": "max_iter",
+        "quando_ajustar": "Aumente se o modelo não convergir (avisar) com solvers iterativos; geralmente nem precisa mexer.",
+        "tipo": "int"
+      },
+      {
+        "default": "False",
+        "descricao": "Se ativado, força os coeficientes a serem positivos (apenas com o solver 'lbfgs').",
+        "efeito": "Com True, nenhum peso pode ser negativo.",
+        "nome": "positive",
+        "opcoes": [
+          true,
+          false
+        ],
+        "quando_ajustar": "Use True só quando o problema exige que todos os efeitos sejam de aumento.",
+        "tipo": "bool"
+      }
+    ],
+    "intuicao": "Imagine que cada peso grande tem um custo. A Ridge soma o erro de previsão com esse custo dos pesos e tenta deixar o total o menor possível. O controle desse custo é o alpha: quanto maior o alpha, mais o modelo é puxado a manter os pesos pequenos (linha mais suave e cautelosa); quanto menor, mais a Ridge se parece com uma regressão linear comum.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Ridge.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/regressor/residuals.html",
+    "naoUsarQuando": [
+      "Quando você quer que o modelo zere automaticamente características inúteis (a Ridge encolhe, mas não zera; nesse caso pense no Lasso).",
+      "Quando a relação entre dados e alvo é claramente curva (uma reta, mesmo regularizada, não acompanha curvas).",
+      "Quando o problema é prever categorias (isso é classificação)."
+    ],
+    "quandoUsar": [
+      "Quando a regressão linear comum está com overfitting (vai bem no treino e mal no teste).",
+      "Quando há muitas características, ou várias muito parecidas entre si (multicolinearidade).",
+      "Quando você quer previsões mais estáveis e pesos mais comportados."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "This model solves a regression model where the loss function is the linear least squares function and regularization is given by the l2-norm. Also known as Ridge Regression or Tikhonov regularization.",
+        "tipo": "doc",
+        "titulo": "Ridge — scikit-learn documentation",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Ridge.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "Ridge regression addresses some of the problems of Ordinary Least Squares by imposing a penalty on the size of the coefficients. The complexity parameter alpha controls the amount of shrinkage.",
+        "tipo": "doc",
+        "titulo": "Linear Models — Ridge regression and classification",
+        "url": "https://scikit-learn.org/stable/modules/linear_model.html"
+      }
+    ],
+    "resumo_basico": "A Ridge é uma regressão linear mais cuidadosa. Ela também desenha a melhor linha, mas com uma regra extra: não deixa os pesos das características ficarem grandes demais. É como pedir para o modelo não exagerar. Isso ajuda quando os dados são poucos ou confusos, deixando as previsões mais estáveis.",
+    "titulo": "Regressão Ridge",
+    "vantagens": [
+      "Reduz o overfitting segurando o tamanho dos pesos.",
+      "Lida bem com características parecidas entre si (multicolinearidade).",
+      "Continua simples de treinar e ainda bem interpretável.",
+      "Costuma generalizar melhor que a regressão linear pura em dados ruidosos."
+    ]
+  },
+  "sgd": {
+    "conceitos": [
+      {
+        "desc": "Ajustar os pesos aos poucos, usando um exemplo (ou poucos) por vez, em vez de todos juntos.",
+        "nome": "Gradiente descendente estocástico"
+      },
+      {
+        "desc": "A regra que mede o quanto o modelo errou; trocá-la muda o comportamento do classificador.",
+        "nome": "Função de perda (loss)"
+      },
+      {
+        "desc": "O tamanho de cada passo durante o aprendizado: grande demais salta a solução, pequeno demais demora.",
+        "nome": "Taxa de aprendizado"
+      },
+      {
+        "desc": "Um freio que evita pesos exagerados e ajuda a não decorar os dados.",
+        "nome": "Regularização (alpha)"
+      },
+      {
+        "desc": "O SGD é muito sensível à escala; por isso quase sempre se padroniza os dados antes.",
+        "nome": "Escala dos atributos"
+      }
+    ],
+    "descricao": "O SGDClassifier treina modelos lineares de classificação usando o método do gradiente descendente estocástico: em vez de olhar todos os dados de uma vez, ele ajusta os pesos com pequenos passos, exemplo por exemplo (ou em pequenos lotes). Dependendo da função de perda escolhida, ele pode se comportar como uma SVM linear (hinge) ou como uma regressão logística (log_loss). É muito eficiente para conjuntos de dados grandes.",
+    "desvantagens": [
+      "Muito sensível à escala dos atributos (exige padronização).",
+      "Precisa de mais ajuste de parâmetros (taxa de aprendizado, alpha, etc.).",
+      "O treino é \"sacudido\" e pode variar entre execuções (use random_state).",
+      "Só separa bem o que é linear."
+    ],
+    "dicas": [
+      "Sempre padronize os atributos antes (por exemplo, com StandardScaler).",
+      "Use loss='log_loss' se quiser probabilidades (predict_proba).",
+      "Defina random_state para resultados reproduzíveis.",
+      "Se não convergir, aumente max_iter ou ative early_stopping.",
+      "Comece com os padrões e ajuste alpha e learning_rate aos poucos."
+    ],
+    "exemplo": "from sklearn.linear_model import SGDClassifier\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_treino, X_teste, y_treino, y_teste = train_test_split(X, y, random_state=42)\n\nmodelo = make_pipeline(\n    StandardScaler(),\n    SGDClassifier(loss='hinge', alpha=0.0001, max_iter=1000, random_state=42)\n)\nmodelo.fit(X_treino, y_treino)\nprint('Acuracia:', modelo.score(X_teste, y_teste))",
+    "exemplo_codigo": "from sklearn.linear_model import SGDClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_iris(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = SGDClassifier(loss='hinge', random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "'hinge'",
+        "descricao": "Função de perda que define como o modelo se comporta. 'hinge' faz dele uma SVM linear; 'log_loss' faz dele algo como uma regressão logística (e libera probabilidades).",
+        "efeito": "Muda completamente o tipo de classificador e se há probabilidades disponíveis.",
+        "nome": "loss",
+        "opcoes": [
+          "hinge",
+          "log_loss",
+          "modified_huber",
+          "squared_hinge",
+          "perceptron",
+          "squared_error",
+          "huber",
+          "epsilon_insensitive",
+          "squared_epsilon_insensitive"
+        ],
+        "quando_ajustar": "Use 'log_loss' quando precisar de probabilidades; 'hinge' para uma SVM linear padrão.",
+        "tipo": "str"
+      },
+      {
+        "default": "'l2'",
+        "descricao": "Tipo de regularização aplicada aos pesos.",
+        "efeito": "'l2' encolhe os pesos; 'l1' pode zerar alguns (seleciona atributos); 'elasticnet' mistura os dois.",
+        "nome": "penalty",
+        "opcoes": [
+          "l2",
+          "l1",
+          "elasticnet",
+          "None"
+        ],
+        "quando_ajustar": "Use 'l1' ou 'elasticnet' quando quiser que o modelo descarte atributos inúteis.",
+        "tipo": "str ou None"
+      },
+      {
+        "default": "0.0001",
+        "descricao": "Força da regularização: quanto maior, mais o modelo é freado para não decorar.",
+        "efeito": "alpha maior deixa o modelo mais simples; menor deixa-o ajustar mais aos dados.",
+        "faixa": ">= 0 (ex.: 1e-5 a 1e-1)",
+        "nome": "alpha",
+        "quando_ajustar": "Aumente se o modelo está decorando o treino; diminua se está simples demais.",
+        "tipo": "float"
+      },
+      {
+        "default": "1000",
+        "descricao": "Número máximo de passagens completas pelos dados de treino (épocas).",
+        "efeito": "Mais iterações dão mais chance de convergir, mas demoram mais.",
+        "faixa": ">= 1 (ex.: 1000 a 5000)",
+        "nome": "max_iter",
+        "quando_ajustar": "Aumente quando aparecer aviso de que o modelo não convergiu.",
+        "tipo": "int"
+      },
+      {
+        "default": "'optimal'",
+        "descricao": "Como o tamanho do passo de aprendizado muda ao longo do treino.",
+        "efeito": "Controla a velocidade e a estabilidade do aprendizado.",
+        "nome": "learning_rate",
+        "opcoes": [
+          "constant",
+          "optimal",
+          "invscaling",
+          "adaptive",
+          "pa1",
+          "pa2"
+        ],
+        "quando_ajustar": "Se o treino ficar instável, experimente 'adaptive' ou 'constant' junto com eta0.",
+        "tipo": "str"
+      }
+    ],
+    "intuicao": "Imagine descer uma montanha no escuro: você dá um passinho na direção que parece mais íngreme para baixo, sente onde está, e dá outro passinho. O SGD faz isso com os pesos do modelo, corrigindo um pouco a cada exemplo. Como dá passos pequenos e frequentes, aprende rápido, mas o caminho fica meio sacudido (estocástico).",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.SGDClassifier.html",
+    "naoUsarQuando": [
+      "Quando o conjunto é pequeno (outros modelos podem ser mais estáveis e simples de ajustar).",
+      "Quando você não pode padronizar os atributos (o SGD costuma ir mal sem isso).",
+      "Quando a separação entre classes é muito curva e não linear.",
+      "Quando você não quer perder tempo ajustando taxa de aprendizado e outros parâmetros sensíveis."
+    ],
+    "quandoUsar": [
+      "Quando o conjunto de dados é muito grande (muitos exemplos ou muitas variáveis).",
+      "Quando você precisa de um treino rápido e que use pouca memória.",
+      "Quando quer um modelo linear flexível, mudando o comportamento pela função de perda.",
+      "Quando os dados chegam aos poucos (aprendizado online com partial_fit)."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "Linear classifiers (SVM, logistic regression, etc.) with SGD training. This estimator implements regularized linear models with stochastic gradient descent (SGD) learning.",
+        "tipo": "doc",
+        "titulo": "SGDClassifier",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.SGDClassifier.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "SGD is merely an optimization technique and does not correspond to a specific family of machine learning models. It is sensitive to feature scaling, so it is highly recommended to scale your data.",
+        "tipo": "doc",
+        "titulo": "Stochastic Gradient Descent",
+        "url": "https://scikit-learn.org/stable/modules/sgd.html"
+      }
+    ],
+    "resumo_basico": "É um aluno que aprende devagarzinho, olhando um exemplo de cada vez e corrigindo um pouco a cada erro, em vez de estudar tudo de uma vez. Por isso ele consegue treinar muito rápido mesmo com montanhas de dados. No fundo, ele também traça uma linha para separar as categorias.",
+    "titulo": "Classificador SGD (Gradiente Descendente Estocástico)",
+    "vantagens": [
+      "Muito rápido e eficiente com dados grandes.",
+      "Usa pouca memória, pois processa aos poucos.",
+      "Flexível: vira SVM linear ou regressão logística trocando a perda.",
+      "Suporta aprendizado online (treinar com dados que chegam em partes)."
+    ]
+  },
+  "svm": {
+    "conceitos": [
+      {
+        "desc": "A faixa de espaço entre a fronteira de decisão e os exemplos mais próximos de cada classe. O SVM tenta deixá-la a mais larga possível.",
+        "nome": "Margem"
+      },
+      {
+        "desc": "Os exemplos que ficam na beira da margem. São os únicos pontos que importam para definir a fronteira.",
+        "nome": "Vetores de suporte"
+      },
+      {
+        "desc": "Uma função que mede semelhança entre exemplos e permite separar classes com fronteiras curvas sem calcular coordenadas extras explicitamente (o 'truque do kernel').",
+        "nome": "Kernel"
+      },
+      {
+        "desc": "Controla o quanto o modelo aceita errar alguns exemplos para manter a margem larga. C alto = pune erros (margem mais apertada); C baixo = mais tolerante (margem mais larga).",
+        "nome": "C (regularização)"
+      }
+    ],
+    "descricao": "O SVC (Support Vector Classifier) é o classificador da família SVM no scikit-learn. Ele aprende uma fronteira de decisão que separa as classes maximizando a 'margem' - a distância entre a fronteira e os exemplos mais próximos de cada classe. Quando os dados não são separáveis por uma reta, ele usa um 'kernel' para encontrar uma fronteira curva. É muito usado para problemas de classificação com poucos a médios números de amostras.",
+    "desvantagens": [
+      "Lento em conjuntos de dados grandes.",
+      "Sensível à escolha de C, gamma e kernel - exige ajuste cuidadoso.",
+      "Precisa que os dados sejam padronizados (escalados) para funcionar bem.",
+      "Não fornece estimativas de probabilidade diretamente por padrão."
+    ],
+    "dicas": [
+      "Sempre padronize as características antes (use StandardScaler), pois o SVM é sensível à escala.",
+      "Comece com kernel 'rbf' e ajuste C e gamma com busca em grade (GridSearch).",
+      "C grande pode causar sobreajuste (decora os dados); C pequeno pode generalizar demais.",
+      "Use kernel 'linear' se as classes parecem separáveis por uma reta - é mais rápido."
+    ],
+    "exemplo": "from sklearn.svm import SVC\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import make_pipeline\n\n# Sempre padronize antes do SVM\nmodelo = make_pipeline(StandardScaler(), SVC(C=1.0, kernel='rbf', gamma='scale'))\nmodelo.fit(X_treino, y_treino)\npredicoes = modelo.predict(X_teste)",
+    "exemplo_codigo": "from sklearn.svm import SVC\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_iris(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = SVC(kernel='rbf', C=1.0)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "1.0",
+        "descricao": "Parâmetro de regularização. A força da regularização é inversamente proporcional a C. Controla o equilíbrio entre margem larga e poucos erros de classificação.",
+        "efeito": "C alto pune mais os erros e aperta a margem (risco de sobreajuste); C baixo deixa a margem mais larga e tolera mais erros (mais generalização).",
+        "faixa": "maior que 0 (ex.: 0.01 a 100)",
+        "nome": "C",
+        "quando_ajustar": "Quando o modelo está sobreajustando (diminua C) ou subajustando (aumente C).",
+        "tipo": "float"
+      },
+      {
+        "default": "'rbf'",
+        "descricao": "Tipo de função kernel usada para mapear os dados. Define se a fronteira é reta ou curva.",
+        "efeito": "'linear' gera fronteira reta; 'rbf' e 'poly' geram fronteiras curvas capazes de separar grupos embolados.",
+        "nome": "kernel",
+        "opcoes": [
+          "linear",
+          "poly",
+          "rbf",
+          "sigmoid",
+          "precomputed"
+        ],
+        "quando_ajustar": "Use 'linear' quando as classes parecem separáveis por reta; 'rbf' como padrão para fronteiras complexas.",
+        "tipo": "str ou callable"
+      },
+      {
+        "default": "'scale'",
+        "descricao": "Coeficiente do kernel para 'rbf', 'poly' e 'sigmoid'. Define o alcance da influência de cada exemplo.",
+        "efeito": "gamma alto = influência curta (fronteira muito ondulada, risco de sobreajuste); gamma baixo = influência longa (fronteira mais suave). 'scale' = 1/(n_features * X.var()).",
+        "nome": "gamma",
+        "opcoes": [
+          "scale",
+          "auto"
+        ],
+        "quando_ajustar": "Ajuste junto com C via busca em grade quando usar kernel 'rbf'.",
+        "tipo": "{'scale', 'auto'} ou float"
+      },
+      {
+        "default": "3",
+        "descricao": "Grau do polinômio quando o kernel é 'poly'. Ignorado pelos outros kernels.",
+        "efeito": "Grau maior cria fronteiras mais curvas e complexas, com maior risco de sobreajuste e custo computacional.",
+        "faixa": "inteiro não-negativo (ex.: 2 a 5)",
+        "nome": "degree",
+        "quando_ajustar": "Apenas quando kernel='poly' e você precisa de fronteiras mais (ou menos) curvas.",
+        "tipo": "int"
+      }
+    ],
+    "intuicao": "Pense na MARGEM como uma estrada larga que separa dois bairros (as classes). O SVM tenta construir a estrada mais larga possível sem que nenhuma casa fique no meio dela. As casas que ficam bem na beira da estrada são os 'vetores de suporte' - são elas que decidem por onde a estrada passa. Já o KERNEL é como um truque mágico: quando os dois bairros estão totalmente misturados num mapa plano, o kernel 'levanta' os pontos numa dimensão extra (como inflar o mapa) até que dê para separá-los com uma superfície - e ao voltar para o mapa plano, a separação vira uma curva.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/classifier/classification_report.html",
+    "naoUsarQuando": [
+      "O conjunto de dados é muito grande (dezenas de milhares de linhas ou mais) - fica lento, pois escala mal acima de ~10.000 amostras.",
+      "Você precisa interpretar facilmente o modelo (a fronteira com kernel é uma 'caixa-preta').",
+      "Você precisa de probabilidades calibradas e rápidas por padrão.",
+      "Os dados têm muito ruído e classes muito sobrepostas sem padrão claro."
+    ],
+    "quandoUsar": [
+      "Conjuntos de dados pequenos a médios (até alguns milhares de exemplos).",
+      "Quando a fronteira entre as classes é complexa/curva (use kernel 'rbf').",
+      "Quando há muitas características (alta dimensão), inclusive mais características que exemplos.",
+      "Quando você precisa de uma separação clara e robusta entre classes bem definidas."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "C-Support Vector Classification. The implementation is based on libsvm. The fit time scales at least quadratically with the number of samples and may be impractical beyond tens of thousands of samples.",
+        "tipo": "doc",
+        "titulo": "sklearn.svm.SVC",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "Support vector machines (SVMs) are a set of supervised learning methods used for classification, regression and outliers detection.",
+        "tipo": "doc",
+        "titulo": "Support Vector Machines (User Guide)",
+        "url": "https://scikit-learn.org/stable/modules/svm.html"
+      }
+    ],
+    "resumo_basico": "Imagine que você quer separar bolinhas azuis de bolinhas vermelhas em uma mesa. O SVM traça a melhor linha (ou faixa) que separa os dois grupos, deixando o maior espaço livre possível dos dois lados. Quanto maior esse espaço, mais confiante o robô fica para classificar bolinhas novas. Ele também sabe entortar a linha quando os grupos estão embolados.",
+    "titulo": "SVM - Máquina de Vetores de Suporte (SVC)",
+    "vantagens": [
+      "Funciona bem em espaços de alta dimensão (muitas características).",
+      "Eficaz mesmo quando há mais características do que exemplos.",
+      "Usa apenas os vetores de suporte, sendo eficiente em memória.",
+      "Versátil: diferentes kernels para fronteiras lineares ou curvas."
+    ]
+  },
+  "svm_linear": {
+    "conceitos": [
+      {
+        "desc": "O espaço entre a reta de separação e os exemplos mais próximos de cada classe; o modelo tenta maximizá-lo.",
+        "nome": "Margem"
+      },
+      {
+        "desc": "A separação é sempre uma reta (em 2D) ou um plano/hiperplano (em mais dimensões), nunca uma curva.",
+        "nome": "Fronteira linear (hiperplano)"
+      },
+      {
+        "desc": "A regra que limita o tamanho dos coeficientes. 'l2' é o padrão; 'l1' tende a zerar coeficientes (seleção de características).",
+        "nome": "Penalidade (penalty)"
+      },
+      {
+        "desc": "Como o modelo mede o erro. 'squared_hinge' (padrão) penaliza erros ao quadrado; 'hinge' é a perda clássica do SVM.",
+        "nome": "Função de perda (loss)"
+      }
+    ],
+    "descricao": "O LinearSVC (Linear Support Vector Classification) é uma versão do SVM que usa apenas o kernel linear, implementada com a biblioteca liblinear. Por causa dessa implementação, ele escala muito melhor para grandes quantidades de exemplos e características do que o SVC com kernel='linear'. É a escolha indicada quando a fronteira entre as classes pode ser uma reta (ou hiperplano).",
+    "desvantagens": [
+      "Só faz fronteiras lineares - não captura padrões curvos.",
+      "Sensível à escala dos dados (precisa padronizar).",
+      "Pode não convergir em max_iter se os dados não estiverem escalados.",
+      "Algumas combinações de penalty/loss/dual não são suportadas."
+    ],
+    "dicas": [
+      "Padronize as características antes (StandardScaler), igual ao SVC.",
+      "Se aparecer aviso de não-convergência, aumente max_iter ou escale melhor os dados.",
+      "Prefira LinearSVC ao SVC(kernel='linear') quando o conjunto é grande - é bem mais rápido.",
+      "Ajuste C para controlar o equilíbrio entre margem larga e poucos erros."
+    ],
+    "exemplo": "from sklearn.svm import LinearSVC\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import make_pipeline\n\nmodelo = make_pipeline(StandardScaler(), LinearSVC(C=1.0, max_iter=1000))\nmodelo.fit(X_treino, y_treino)\npredicoes = modelo.predict(X_teste)",
+    "exemplo_codigo": "from sklearn.svm import LinearSVC\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_iris(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = LinearSVC(C=1.0, max_iter=5000)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "1.0",
+        "descricao": "Parâmetro de regularização. A força da regularização é inversamente proporcional a C.",
+        "efeito": "C alto pune mais os erros e tenta classificar tudo certo (risco de sobreajuste); C baixo deixa a margem mais larga e tolera mais erros.",
+        "faixa": "maior que 0 (ex.: 0.01 a 100)",
+        "nome": "C",
+        "quando_ajustar": "Quando o modelo está sobreajustando (diminua C) ou subajustando (aumente C).",
+        "tipo": "float"
+      },
+      {
+        "default": "'squared_hinge'",
+        "descricao": "Função de perda usada no treinamento.",
+        "efeito": "'hinge' é a perda padrão do SVM; 'squared_hinge' eleva o erro ao quadrado, penalizando mais os erros grandes.",
+        "nome": "loss",
+        "opcoes": [
+          "hinge",
+          "squared_hinge"
+        ],
+        "quando_ajustar": "Geralmente mantenha o padrão; mude para 'hinge' se quiser o comportamento clássico do SVM (com penalty='l2', dual=True).",
+        "tipo": "str"
+      },
+      {
+        "default": "'l2'",
+        "descricao": "Norma usada na penalização dos coeficientes.",
+        "efeito": "'l2' mantém todos os coeficientes pequenos; 'l1' zera coeficientes irrelevantes, fazendo seleção de características.",
+        "nome": "penalty",
+        "opcoes": [
+          "l1",
+          "l2"
+        ],
+        "quando_ajustar": "Use 'l1' quando quiser um modelo esparso/seleção automática de variáveis (com loss='squared_hinge').",
+        "tipo": "str"
+      },
+      {
+        "default": "1000",
+        "descricao": "Número máximo de iterações que o solver pode executar.",
+        "efeito": "Valor maior dá mais chances de convergir, ao custo de mais tempo de treino.",
+        "faixa": "inteiro positivo (ex.: 1000 a 10000)",
+        "nome": "max_iter",
+        "quando_ajustar": "Aumente se aparecer aviso de não-convergência (ConvergenceWarning).",
+        "tipo": "int"
+      }
+    ],
+    "intuicao": "Pense numa régua reta colocada sobre a mesa para dividir dois montes de bolinhas. O LinearSVC busca a posição da régua que deixa a maior MARGEM (espaço livre) entre os dois montes - igual ao SVM normal - mas ele NÃO usa o truque do kernel para entortar a régua: a separação é sempre reta. Em troca disso, ele é muito mais veloz e aguenta conjuntos de dados bem maiores. É como ter uma régua super rápida em vez de um pincel que faz curvas.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.svm.LinearSVC.html",
+    "naoUsarQuando": [
+      "A fronteira entre as classes é claramente curva - use SVC com kernel 'rbf'.",
+      "Você precisa de fronteiras não-lineares (LinearSVC não tem kernels).",
+      "Você precisa de estimativas de probabilidade prontas (use outra abordagem).",
+      "Há poucos exemplos e a relação é complexa - o SVC pode capturar melhor."
+    ],
+    "quandoUsar": [
+      "Conjuntos de dados grandes (muitos exemplos e/ou muitas características) - escala bem.",
+      "Quando as classes são separáveis (ou quase) por uma reta/hiperplano.",
+      "Classificação de texto e dados esparsos de alta dimensão.",
+      "Quando você precisa de treino rápido e um modelo simples."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "Linear Support Vector Classification. Similar to SVC with parameter kernel='linear', but implemented in terms of liblinear rather than libsvm, so it has more flexibility in the choice of penalties and loss functions and should scale better to large numbers of samples.",
+        "tipo": "doc",
+        "titulo": "sklearn.svm.LinearSVC",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.svm.LinearSVC.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "LinearSVC implements 'one-vs-the-rest' multi-class strategy and scales better to large numbers of samples.",
+        "tipo": "doc",
+        "titulo": "Support Vector Machines (User Guide)",
+        "url": "https://scikit-learn.org/stable/modules/svm.html"
+      }
+    ],
+    "resumo_basico": "É um primo do SVM que só sabe separar grupos com uma linha reta, mas faz isso muito rápido, mesmo com muitos dados. Imagine traçar uma régua reta para dividir bolinhas azuis e vermelhas: o LinearSVC encontra a melhor régua bem depressa. É ótimo quando os grupos já dão para separar sem entortar a linha.",
+    "titulo": "SVM Linear (LinearSVC)",
+    "vantagens": [
+      "Muito mais rápido e escalável que o SVC para grandes conjuntos.",
+      "Funciona bem em alta dimensão e com dados esparsos (ex.: texto).",
+      "Permite penalidade 'l1' para seleção automática de características.",
+      "Implementação eficiente baseada em liblinear."
+    ]
+  },
+  "svr": {
+    "conceitos": [
+      {
+        "desc": "Uma faixa de largura epsilon ao redor da previsão. Pontos dentro dela não geram penalidade - o modelo os considera bons o bastante.",
+        "nome": "Tubo epsilon"
+      },
+      {
+        "desc": "Os pontos que ficam fora (ou na borda) do tubo epsilon. São eles que definem a função prevista.",
+        "nome": "Vetores de suporte"
+      },
+      {
+        "desc": "Função que permite ao SVR prever relações curvas, não apenas retas, medindo semelhança entre exemplos.",
+        "nome": "Kernel"
+      },
+      {
+        "desc": "Controla quanto o modelo penaliza os pontos fora do tubo. C alto segue os dados de perto; C baixo gera uma curva mais suave.",
+        "nome": "C (regularização)"
+      }
+    ],
+    "descricao": "O SVR (Support Vector Regression) é a versão de regressão da família SVM no scikit-learn. Em vez de prever uma classe, ele prevê um valor contínuo. A ideia é ajustar uma função que fique dentro de uma 'tubo' de tolerância (definido por epsilon) ao redor dos dados: erros menores que epsilon são ignorados, e apenas os pontos fora do tubo (os vetores de suporte) influenciam o modelo. Assim como o SVC, ele pode usar kernels para capturar relações curvas.",
+    "desvantagens": [
+      "Lento em conjuntos de dados grandes.",
+      "Sensível à escolha de C, gamma e epsilon - exige ajuste.",
+      "Precisa de padronização das características.",
+      "Não fornece interpretação direta dos coeficientes (com kernel não-linear)."
+    ],
+    "dicas": [
+      "Padronize as características E considere padronizar o alvo (y) antes de treinar.",
+      "Comece com kernel 'rbf' e ajuste C, gamma e epsilon com busca em grade.",
+      "epsilon maior = tubo mais largo = modelo mais simples (ignora mais erros pequenos).",
+      "Use kernel 'linear' se a relação parecer reta - é mais rápido."
+    ],
+    "exemplo": "from sklearn.svm import SVR\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import make_pipeline\n\nmodelo = make_pipeline(StandardScaler(), SVR(C=1.0, kernel='rbf', epsilon=0.1, gamma='scale'))\nmodelo.fit(X_treino, y_treino)\npredicoes = modelo.predict(X_teste)",
+    "exemplo_codigo": "from sklearn.svm import SVR\nfrom sklearn.datasets import load_diabetes\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_diabetes(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = SVR(kernel='rbf', C=1.0)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "1.0",
+        "descricao": "Parâmetro de regularização. A força da regularização é inversamente proporcional a C.",
+        "efeito": "C alto faz a curva seguir os pontos de perto (risco de sobreajuste); C baixo gera uma curva mais suave e geral.",
+        "faixa": "maior que 0 (ex.: 0.01 a 100)",
+        "nome": "C",
+        "quando_ajustar": "Quando o modelo está sobreajustando (diminua C) ou subajustando (aumente C).",
+        "tipo": "float"
+      },
+      {
+        "default": "'rbf'",
+        "descricao": "Tipo de função kernel usada. Define se a previsão segue uma reta ou uma curva.",
+        "efeito": "'linear' gera previsão reta; 'rbf' e 'poly' capturam relações curvas.",
+        "nome": "kernel",
+        "opcoes": [
+          "linear",
+          "poly",
+          "rbf",
+          "sigmoid",
+          "precomputed"
+        ],
+        "quando_ajustar": "Use 'linear' para relações retas; 'rbf' como padrão para relações curvas.",
+        "tipo": "str ou callable"
+      },
+      {
+        "default": "0.1",
+        "descricao": "Largura do tubo de tolerância (epsilon-tube). Erros menores que epsilon não são penalizados.",
+        "efeito": "epsilon maior = tubo mais largo = ignora mais erros pequenos = modelo mais simples; epsilon menor = modelo mais sensível.",
+        "faixa": "não-negativo (ex.: 0.01 a 1.0)",
+        "nome": "epsilon",
+        "quando_ajustar": "Aumente se o modelo está muito sensível ao ruído; diminua se está ignorando demais os dados.",
+        "tipo": "float"
+      },
+      {
+        "default": "'scale'",
+        "descricao": "Coeficiente do kernel para 'rbf', 'poly' e 'sigmoid'. Define o alcance da influência de cada exemplo.",
+        "efeito": "gamma alto = curva muito ondulada (risco de sobreajuste); gamma baixo = curva mais suave. 'scale' = 1/(n_features * X.var()).",
+        "nome": "gamma",
+        "opcoes": [
+          "scale",
+          "auto"
+        ],
+        "quando_ajustar": "Ajuste junto com C e epsilon via busca em grade quando usar kernel 'rbf'.",
+        "tipo": "{'scale', 'auto'} ou float"
+      }
+    ],
+    "intuicao": "Imagine que você quer traçar uma linha que acompanhe uma nuvem de pontos. O SVR desenha um TUBO (uma faixa de largura epsilon) em volta dessa linha. Tudo que cair DENTRO do tubo é considerado 'acertado o suficiente' - o modelo nem se incomoda. Só os pontos que escapam do tubo é que importam e puxam a linha. O KERNEL entra quando a relação não é uma reta: ele permite que essa linha vire uma curva suave que acompanha melhor o formato dos dados.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVR.html",
+    "naoUsarQuando": [
+      "O conjunto de dados é muito grande - escala mal acima de ~10.000 amostras.",
+      "Você precisa de um modelo simples e fácil de interpretar (use regressão linear).",
+      "A relação é claramente linear e simples - modelos lineares são mais rápidos.",
+      "Você não pode padronizar os dados (o SVR é sensível à escala)."
+    ],
+    "quandoUsar": [
+      "Problemas de regressão (prever números) com conjuntos pequenos a médios.",
+      "Quando a relação entre entrada e saída é curva/não-linear (use kernel 'rbf').",
+      "Quando há muitas características em relação ao número de exemplos.",
+      "Quando você quer um modelo robusto a pequenos erros/ruídos (graças ao tubo epsilon)."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "Epsilon-Support Vector Regression. The free parameters in the model are C and epsilon. The implementation is based on libsvm. The fit time complexity is more than quadratic with the number of samples which makes it hard to scale to datasets with more than a couple of 10000 samples.",
+        "tipo": "doc",
+        "titulo": "sklearn.svm.SVR",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVR.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "The method of Support Vector Classification can be extended to solve regression problems. This method is called Support Vector Regression.",
+        "tipo": "doc",
+        "titulo": "Support Vector Machines (User Guide)",
+        "url": "https://scikit-learn.org/stable/modules/svm.html"
+      }
+    ],
+    "resumo_basico": "É o SVM que, em vez de separar grupos, aprende a prever um número (como prever a temperatura ou o preço). Imagine uma faixa larga (um 'tubo') desenhada ao redor da linha de tendência: o robô só liga para os pontos que escapam dessa faixa. Os que ficam dentro do tubo já estão 'bons o bastante'. Assim ele traça uma curva que segue bem os dados sem se preocupar com erros pequenininhos.",
+    "titulo": "SVR - Regressão por Vetores de Suporte",
+    "vantagens": [
+      "Captura relações não-lineares via kernels.",
+      "Robusto a pequenos erros graças ao tubo epsilon.",
+      "Funciona bem em alta dimensão (muitas características).",
+      "Eficiente em memória, pois usa só os vetores de suporte."
+    ]
+  },
+  "theilsen": {
+    "conceitos": [
+      {
+        "desc": "Generalização da mediana para vários coeficientes ao mesmo tempo; o 'centro' das estimativas.",
+        "nome": "Mediana espacial"
+      },
+      {
+        "desc": "Fração de outliers que o método aguenta antes de falhar; em Theil-Sen é cerca de 29,3%.",
+        "nome": "Ponto de ruptura"
+      },
+      {
+        "desc": "Conjunto de subamostras usadas para estimar os coeficientes, limitado para controlar o custo.",
+        "nome": "Subpopulação"
+      },
+      {
+        "desc": "Diferente do RANSAC, não exige definir um limiar de resíduo para separar inliers de outliers.",
+        "nome": "Robustez sem limiar"
+      }
+    ],
+    "descricao": "O TheilSenRegressor é um método de regressão linear robusto baseado em medianas. A ideia central, em uma dimensão, é calcular a inclinação entre pares de pontos e usar a mediana dessas inclinações; em múltiplas dimensões, generaliza calculando o estimador em vários subconjuntos de dados e tomando a mediana espacial dos coeficientes. É robusto a outliers (com ponto de ruptura de cerca de 29,3%) e não exige escolher um limiar como o RANSAC, mas pode ser custoso em dimensões altas, por isso usa subpopulações.",
+    "desvantagens": [
+      "Custo computacional cresce muito com o número de features.",
+      "Pode ser lento em conjuntos grandes (mitigado por max_subpopulation/n_subsamples).",
+      "Continua sendo um modelo linear.",
+      "Perde eficiência se a fração de outliers for muito alta."
+    ],
+    "dicas": [
+      "Use em problemas com poucas features; para muitas dimensões prefira Huber ou RANSAC.",
+      "Reduza max_subpopulation para acelerar (ao custo de um pouco de precisão).",
+      "Fixe random_state para reprodutibilidade, já que há amostragem aleatória.",
+      "Padronize as variáveis quando elas tiverem escalas muito diferentes."
+    ],
+    "exemplo": "Estimar a tendência de crescimento de uma planta medida por um aluno ao longo de semanas: em algumas semanas a régua foi lida errado e gerou valores absurdos. Theil-Sen calcula a inclinação entre muitos pares de medições e usa a mediana, então as leituras erradas não distorcem a tendência de crescimento estimada.",
+    "exemplo_codigo": "from sklearn.linear_model import TheilSenRegressor\nfrom sklearn.datasets import make_regression\nfrom sklearn.model_selection import train_test_split\n\nX, y = make_regression(n_samples=200, n_features=4, noise=10, random_state=42)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = TheilSenRegressor(random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "hiperparametros_doc": [
+      {
+        "default": "True",
+        "descricao": "Se deve calcular o intercepto do modelo.",
+        "efeito": "Se False, a reta é forçada a passar pela origem.",
+        "nome": "fit_intercept",
+        "opcoes": [
+          true,
+          false
+        ],
+        "quando_ajustar": "Deixe True salvo se os dados já estiverem centrados.",
+        "tipo": "bool"
+      },
+      {
+        "default": "10000.0",
+        "descricao": "Tamanho máximo da subpopulação estocástica usada quando há combinações demais.",
+        "efeito": "Limita o número de subamostras consideradas, controlando o custo computacional.",
+        "faixa": "valor > 0",
+        "nome": "max_subpopulation",
+        "quando_ajustar": "Reduza para acelerar em problemas grandes; aumente para mais precisão se houver tempo.",
+        "tipo": "int/float"
+      },
+      {
+        "default": "None",
+        "descricao": "Número de amostras usadas para calcular os parâmetros (entre n_features e n_samples).",
+        "efeito": "Maior aumenta a robustez (breakdown point); menor aumenta a eficiência estatística.",
+        "faixa": "n_features <= n_subsamples <= n_samples",
+        "nome": "n_subsamples",
+        "quando_ajustar": "Aumente para mais robustez a outliers; diminua para mais eficiência quando há poucos outliers.",
+        "tipo": "int ou None"
+      },
+      {
+        "default": "300",
+        "descricao": "Número máximo de iterações no cálculo da mediana espacial.",
+        "efeito": "Mais iterações dão mais chance de convergir.",
+        "faixa": "max_iter >= 1",
+        "nome": "max_iter",
+        "quando_ajustar": "Aumente se não convergir.",
+        "tipo": "int"
+      },
+      {
+        "default": "0.001",
+        "descricao": "Tolerância no cálculo da mediana espacial.",
+        "efeito": "Menor exige convergência mais precisa (mais lento).",
+        "faixa": "tol > 0",
+        "nome": "tol",
+        "quando_ajustar": "Raramente; ajuste para trocar precisão por velocidade.",
+        "tipo": "float"
+      },
+      {
+        "default": "None",
+        "descricao": "Estado do gerador aleatório usado na amostragem das subpopulações.",
+        "efeito": "Fixar garante reprodutibilidade da amostragem.",
+        "nome": "random_state",
+        "quando_ajustar": "Defina um inteiro para resultados reproduzíveis.",
+        "tipo": "int, RandomState ou None"
+      },
+      {
+        "default": "None",
+        "descricao": "Número de CPUs usadas no cálculo.",
+        "efeito": "Mais processadores aceleram o treino em paralelo.",
+        "nome": "n_jobs",
+        "opcoes": [
+          "None (=1)",
+          "-1 (todos os processadores)",
+          "inteiro positivo"
+        ],
+        "quando_ajustar": "Use -1 para usar todos os núcleos em conjuntos maiores.",
+        "tipo": "int ou None"
+      },
+      {
+        "default": "False",
+        "descricao": "Modo detalhado durante o ajuste.",
+        "efeito": "Imprime informações de progresso do treino.",
+        "nome": "verbose",
+        "opcoes": [
+          true,
+          false
+        ],
+        "quando_ajustar": "Ative para acompanhar o andamento ou depurar.",
+        "tipo": "bool"
+      }
+    ],
+    "intuicao": "Médias são facilmente puxadas por valores extremos; medianas, não. Theil-Sen explora isso: em vez de ajustar uma única reta minimizando o erro total (sensível a outliers), ele estima muitas retas a partir de subconjuntos e fica com o 'centro' (mediana) dessas estimativas. Como a mediana ignora os extremos, o resultado é robusto sem precisar definir manualmente o que é outlier. O preço é o custo computacional, controlado limitando o tamanho e o número de subamostras.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.TheilSenRegressor.html",
+    "naoUsarQuando": [
+      "Quando há muitas variáveis (custo cresce rapidamente com a dimensão).",
+      "Quando a fração de outliers ultrapassa ~29% (o ponto de ruptura é excedido).",
+      "Quando a relação é claramente não linear.",
+      "Quando o conjunto de dados é enorme e o tempo de treino é crítico."
+    ],
+    "quandoUsar": [
+      "Quando há outliers moderados e você quer robustez sem ajustar um limiar.",
+      "Quando deseja um método robusto com boa propriedade estatística (ponto de ruptura alto).",
+      "Quando o número de variáveis (features) é pequeno ou moderado.",
+      "Quando prefere uma alternativa determinística-ish e principista ao RANSAC."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "citacao": "class sklearn.linear_model.TheilSenRegressor(*, fit_intercept=True, max_subpopulation=10000.0, n_subsamples=None, max_iter=300, tol=0.001, random_state=None, n_jobs=None, verbose=False)",
+        "tipo": "doc",
+        "titulo": "TheilSenRegressor",
+        "url": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.TheilSenRegressor.html"
+      },
+      {
+        "autor": "scikit-learn",
+        "citacao": "The TheilSenRegressor estimator uses a generalization of the median in multiple dimensions and is thus robust to multivariate outliers.",
+        "tipo": "doc",
+        "titulo": "Robustness regression: outliers and modeling errors",
+        "url": "https://scikit-learn.org/stable/modules/linear_model.html#robustness-regression-outliers-and-modeling-errors"
+      }
+    ],
+    "resumo_basico": "Pense em traçar uma reta olhando muitos pares de pontos, calculando a inclinação de cada par e ficando com a inclinação do meio (a mediana). Como você usa o valor do meio, alguns pares estranhos não atrapalham a resposta. A Regressão de Theil-Sen é assim: ela combina muitas estimativas e escolhe o valor central, o que a torna resistente a pontos fora da curva.",
+    "titulo": "Regressão de Theil-Sen (TheilSenRegressor)",
+    "vantagens": [
+      "Robusto a outliers sem precisar de limiar manual.",
+      "Boa propriedade estatística (ponto de ruptura de ~29,3%).",
+      "Resultados estáveis e interpretáveis (modelo linear).",
+      "Geralmente mais robusto que mínimos quadrados em dados ruidosos."
+    ]
+  }
+}

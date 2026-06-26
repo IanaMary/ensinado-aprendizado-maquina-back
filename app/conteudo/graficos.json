@@ -1,0 +1,466 @@
+{
+  "balanceamento_classes": {
+    "conceitos": [
+      {
+        "desc": "Quantos exemplos existem de cada categoria no conjunto de dados.",
+        "nome": "Frequência de classe"
+      },
+      {
+        "desc": "Quando uma classe tem muito mais exemplos que outra, enviesando o aprendizado.",
+        "nome": "Desbalanceamento"
+      },
+      {
+        "desc": "Comparar as duas distribuições garante que ambas representam o mesmo problema.",
+        "nome": "Treino vs teste"
+      }
+    ],
+    "descricao": "É um gráfico de barras com uma barra por classe, cuja altura é a frequência (contagem) de exemplos daquela classe. Pode comparar treino e teste lado a lado. Distribuições muito desiguais indicam desbalanceamento: o modelo pode atingir alta acurácia só prevendo a classe majoritária, ignorando as raras. É um gráfico de diagnóstico dos dados, feito antes mesmo de confiar nas métricas, porque ele explica por que precisão/recall de classes raras costumam ser baixos.",
+    "dicas": [
+      "Barras muito desiguais pedem técnicas como reamostragem, pesos de classe ou métricas além da acurácia.",
+      "Compare treino e teste: se forem diferentes, a avaliação fica injusta.",
+      "Use este gráfico cedo, ele explica resultados ruins de classes raras depois."
+    ],
+    "exemplo": "Se a barra 'normal' tem 950 e a barra 'fraude' tem 50, há forte desbalanceamento: um modelo que sempre diz 'normal' acerta 95% mas nunca pega fraude.",
+    "exemplo_codigo": "from yellowbrick.target import ClassBalance\n\nviz = ClassBalance(labels=['normal', 'fraude'])\nviz.fit(y_train, y_test)\nviz.show()",
+    "formula": "frequência(classe c) = nº de exemplos da classe c; proporção = frequência(c) / total",
+    "intuicao": "No básico você compara a altura das barras; no avançado entende que o desbalanceamento enviesa o treino e por isso a acurácia pode mentir — daí a necessidade de olhar recall por classe ou reamostrar os dados.",
+    "link_sklearn": "",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/target/class_balance.html",
+    "naoUsarQuando": [
+      "Em regressão, onde o alvo é numérico contínuo.",
+      "Em agrupamento, onde não existem classes rotuladas."
+    ],
+    "quandoUsar": [
+      "Antes de treinar um classificador, para inspecionar a distribuição das classes.",
+      "Quando a acurácia parece alta demais e você suspeita de classe majoritária dominante."
+    ],
+    "referencias": [
+      {
+        "autor": "Yellowbrick",
+        "tipo": "doc",
+        "titulo": "Class Balance",
+        "url": "https://www.scikit-yb.org/en/latest/api/target/class_balance.html"
+      }
+    ],
+    "resumo_basico": "É um gráfico de barras simples que conta quantos exemplos existem de cada categoria. Pense numa turma onde quase todos torcem por um time e só dois por outro: o modelo tende a 'chutar' sempre o time da maioria. Você quer ver barras parecidas em altura; barras muito desiguais são um aviso de problema.",
+    "titulo": "Balanceamento das Classes"
+  },
+  "distancia_clusters": {
+    "conceitos": [
+      {
+        "desc": "O ponto central (média) de um cluster, que o representa no mapa.",
+        "nome": "Centróide"
+      },
+      {
+        "desc": "Projeção de muitas dimensões em duas para podermos enxergar as distâncias.",
+        "nome": "Embedding 2D"
+      },
+      {
+        "desc": "Codifica quantos pontos pertencem ao cluster: bolha grande, cluster populoso.",
+        "nome": "Tamanho da bolha"
+      }
+    ],
+    "descricao": "Os centros dos clusters são projetados em 2 dimensões (via MDS ou t-SNE) preservando ao máximo as distâncias originais entre eles. Cada cluster vira um círculo; o tamanho do círculo é proporcional ao número de pontos (membros) daquele cluster. Centros próximos no mapa indicam clusters semelhantes (candidatos a fusão); centros bem separados indicam grupos distintos. Como é uma projeção 2D de um espaço de muitas dimensões, os eixos não têm unidade física — só as distâncias relativas importam.",
+    "dicas": [
+      "Foque nas distâncias relativas, não nos números dos eixos (eles não têm unidade).",
+      "Bolhas muito próximas sugerem reduzir o número de clusters.",
+      "Bolhas minúsculas podem ser clusters fracos ou ruído."
+    ],
+    "exemplo": "Se duas bolhas estão quase encostadas e são pequenas, esses dois clusters são parecidos e pouco populosos — talvez devessem ser um só; uma bolha grande e isolada é um grupo forte e bem definido.",
+    "exemplo_codigo": "from yellowbrick.cluster import InterclusterDistance\nfrom sklearn.cluster import KMeans\n\nmodelo = KMeans(n_clusters=6, random_state=42)\nviz = InterclusterDistance(modelo)\nviz.fit(X)\nviz.show()",
+    "formula": "distância entre centróides projetada por embedding 2D (MDS/t-SNE) preservando as distâncias originais",
+    "intuicao": "No básico você lê o mapa de bolhas; no avançado entende que é uma redução de dimensionalidade dos centróides, então proximidade no desenho aproxima a similaridade real entre clusters e o tamanho conta a população.",
+    "link_sklearn": "",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/cluster/icdm.html",
+    "naoUsarQuando": [
+      "Em classificação ou regressão supervisionadas.",
+      "Quando você precisa de distâncias exatas, pois a projeção 2D é aproximada."
+    ],
+    "quandoUsar": [
+      "Em agrupamento para ver quais clusters são parecidos e quais são bem distintos.",
+      "Para decidir se dois clusters próximos poderiam ser unidos."
+    ],
+    "referencias": [
+      {
+        "autor": "Yellowbrick",
+        "tipo": "doc",
+        "titulo": "Intercluster Distance Maps",
+        "url": "https://www.scikit-yb.org/en/latest/api/cluster/icdm.html"
+      }
+    ],
+    "resumo_basico": "Mostra os grupos como bolhas num mapa: bolhas próximas são grupos parecidos, bolhas distantes são bem diferentes, e o tamanho da bolha diz quantos pontos têm. É como ver mesas numa festa: mesas afastadas têm pessoas com gostos diferentes, mesas grudadas talvez pudessem virar uma só. Você quer bolhas bem espalhadas e cada uma com gente o bastante.",
+    "titulo": "Distância entre Clusters"
+  },
+  "distancia_cook": {
+    "conceitos": [
+      {
+        "desc": "O quanto um único ponto altera o modelo inteiro se for incluído ou removido.",
+        "nome": "Influência"
+      },
+      {
+        "desc": "Quão extremo um ponto é nas variáveis de entrada; pontos na ponta têm mais peso.",
+        "nome": "Alavancagem"
+      },
+      {
+        "desc": "Linha de alerta (em geral 4/n) acima da qual o ponto é considerado influente.",
+        "nome": "Limiar heurístico"
+      }
+    ],
+    "descricao": "Para cada observação calcula-se a distância de Cook, que mede o quanto as previsões de uma regressão linear (OLS) mudariam se aquela observação fosse removida. O gráfico é um stem plot: o eixo X é o índice da instância e o eixo Y é o valor da distância de Cook. Uma linha de limiar heurístico (tipicamente 4/n) marca o nível de alerta; barras acima dela são pontos altamente influentes — possíveis outliers ou erros de dados que distorcem o ajuste. Pontos com Cook alto combinam resíduo grande e alavancagem (posição extrema nas variáveis de entrada).",
+    "dicas": [
+      "Investigue toda barra acima da linha de alerta antes de removê-la — pode ser dado válido e importante.",
+      "Pontos influentes muitas vezes são erros de digitação ou medições raras.",
+      "Reavalie o modelo após tratar os pontos influentes para ver se as previsões estabilizam."
+    ],
+    "exemplo": "Se uma única barra dispara muito acima da linha tracejada de alerta enquanto as outras são baixinhas, aquele exemplo está dominando o modelo e deve ser checado (pode ser erro de digitação ou outlier real).",
+    "exemplo_codigo": "from yellowbrick.regressor import CooksDistance\n\nviz = CooksDistance()\nviz.fit(X, y)\nviz.show()",
+    "formula": "D_i = (e_i² / (p · s²)) · (h_ii / (1 - h_ii)²)   (e_i: resíduo; h_ii: alavancagem; p: nº de parâmetros)",
+    "intuicao": "No básico você caça as barras mais altas; no avançado entende que a distância de Cook junta resíduo e alavancagem para medir o impacto real de remover um ponto sobre todos os coeficientes do modelo.",
+    "link_sklearn": "",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/regressor/influence.html",
+    "naoUsarQuando": [
+      "Em classificação ou agrupamento.",
+      "Em modelos não-lineares complexos, onde a distância de Cook (baseada em OLS) não se aplica diretamente."
+    ],
+    "quandoUsar": [
+      "Em regressão linear para detectar pontos influentes e outliers que distorcem o ajuste.",
+      "Na fase de limpeza de dados, antes de confiar nos coeficientes do modelo."
+    ],
+    "referencias": [
+      {
+        "autor": "Yellowbrick",
+        "tipo": "doc",
+        "titulo": "Cook's Distance",
+        "url": "https://www.scikit-yb.org/en/latest/api/regressor/influence.html"
+      }
+    ],
+    "resumo_basico": "Aponta quais exemplos têm 'poder demais' sobre o modelo, ou seja, sozinhos puxam a previsão para um lado. É como uma gangorra: uma pessoa pesada sentada bem na ponta desequilibra tudo. Cada exemplo vira uma barra; barras que estouram a linha de alerta são os pontos influentes que merecem investigação.",
+    "titulo": "Distância de Cook"
+  },
+  "erros_predicao_classe": {
+    "conceitos": [
+      {
+        "desc": "Cada barra soma os palpites do modelo para uma classe real, fatiada pela classe prevista.",
+        "nome": "Barra empilhada"
+      },
+      {
+        "desc": "O eixo agrupa pela verdade; as cores mostram em quê o modelo transformou cada exemplo.",
+        "nome": "Classe real vs prevista"
+      },
+      {
+        "desc": "O tamanho das fatias 'erradas' dentro de cada barra mostra o quanto aquela classe é confundida.",
+        "nome": "Proporção de erro"
+      }
+    ],
+    "descricao": "Cada barra do eixo X representa uma classe real (actual class) e sua altura é o total de exemplos daquela classe. A barra é colorida por fatias segundo a classe prevista (predicted class). A fatia da cor 'correta' é o acerto; as outras cores são as confusões. Diferente da matriz de confusão, aqui dá para ver de relance o tamanho relativo de cada classe e a proporção de erro dentro dela. Barras com muitas fatias de cores erradas indicam classes problemáticas.",
+    "dicas": [
+      "Procure barras com grandes fatias de cor 'errada' — são as classes mal aprendidas.",
+      "Compare a altura das barras para enxergar desbalanceamento entre classes.",
+      "Use junto da matriz de confusão: uma mostra o panorama, a outra os pares exatos."
+    ],
+    "exemplo": "Se a barra 'onça' tem 50 de altura e uma fatia grande na cor 'gato', muitas onças estão sendo previstas como gato — confusão clara naquela classe.",
+    "exemplo_codigo": "from yellowbrick.classifier import ClassPredictionError\nfrom sklearn.ensemble import RandomForestClassifier\n\nmodelo = RandomForestClassifier()\nviz = ClassPredictionError(modelo, classes=['gato', 'cachorro', 'onça'])\nviz.fit(X_train, y_train)\nviz.score(X_test, y_test)\nviz.show()",
+    "formula": "altura da barra (classe c) = nº de exemplos reais da classe c; fatia = nº previsto como classe k dentro de c",
+    "intuicao": "No básico você vê se cada barra é 'da cor certa'; no avançado percebe que é a mesma informação da matriz de confusão, mas empilhada por classe verdadeira, o que torna óbvia a proporção de erro de cada uma.",
+    "link_sklearn": "",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/classifier/class_prediction_error.html",
+    "naoUsarQuando": [
+      "Em regressão ou agrupamento sem rótulos.",
+      "Quando há muitíssimas classes, pois as barras ficam difíceis de ler."
+    ],
+    "quandoUsar": [
+      "Em classificação quando você quer ver os erros distribuídos por classe e o tamanho de cada classe ao mesmo tempo.",
+      "Como complemento mais visual da matriz de confusão."
+    ],
+    "referencias": [
+      {
+        "autor": "Yellowbrick",
+        "tipo": "doc",
+        "titulo": "Class Prediction Error",
+        "url": "https://www.scikit-yb.org/en/latest/api/classifier/class_prediction_error.html"
+      }
+    ],
+    "resumo_basico": "É um gráfico de barras empilhadas que mostra, para cada categoria verdadeira, em quais categorias o modelo dividiu seus palpites. Imagine separar frutas em caixas: a barra da caixa 'maçã' mostra quantas maçãs ficaram certas e quantas foram parar na caixa 'pêssego'. Você quer que cada barra seja quase toda da cor certa.",
+    "titulo": "Erros de Predição por Classe"
+  },
+  "matriz_confusao": {
+    "conceitos": [
+      {
+        "desc": "Células onde a classe prevista é igual à verdadeira: são os acertos do modelo.",
+        "nome": "Diagonal principal"
+      },
+      {
+        "desc": "Erros fora da diagonal: prever uma classe que não era (FP) ou deixar de prever a certa (FN).",
+        "nome": "Falso positivo / falso negativo"
+      },
+      {
+        "desc": "A intensidade da cor traduz a contagem; quanto mais escura a célula, mais exemplos caíram ali.",
+        "nome": "Mapa de calor"
+      }
+    ],
+    "descricao": "É uma tabela quadrada N×N onde as linhas representam a classe verdadeira e as colunas a classe prevista pelo modelo. Cada célula traz a contagem (ou proporção) de exemplos. A diagonal principal são os acertos; tudo fora dela são confusões. O mapa de calor usa cor mais intensa para valores maiores, então um modelo bom mostra a diagonal escura e células fora da diagonal claras. Linhas inteiras erradas indicam uma classe que o modelo nunca reconhece; colunas erradas indicam uma classe que ele prevê demais.",
+    "dicas": [
+      "Sempre comece pela diagonal: se estiver escura e o resto claro, o modelo vai bem.",
+      "Leia a linha de uma classe para descobrir com quem ela mais se confunde.",
+      "Com classes desbalanceadas, prefira a versão em porcentagem (percent=True) para não se enganar com números absolutos."
+    ],
+    "exemplo": "Se a célula (gato, gato) tem 48 e (gato, cachorro) tem 2, o modelo viu 50 gatos e confundiu só 2 com cachorro: ótimo. Se a diagonal toda estiver bem escura e o resto quase branco, o modelo acertou quase tudo.",
+    "exemplo_codigo": "from yellowbrick.classifier import ConfusionMatrix\nfrom sklearn.linear_model import LogisticRegression\n\nmodelo = LogisticRegression()\nviz = ConfusionMatrix(modelo, classes=['gato', 'cachorro', 'onça'])\nviz.fit(X_train, y_train)\nviz.score(X_test, y_test)\nviz.show()",
+    "formula": "acerto_diagonal = soma das células onde linha = coluna; acurácia = diagonal / total",
+    "intuicao": "No básico você só olha se a diagonal está escura; no avançado cada célula fora da diagonal te diz exatamente qual par de classes o modelo troca. Ler linha por linha mostra o erro de cada classe verdadeira.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.confusion_matrix.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/classifier/confusion_matrix.html",
+    "naoUsarQuando": [
+      "Em regressão (saída numérica contínua), pois não há classes para contar.",
+      "Em agrupamento, onde não existem rótulos verdadeiros para comparar."
+    ],
+    "quandoUsar": [
+      "Em qualquer problema de classificação (2 ou mais classes) para ver os acertos e as confusões.",
+      "Quando você quer saber exatamente quais classes o modelo troca entre si."
+    ],
+    "referencias": [
+      {
+        "autor": "Yellowbrick",
+        "tipo": "doc",
+        "titulo": "Confusion Matrix",
+        "url": "https://www.scikit-yb.org/en/latest/api/classifier/confusion_matrix.html"
+      }
+    ],
+    "resumo_basico": "É como um boletim que mostra, para cada categoria, quantas vezes o modelo acertou e em quais categorias ele se confundiu. Imagine um jogo de adivinhar animais: a matriz conta quantas onças você chamou de gato. O que você quer ver é a diagonal bem escura (os acertos) e o resto bem claro (os erros pequenos).",
+    "titulo": "Matriz de Confusão"
+  },
+  "metodo_cotovelo": {
+    "conceitos": [
+      {
+        "desc": "Soma das distâncias quadradas dos pontos aos seus centróides; quanto menor, mais compacto.",
+        "nome": "Distorção (inércia)"
+      },
+      {
+        "desc": "A partir de certo k, aumentar clusters melhora pouquíssimo a métrica.",
+        "nome": "Retornos decrescentes"
+      },
+      {
+        "desc": "O k onde a curva dobra: o melhor equilíbrio entre simplicidade e ajuste.",
+        "nome": "Ponto de cotovelo"
+      }
+    ],
+    "descricao": "O visualizador roda o algoritmo (geralmente KMeans) para uma faixa de valores de k e plota, no eixo Y, uma métrica de pontuação (por padrão a distorção, soma das distâncias quadradas ao centróide) contra k no eixo X. Conforme k cresce, a métrica melhora, mas com retornos decrescentes; o 'cotovelo' é o ponto de inflexão onde adicionar mais clusters deixa de compensar. O Yellowbrick marca esse k automaticamente com uma linha tracejada e pode sobrepor o tempo de treino. Outras métricas disponíveis são 'silhouette' e 'calinski_harabasz'.",
+    "dicas": [
+      "Se o cotovelo não for óbvio, troque a métrica para 'silhouette'.",
+      "Confira o tempo de treino sobreposto: às vezes um k menor é quase tão bom e bem mais rápido.",
+      "Não escolha k muito alto só para reduzir a distorção — você acaba dividindo demais."
+    ],
+    "exemplo": "Se a curva cai forte de k=1 a k=3 e depois fica quase reta, o cotovelo está em k=3: três grupos é a melhor escolha.",
+    "exemplo_codigo": "from yellowbrick.cluster import KElbowVisualizer\nfrom sklearn.cluster import KMeans\n\nmodelo = KMeans(random_state=42)\nviz = KElbowVisualizer(modelo, k=(2, 10))\nviz.fit(X)\nviz.show()",
+    "formula": "distorção = Σ (distância de cada ponto ao seu centróide)²  (soma para todos os pontos)",
+    "intuicao": "No básico você procura a 'dobra' da curva; no avançado entende que está balanceando ganho de ajuste contra complexidade — mais clusters sempre reduzem a distorção, mas o cotovelo marca onde o ganho extra fica pequeno.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/cluster/elbow.html",
+    "naoUsarQuando": [
+      "Em classificação ou regressão supervisionadas.",
+      "Quando a curva não tem cotovelo claro — aí use a métrica de silhueta para decidir."
+    ],
+    "quandoUsar": [
+      "Em agrupamento para escolher o número de clusters k.",
+      "Quando você não sabe de antemão quantos grupos existem nos dados."
+    ],
+    "referencias": [
+      {
+        "autor": "Yellowbrick",
+        "tipo": "doc",
+        "titulo": "Elbow Method",
+        "url": "https://www.scikit-yb.org/en/latest/api/cluster/elbow.html"
+      }
+    ],
+    "resumo_basico": "Ajuda a escolher em quantos grupos dividir os dados. Você testa vários números de grupos e desenha uma curva; o ponto onde a curva 'dobra' como um cotovelo é o número ideal. É como apertar pessoas em vans: depois de certo ponto, colocar mais vans quase não melhora nada — esse joelho da curva é a resposta.",
+    "titulo": "Método do Cotovelo"
+  },
+  "prediction_error": {
+    "conceitos": [
+      {
+        "desc": "Onde previsto é igual ao real: a meta de um modelo perfeito.",
+        "nome": "Linha identidade (45°)"
+      },
+      {
+        "desc": "A reta que melhor descreve os pontos; comparada à identidade, revela viés.",
+        "nome": "Linha de melhor ajuste"
+      },
+      {
+        "desc": "Mede quanto da variação dos dados o modelo explica; perto de 1 é ótimo.",
+        "nome": "R²"
+      }
+    ],
+    "descricao": "No eixo X ficam os valores reais (y) e no eixo Y os valores previstos (ŷ). A linha identidade (45°) representa a previsão perfeita, e há também a linha de melhor ajuste (best fit) dos pontos. Pontos acima da diagonal são superestimações; abaixo, subestimações. Quanto mais a nuvem se cola à diagonal e quanto mais a linha de best fit coincide com a identidade, melhor o modelo. Um leque que se abre para valores altos indica que o erro cresce com a magnitude; uma inclinação diferente de 45° revela viés sistemático.",
+    "dicas": [
+      "Compare a linha de best fit com a diagonal: se divergem, há viés.",
+      "Faixa estreita e colada à diagonal = bom; nuvem larga = muito erro.",
+      "Um leque que abre nos valores altos indica erro crescente com a magnitude."
+    ],
+    "exemplo": "Se os pontos formam uma faixa estreita grudada na diagonal, o modelo prevê muito bem; se a nuvem se inclina e fica achatada longe dos extremos, o modelo subestima valores altos.",
+    "exemplo_codigo": "from yellowbrick.regressor import PredictionError\nfrom sklearn.linear_model import LinearRegression\n\nmodelo = LinearRegression()\nviz = PredictionError(modelo)\nviz.fit(X_train, y_train)\nviz.score(X_test, y_test)\nviz.show()",
+    "formula": "previsão perfeita: ŷ = y (linha identidade de 45°); qualidade resumida por R²",
+    "intuicao": "No básico você vê se os pontos seguem a diagonal; no avançado compara a linha de best fit com a linha identidade — a diferença entre elas mede o viés do modelo, e a dispersão em torno mede a variância.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.r2_score.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/regressor/peplot.html",
+    "naoUsarQuando": [
+      "Em classificação, onde a saída é categórica.",
+      "Em agrupamento, que não tem alvo numérico para comparar."
+    ],
+    "quandoUsar": [
+      "Em regressão para comparar visualmente valores previstos com valores reais.",
+      "Quando você quer detectar viés sistemático (super ou subestimação)."
+    ],
+    "referencias": [
+      {
+        "autor": "Yellowbrick",
+        "tipo": "doc",
+        "titulo": "Prediction Error Plot",
+        "url": "https://www.scikit-yb.org/en/latest/api/regressor/peplot.html"
+      }
+    ],
+    "resumo_basico": "É um gráfico de pontos que coloca, para cada exemplo, o valor real no eixo de baixo e o valor que o modelo previu no eixo de lado. Existe uma linha diagonal 'perfeita': se um ponto cai em cima dela, o modelo acertou em cheio. Você quer ver os pontos colados nessa diagonal, formando uma faixa fina e bem alinhada.",
+    "titulo": "Previsto vs Real"
+  },
+  "relatorio_classificacao": {
+    "conceitos": [
+      {
+        "desc": "Dos exemplos que o modelo chamou de uma classe, quantos realmente eram dela.",
+        "nome": "Precisão"
+      },
+      {
+        "desc": "Dos exemplos que de fato eram de uma classe, quantos o modelo encontrou.",
+        "nome": "Recall"
+      },
+      {
+        "desc": "Média harmônica entre precisão e recall: só fica alta quando as duas estão altas.",
+        "nome": "F1-score"
+      },
+      {
+        "desc": "Quantos exemplos reais existem de cada classe; ajuda a julgar se uma nota é confiável.",
+        "nome": "Support"
+      }
+    ],
+    "descricao": "É um mapa de calor com uma linha por classe e três colunas: precision, recall e f1-score (o support, número de exemplos, costuma aparecer ao lado). A cor varia de 0 a 1: tons mais intensos indicam valores próximos de 1 (bom). Precisão alta com recall baixo significa que o modelo é cauteloso (erra pouco quando aponta, mas deixa passar muitos); recall alto com precisão baixa significa que ele aponta demais. O F1 equilibra os dois numa nota só. Visualmente você procura linhas inteiras quentes; uma linha fria denuncia uma classe que o modelo trata mal.",
+    "dicas": [
+      "Compare precisão e recall da mesma classe: a diferença revela se o modelo é cauteloso ou exagerado.",
+      "Olhe o support junto: uma nota alta com pouquíssimos exemplos é pouco confiável.",
+      "Procure linhas frias — são as classes que precisam de mais dados ou ajuste."
+    ],
+    "exemplo": "Se a classe 'onça' tem precisão 0,95 e recall 0,60, sempre que o modelo diz 'onça' ele quase sempre acerta, mas deixa escapar 40% das onças de verdade — a célula do recall vai estar mais fria que a da precisão.",
+    "exemplo_codigo": "from yellowbrick.classifier import ClassificationReport\nfrom sklearn.ensemble import RandomForestClassifier\n\nmodelo = RandomForestClassifier()\nviz = ClassificationReport(modelo, classes=['gato', 'cachorro', 'onça'], support=True)\nviz.fit(X_train, y_train)\nviz.score(X_test, y_test)\nviz.show()",
+    "formula": "precisão = VP / (VP + FP); recall = VP / (VP + FN); F1 = 2·(precisão·recall) / (precisão + recall)",
+    "intuicao": "No básico você lê as notas por classe; no avançado entende que precisão e recall medem dois tipos de erro diferentes, e o F1 é a média harmônica que pune quando um dos dois está baixo.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.classification_report.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/classifier/classification_report.html",
+    "naoUsarQuando": [
+      "Em regressão, onde não há precisão/recall.",
+      "Em agrupamento sem rótulos verdadeiros."
+    ],
+    "quandoUsar": [
+      "Em classificação quando você quer notas detalhadas por classe, não só a acurácia geral.",
+      "Quando as classes são desbalanceadas e a acurácia sozinha engana."
+    ],
+    "referencias": [
+      {
+        "autor": "Yellowbrick",
+        "tipo": "doc",
+        "titulo": "Classification Report",
+        "url": "https://www.scikit-yb.org/en/latest/api/classifier/classification_report.html"
+      }
+    ],
+    "resumo_basico": "É um painel colorido que dá três notas para cada categoria: precisão, recall e F1. Pense numa avaliação de detetive: a precisão é o quanto ele acerta quando aponta um suspeito, e o recall é quantos culpados de verdade ele consegue pegar. Quanto mais quente/escura a cor de cada quadradinho, melhor a nota.",
+    "titulo": "Relatório de Classificação"
+  },
+  "residuals_plot": {
+    "conceitos": [
+      {
+        "desc": "A diferença entre o valor real e o previsto: o erro de cada ponto.",
+        "nome": "Resíduo"
+      },
+      {
+        "desc": "Os erros têm espalhamento parecido em toda a faixa: sinal de um bom modelo.",
+        "nome": "Homocedasticidade"
+      },
+      {
+        "desc": "Curvas ou funis indicam que o modelo não capturou toda a estrutura dos dados.",
+        "nome": "Padrão nos resíduos"
+      }
+    ],
+    "descricao": "No eixo X ficam os valores previstos (ŷ) e no eixo Y os resíduos (e = y - ŷ). Uma linha horizontal em zero marca o erro nulo. Pontos de treino e teste costumam ter cores diferentes. O ideal é uma nuvem sem padrão, distribuída aleatoriamente em torno de zero (homocedasticidade). Padrões revelam problemas: uma curva indica relação não-linear não capturada; um formato de funil (erro crescente) indica heterocedasticidade; pontos muito afastados são outliers. O histograma lateral mostra se os resíduos têm média zero e formato aproximadamente normal.",
+    "dicas": [
+      "Procure ausência de padrão: nuvem aleatória em torno de zero é o objetivo.",
+      "Um formato de funil aponta heterocedasticidade — considere transformar o alvo.",
+      "Compare treino e teste: resíduos bem maiores no teste indicam overfitting."
+    ],
+    "exemplo": "Se os pontos estão espalhados aleatoriamente acima e abaixo da linha zero sem forma, o modelo está saudável; se formam um 'U', falta um termo não-linear no modelo.",
+    "exemplo_codigo": "from yellowbrick.regressor import ResidualsPlot\nfrom sklearn.linear_model import Ridge\n\nmodelo = Ridge()\nviz = ResidualsPlot(modelo)\nviz.fit(X_train, y_train)\nviz.score(X_test, y_test)\nviz.show()",
+    "formula": "e = y - ŷ  (resíduo = valor real menos valor previsto)",
+    "intuicao": "No básico você quer 'bagunça sem padrão' em torno do zero; no avançado, qualquer estrutura (curva, funil) significa que o modelo violou suas premissas e há sinal nos erros que ele não aprendeu.",
+    "link_sklearn": "",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/regressor/residuals.html",
+    "naoUsarQuando": [
+      "Em classificação ou agrupamento.",
+      "Quando há pouquíssimos pontos, pois padrões ficam difíceis de julgar."
+    ],
+    "quandoUsar": [
+      "Em regressão para verificar se o modelo está bem ajustado e sem viés.",
+      "Para diagnosticar não-linearidade ou erro que cresce com o valor previsto."
+    ],
+    "referencias": [
+      {
+        "autor": "Yellowbrick",
+        "tipo": "doc",
+        "titulo": "Residuals Plot",
+        "url": "https://www.scikit-yb.org/en/latest/api/regressor/residuals.html"
+      }
+    ],
+    "resumo_basico": "Mostra o 'erro' de cada previsão: o quanto o modelo passou ou faltou em cada exemplo. Pense em acertar dardos num alvo: o resíduo é a distância de onde o dardo bateu até o centro. Você quer ver os pontos espalhados sem padrão, formando uma nuvem aleatória em torno da linha zero — se aparecer uma curva ou um funil, o modelo está deixando escapar algo.",
+    "titulo": "Gráfico de Resíduos"
+  },
+  "silhouette": {
+    "conceitos": [
+      {
+        "desc": "Distância média de um ponto aos outros do seu próprio cluster: quanto menor, mais unido.",
+        "nome": "Coesão (a)"
+      },
+      {
+        "desc": "Distância média ao cluster vizinho mais próximo: quanto maior, melhor a divisão.",
+        "nome": "Separação (b)"
+      },
+      {
+        "desc": "Valor entre -1 e 1; perto de 1 é ótimo, perto de 0 é fronteira, negativo é grupo errado.",
+        "nome": "Coeficiente de silhueta"
+      }
+    ],
+    "descricao": "Para cada ponto calcula-se um coeficiente de silhueta entre -1 e 1. Os pontos são agrupados por cluster e ordenados, formando 'lâminas' (uma faca por cluster). O eixo X é o valor da silhueta; uma linha tracejada marca a média geral. Lâminas largas e à direita indicam clusters densos e bem separados; valores negativos indicam pontos provavelmente atribuídos ao cluster errado. Comparar a espessura das lâminas mostra clusters de tamanhos muito diferentes, e clusters cuja maioria fica abaixo da média geral são suspeitos.",
+    "dicas": [
+      "Procure lâminas largas, à direita e sem valores negativos.",
+      "Compare cada cluster com a linha da média geral: os que ficam abaixo são frágeis.",
+      "Use vários valores de k e escolha o que dá silhueta média mais alta e lâminas equilibradas."
+    ],
+    "exemplo": "Se um cluster tem uma lâmina larga toda acima de 0,6 e nenhum valor negativo, seus pontos estão muito bem agrupados; se outra lâmina mergulha para -0,2, vários pontos dela estão mais perto de outro cluster.",
+    "exemplo_codigo": "from yellowbrick.cluster import SilhouetteVisualizer\nfrom sklearn.cluster import KMeans\n\nmodelo = KMeans(n_clusters=4, random_state=42)\nviz = SilhouetteVisualizer(modelo, colors='yellowbrick')\nviz.fit(X)\nviz.show()",
+    "formula": "s = (b - a) / max(a, b)",
+    "intuicao": "No básico você vê se as 'facas' são gordas e vão para a direita; no avançado cada valor s combina coesão (distância dentro do grupo) e separação (distância ao grupo vizinho mais próximo) num número entre -1 e 1.",
+    "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.silhouette_score.html",
+    "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/cluster/silhouette.html",
+    "naoUsarQuando": [
+      "Em classificação ou regressão supervisionadas, onde há rótulo ou número de saída.",
+      "Com clusters de formato muito irregular, onde a distância média engana."
+    ],
+    "quandoUsar": [
+      "Em agrupamento (clustering) para avaliar a qualidade dos clusters formados.",
+      "Para comparar diferentes números de clusters e escolher o melhor."
+    ],
+    "referencias": [
+      {
+        "autor": "Yellowbrick",
+        "tipo": "doc",
+        "titulo": "Silhouette Visualizer",
+        "url": "https://www.scikit-yb.org/en/latest/api/cluster/silhouette.html"
+      }
+    ],
+    "resumo_basico": "Mostra o quão 'bem encaixado' cada ponto está no seu grupo. Imagine grupos de amigos no recreio: a silhueta mede se cada pessoa está perto do seu próprio grupo e longe dos outros. Lâminas largas e bem para a direita são ótimas; lâminas finas, curtas ou que entram no lado negativo são pontos que talvez estejam no grupo errado.",
+    "titulo": "Gráfico de Silhueta"
+  }
+}

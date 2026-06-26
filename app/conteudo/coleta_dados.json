@@ -1,0 +1,305 @@
+{
+  "csv": {
+    "conceitos": [
+      {
+        "desc": "O caractere que divide os campos; vírgula é o padrão, mas há ponto e vírgula ou tabulação.",
+        "nome": "Separador (delimitador)"
+      },
+      {
+        "desc": "A primeira linha com os nomes das colunas, que viram os atributos.",
+        "nome": "Cabeçalho (header)"
+      },
+      {
+        "desc": "A codificação do texto (UTF-8 evita que acentos virem símbolos estranhos).",
+        "nome": "Encoding"
+      },
+      {
+        "desc": "Cada linha de dados é um exemplo para o modelo aprender.",
+        "nome": "Amostra (linha)"
+      }
+    ],
+    "descricao": "Um CSV (Comma-Separated Values) é um arquivo de texto onde cada linha é uma amostra e os campos são separados por um delimitador (geralmente vírgula, às vezes ponto e vírgula ou tabulação). A primeira linha costuma ser o cabeçalho com os nomes das colunas. Ao carregar, cada linha vira uma amostra e cada coluna vira um atributo (feature). Cuidados: confirme o separador (sep), o encoding (UTF-8 é o ideal para acentos), o caractere decimal (vírgula vs. ponto) e como valores ausentes aparecem. Por ser texto puro, não guarda tipos — números, datas e textos chegam como strings até serem interpretados.",
+    "desvantagens": [
+      "Não guarda tipos de dados: tudo começa como texto.",
+      "Separador, encoding e decimal errados quebram a leitura facilmente.",
+      "Não representa bem dados aninhados ou hierárquicos."
+    ],
+    "dicas": [
+      "Se acentos aparecerem errados, tente encoding='utf-8' ou 'latin-1'.",
+      "Se os números estiverem em colunas únicas, verifique se o separador não é ';' (comum em planilhas em português).",
+      "Use df.head() e df.dtypes logo após carregar para conferir se a tabela ficou correta."
+    ],
+    "exemplo": "nome,idade,nota,passou\nAna,15,8.5,sim\nBruno,16,4.0,nao\nClara,15,7.2,sim",
+    "exemplo_codigo": "import pandas as pd\n\ndf = pd.read_csv(\"alunos.csv\", sep=\",\", encoding=\"utf-8\")\nprint(df.head())\nprint(df.columns.tolist())  # nomes dos atributos\nprint(df.shape)             # (amostras, atributos)",
+    "formula": "",
+    "intuicao": "CSV é o jeito mais simples e universal de guardar uma tabela. Como é só texto com separadores, abre em qualquer ferramenta e é rápido de ler, mesmo com muitas linhas.",
+    "link_sklearn": "https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html",
+    "naoUsarQuando": [
+      "Quando os dados têm estrutura aninhada/hierárquica (listas dentro de campos) — prefira JSON.",
+      "Quando você precisa guardar tipos de dados e formatação juntos."
+    ],
+    "quandoUsar": [
+      "Quando você quer um formato leve, rápido e que abre em qualquer programa.",
+      "Quando os dados vêm de exportações de bancos de dados, planilhas ou sites.",
+      "Quando o conjunto é grande e ler rápido importa."
+    ],
+    "referencias": [
+      {
+        "autor": "pandas development team",
+        "tipo": "doc",
+        "titulo": "pandas.read_csv",
+        "url": "https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html"
+      }
+    ],
+    "resumo_basico": "CSV é uma tabela em texto puro: cada linha é um exemplo e os valores são separados por vírgula. Imagine uma lista de presença escrita num bloco de notas, com cada coluna apartada por um sinalzinho. É o formato mais usado em ciência de dados porque é leve e abre em qualquer lugar.",
+    "titulo": "Arquivo CSV (valores separados por vírgula)",
+    "vantagens": [
+      "Leve, simples e lido por praticamente qualquer ferramenta.",
+      "Rápido de carregar mesmo com muitas linhas.",
+      "Fácil de inspecionar abrindo num editor de texto."
+    ]
+  },
+  "dados": {
+    "conceitos": [
+      {
+        "desc": "Um exemplo individual que a IA observa.",
+        "nome": "Amostra (linha)"
+      },
+      {
+        "desc": "Uma característica medida de cada amostra.",
+        "nome": "Atributo / feature (coluna)"
+      },
+      {
+        "desc": "A coluna que o modelo deve aprender a prever (quando há rótulo).",
+        "nome": "Alvo / target"
+      },
+      {
+        "desc": "Base pequena e conhecida, ótima para aprender e comparar modelos.",
+        "nome": "Toy dataset"
+      }
+    ],
+    "descricao": "Etapa de coleta do pipeline: carrega o conjunto de dados que alimenta todo o restante do fluxo. Aceita arquivos tabulares (CSV/TSV, Excel .xls/.xlsx), JSON (array de objetos) e datasets prontos (toy datasets do scikit-learn, bases do UCI e geradores sintéticos). Os dados viram uma tabela onde as linhas são as amostras e as colunas são os atributos (features); uma das colunas pode ser o alvo (target) que o modelo deve aprender a prever.",
+    "desvantagens": [
+      "Dados ruins (sujos, enviesados ou pequenos) levam a modelos ruins.",
+      "Formatos mal estruturados exigem limpeza antes de treinar."
+    ],
+    "dicas": [
+      "A primeira linha do arquivo deve conter os nomes das colunas.",
+      "Depois de carregar, escolha o tipo de predição, o alvo (target) e os atributos.",
+      "Em CSV, confira o separador (vírgula/ponto-e-vírgula) e o encoding (UTF-8)."
+    ],
+    "exemplo": "Uma tabela de flores com colunas 'comprimento_petala', 'largura_petala' e 'especie' (o alvo). Cada linha é uma flor medida.",
+    "exemplo_codigo": "import pandas as pd\nfrom sklearn.datasets import load_iris\n\n# Dataset pronto: vira uma tabela (DataFrame)\ndados = load_iris(as_frame=True)\ndf = dados.frame\nprint(df.head())        # 5 primeiras amostras\nprint(df.shape)         # (linhas, colunas)",
+    "formula": "",
+    "intuicao": "Sem dados não há aprendizado de máquina: o modelo só sabe o que os exemplos mostram. Quanto mais representativos e limpos os dados, melhor a IA generaliza para casos novos.",
+    "link_sklearn": "https://scikit-learn.org/stable/datasets.html",
+    "naoUsarQuando": [
+      "Evite dados com muitas colunas vazias ou inconsistentes sem antes limpar.",
+      "Evite planilhas com cabeçalhos extras ou células mescladas."
+    ],
+    "quandoUsar": [
+      "Sempre — é o ponto de partida de qualquer pipeline de ML.",
+      "Use um arquivo quando tiver seus próprios dados; um dataset pronto para praticar."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn",
+        "tipo": "doc",
+        "titulo": "scikit-learn — Dataset loading utilities",
+        "url": "https://scikit-learn.org/stable/datasets.html"
+      }
+    ],
+    "resumo_basico": "É aqui que você dá os exemplos para a IA aprender! Pense numa tabela: cada linha é um caso (uma flor, um cachorro, uma casa) e cada coluna é uma característica dele. Você pode subir um arquivo (CSV, Excel, JSON) ou escolher um conjunto de dados pronto pra brincar.",
+    "titulo": "Entrada de Dados",
+    "vantagens": [
+      "Aceita vários formatos no mesmo lugar.",
+      "Datasets prontos já vêm organizados para aulas e exemplos guiados."
+    ]
+  },
+  "dataset": {
+    "conceitos": [
+      {
+        "desc": "Conjunto pequeno e clássico embutido para ensino, como o Iris.",
+        "nome": "Toy dataset"
+      },
+      {
+        "desc": "Objeto do sklearn com data, target, feature_names e DESCR.",
+        "nome": "Bunch"
+      },
+      {
+        "desc": "A coluna que o modelo deve aprender a prever.",
+        "nome": "Target (rótulo)"
+      },
+      {
+        "desc": "Dados gerados artificialmente por geradores para criar exemplos sob medida.",
+        "nome": "Dados sintéticos"
+      }
+    ],
+    "descricao": "São conjuntos prontos vindos de fontes como os toy datasets do scikit-learn (load_iris, load_wine, load_breast_cancer, load_diabetes, load_digits), repositórios como o UCI, e geradores sintéticos da plataforma. Os toy datasets do sklearn retornam um objeto Bunch com 'data' (matriz amostras x atributos), 'target' (rótulo a prever), 'feature_names' e 'DESCR'. Já chegam limpos, numéricos e sem valores faltando, então cada linha já é uma amostra e cada coluna um atributo. Cuidados: são pequenos e idealizados para ensino, podendo não refletir a bagunça de dados reais; e cada um serve a um tipo de tarefa (classificação, regressão).",
+    "desvantagens": [
+      "São pequenos e idealizados, não refletem a bagunça de dados reais.",
+      "Pouca variedade frente aos problemas do mundo real.",
+      "Podem dar uma falsa sensação de que treinar é sempre fácil."
+    ],
+    "dicas": [
+      "Leia o DESCR do dataset para entender atributos e rótulos.",
+      "Use return_X_y=True quando quiser só os dados (X) e os rótulos (y) separados.",
+      "Comece pelo Iris para classificação e pelo Diabetes para regressão."
+    ],
+    "exemplo": "Iris: 150 amostras de flores, 4 atributos (comprimento e largura de sépala e pétala) e o rótulo 'espécie' (setosa, versicolor, virginica). Cada linha = uma flor; cada coluna = uma medida.",
+    "exemplo_codigo": "from sklearn.datasets import load_iris\nimport pandas as pd\n\ndados = load_iris()\ndf = pd.DataFrame(dados.data, columns=dados.feature_names)\ndf[\"especie\"] = dados.target  # rótulo a prever\nprint(df.head())\nprint(df.shape)  # (amostras, atributos)",
+    "formula": "",
+    "intuicao": "Datasets prontos tiram o trabalho de coletar e limpar: os dados já estão em formato de tabela, com atributos e rótulos definidos. Ótimos para focar no aprendizado do modelo, não na preparação dos dados.",
+    "link_sklearn": "https://scikit-learn.org/stable/datasets.html",
+    "naoUsarQuando": [
+      "Quando o objetivo é resolver um problema real com os seus próprios dados.",
+      "Quando você quer praticar a coleta e a limpeza de dados bagunçados."
+    ],
+    "quandoUsar": [
+      "Quando você quer aprender ou testar um modelo rapidamente, sem buscar dados.",
+      "Quando precisa de um exemplo limpo e confiável para comparar algoritmos.",
+      "Quando quer dados que já casam com um tipo de tarefa (classificação ou regressão)."
+    ],
+    "referencias": [
+      {
+        "autor": "scikit-learn developers",
+        "tipo": "doc",
+        "titulo": "Dataset loading utilities",
+        "url": "https://scikit-learn.org/stable/datasets.html"
+      },
+      {
+        "autor": "scikit-learn developers",
+        "tipo": "doc",
+        "titulo": "Toy datasets",
+        "url": "https://scikit-learn.org/stable/datasets/toy_dataset.html"
+      }
+    ],
+    "resumo_basico": "São conjuntos de dados já prontos e arrumados que vêm embutidos na plataforma, como kits de experimento de ciências. Você não precisa caçar nem limpar nada: é só escolher e começar a treinar. Perfeito para aprender e testar ideias rápido, com dados clássicos como as flores Iris.",
+    "titulo": "Datasets prontos",
+    "vantagens": [
+      "Já vêm limpos, numéricos e prontos para treinar, sem preparação.",
+      "São clássicos e bem documentados, ótimos para aprender e comparar.",
+      "Carregam em uma linha, sem upload nem download de arquivos."
+    ]
+  },
+  "json": {
+    "conceitos": [
+      {
+        "desc": "Cada dado é um par 'etiqueta: valor'; as etiquetas viram nomes de colunas.",
+        "nome": "Chave-valor"
+      },
+      {
+        "desc": "Uma lista de objetos vira uma tabela: cada objeto é uma amostra.",
+        "nome": "Array (lista)"
+      },
+      {
+        "desc": "Como o JSON está arrumado (records, columns, split); precisa bater com a leitura.",
+        "nome": "Orient"
+      },
+      {
+        "desc": "Objetos dentro de objetos; pode exigir achatar com json_normalize.",
+        "nome": "Aninhamento"
+      }
+    ],
+    "descricao": "JSON (JavaScript Object Notation) representa dados como objetos (pares chave-valor) e listas (arrays). Para virar tabela, o formato mais comum é uma lista de objetos (orient='records'), onde cada objeto é uma amostra e cada chave vira uma coluna/atributo. JSON pode ser aninhado (objetos dentro de objetos), então às vezes é preciso achatar a estrutura (pandas.json_normalize) para obter uma tabela limpa. Cuidados: confirme o orient (records, columns, split...), o encoding UTF-8, e que todas as amostras tenham as mesmas chaves para não gerar colunas vazias. Há também o JSON Lines (lines=True), com um objeto por linha.",
+    "desvantagens": [
+      "Dados muito aninhados precisam ser achatados antes de virar tabela.",
+      "Mais verboso e pesado que um CSV para tabelas simples.",
+      "Se as amostras tiverem chaves diferentes, surgem colunas com vazios."
+    ],
+    "dicas": [
+      "Se vier uma lista de objetos, use orient='records'.",
+      "Para JSON aninhado, experimente pandas.json_normalize para achatar.",
+      "Se cada linha do arquivo for um objeto separado, use lines=True."
+    ],
+    "exemplo": "[\n  {\"nome\": \"Ana\",   \"idade\": 15, \"nota\": 8.5, \"passou\": \"sim\"},\n  {\"nome\": \"Bruno\", \"idade\": 16, \"nota\": 4.0, \"passou\": \"nao\"}\n]",
+    "exemplo_codigo": "import pandas as pd\n\n# lista de objetos -> orient='records'\ndf = pd.read_json(\"alunos.json\", orient=\"records\")\nprint(df.head())\nprint(df.shape)  # (amostras, atributos)",
+    "formula": "",
+    "intuicao": "JSON descreve dados como fichas com etiquetas (chaves) e seus valores. Quando é uma lista de fichas iguais, cada ficha vira uma linha e cada etiqueta vira uma coluna.",
+    "link_sklearn": "https://pandas.pydata.org/docs/reference/api/pandas.read_json.html",
+    "naoUsarQuando": [
+      "Quando a estrutura é muito aninhada e complexa de achatar em tabela.",
+      "Quando uma tabela simples bastaria — um CSV seria mais direto."
+    ],
+    "quandoUsar": [
+      "Quando os dados vêm de uma API web ou aplicativo, formato nativo da internet.",
+      "Quando há estrutura aninhada/hierárquica que o CSV não representa bem.",
+      "Quando você quer guardar dados e seus tipos básicos juntos de forma legível."
+    ],
+    "referencias": [
+      {
+        "autor": "pandas development team",
+        "tipo": "doc",
+        "titulo": "pandas.read_json",
+        "url": "https://pandas.pydata.org/docs/reference/api/pandas.read_json.html"
+      }
+    ],
+    "resumo_basico": "JSON é um formato de texto que guarda dados em pares 'chave: valor', como uma ficha de cadastro organizada. É a língua que sites e aplicativos usam para trocar informação na internet. Use quando seus dados vêm de uma API ou já estão nesse formato de fichas.",
+    "titulo": "Arquivo JSON",
+    "vantagens": [
+      "Representa dados aninhados e hierárquicos com naturalidade.",
+      "É o padrão de troca de dados na web (APIs).",
+      "Legível por humanos e por máquinas ao mesmo tempo."
+    ]
+  },
+  "xlsx": {
+    "conceitos": [
+      {
+        "desc": "Cada planilha .xlsx pode ter várias abas; você escolhe qual carregar com sheet_name.",
+        "nome": "Aba (sheet)"
+      },
+      {
+        "desc": "A linha que contém os nomes das colunas; vira o nome dos atributos no DataFrame.",
+        "nome": "Cabeçalho (header)"
+      },
+      {
+        "desc": "Cada linha abaixo do cabeçalho é um exemplo que o modelo vai aprender.",
+        "nome": "Amostra (linha)"
+      },
+      {
+        "desc": "Cada coluna é uma característica medida de cada amostra.",
+        "nome": "Atributo (feature)"
+      }
+    ],
+    "descricao": "O formato .xlsx é um arquivo de pacote (na verdade um ZIP de XMLs) usado pelo Excel moderno. Cada planilha pode ter várias abas (sheets); normalmente a primeira linha guarda o cabeçalho com os nomes das colunas e as linhas seguintes são as amostras. Ao carregar, cada linha vira uma amostra e cada coluna vira um atributo (feature). Cuidados: escolha a aba certa (sheet_name), confirme que a primeira linha é o cabeçalho (header), evite células mescladas e fórmulas, e fique atento a tipos misturados numa mesma coluna (texto e número). Ler .xlsx exige uma engine como o openpyxl.",
+    "desvantagens": [
+      "Mais pesado e lento de ler que um CSV simples.",
+      "Formatação, fórmulas e células mescladas podem atrapalhar a leitura como tabela.",
+      "Exige uma biblioteca extra (engine) para abrir."
+    ],
+    "dicas": [
+      "Deixe a primeira linha só com os nomes das colunas, sem títulos decorativos acima.",
+      "Use sheet_name para apontar a aba exata e evite surpresas.",
+      "Confira df.dtypes depois de carregar para ver se números não viraram texto."
+    ],
+    "exemplo": "Aba 'alunos':\n| nome  | idade | nota | passou |\n| Ana   | 15    | 8.5  | sim    |\n| Bruno | 16    | 4.0  | nao    |",
+    "exemplo_codigo": "import pandas as pd\n\n# precisa do openpyxl instalado: pip install openpyxl\ndf = pd.read_excel(\"alunos.xlsx\", sheet_name=\"alunos\", header=0)\nprint(df.head())\nprint(df.shape)  # (linhas/amostras, colunas/atributos)",
+    "formula": "",
+    "intuicao": "Uma planilha já está quase no formato de tabela que o ML adora: linhas viram exemplos e colunas viram características. O trabalho é só apontar a aba e a linha do cabeçalho certos.",
+    "link_sklearn": "https://pandas.pydata.org/docs/reference/api/pandas.read_excel.html",
+    "naoUsarQuando": [
+      "Quando o arquivo é gigante (milhões de linhas), pois .xlsx fica lento — prefira CSV.",
+      "Quando a planilha tem células mescladas, fórmulas e formatação que bagunçam a tabela."
+    ],
+    "quandoUsar": [
+      "Quando os dados já estão organizados numa planilha do Excel ou Google Sheets.",
+      "Quando há várias abas e você quer carregar uma delas de forma controlada.",
+      "Quando colegas ou professores entregam os dados em formato de planilha."
+    ],
+    "referencias": [
+      {
+        "autor": "pandas development team",
+        "tipo": "doc",
+        "titulo": "pandas.read_excel",
+        "url": "https://pandas.pydata.org/docs/reference/api/pandas.read_excel.html"
+      }
+    ],
+    "resumo_basico": "É aquele arquivo de planilha que você abre no Excel ou no Google Sheets, cheio de células organizadas em linhas e colunas. Pense num caderno quadriculado onde cada linha é um exemplo e cada coluna é uma característica. Use quando seus dados já vivem numa planilha, com cabeçalhos coloridos e abas separadas.",
+    "titulo": "Planilha Excel (.xlsx)",
+    "vantagens": [
+      "Fácil de criar e editar à mão em qualquer editor de planilhas.",
+      "Guarda várias abas e tipos de dados num único arquivo.",
+      "Familiar para quem já usa Excel, sem precisar saber programar."
+    ]
+  }
+}

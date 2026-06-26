@@ -15,6 +15,26 @@ class TestListToyDatasets:
         assert isinstance(data, list)
         assert len(data) > 0
 
+
+@pytest.mark.asyncio
+class TestDatasetConteudo:
+    """GET /toy_datasets/{name}/conteudo — bloco educacional, read-only."""
+
+    async def test_conteudo_iris(self, client, mock_db):
+        """Retorna o bloco conteudo sem auth e sem escrever no banco."""
+        response = await client.get("/toy_datasets/iris/conteudo")
+        assert response.status_code == 200
+        data = response.json()
+        assert data.get("titulo")
+        assert data.get("descricao")
+        # Não deve ter inserido nada em arquivos/configuracoes (rota read-only).
+        mock_db["arquivos"].insert_one.assert_not_called()
+        mock_db["configuracoes"].insert_one.assert_not_called()
+
+    async def test_conteudo_404(self, client):
+        response = await client.get("/toy_datasets/nao_existe/conteudo")
+        assert response.status_code == 404
+
     async def test_dataset_has_required_fields(self, client):
         """Each dataset should have required fields."""
         response = await client.get("/toy_datasets/")

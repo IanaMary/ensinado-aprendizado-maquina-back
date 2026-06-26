@@ -53,7 +53,12 @@ class DatasetConfig:
     metrica_recomendada: str = ""
     visualizacao_recomendada: str = ""
     reflexao_final: str = ""
-    
+
+    # Conteúdo educacional rico (Básico/Avançado/código/links) exibido no card do
+    # tutor. Opcional: quando ausente, o endpoint /toy_datasets/{name}/conteudo
+    # deriva um bloco a partir dos campos acima (descricao, missao, etc.).
+    conteudo: Optional[Dict[str, Any]] = None
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
@@ -79,6 +84,36 @@ class DatasetConfig:
                 "visualizacao_recomendada": self.visualizacao_recomendada,
                 "reflexao_final": self.reflexao_final,
             } if self.pergunta_guia else None,
+            "conteudo": self.conteudo,
+        }
+
+    def conteudo_card(self) -> Dict[str, Any]:
+        """Bloco `conteudo` para o card do tutor (Básico/Avançado/link).
+
+        Usa o `conteudo` explícito quando existe; senão deriva um bloco razoável
+        dos campos educacionais já presentes no dataset.
+        """
+        if self.conteudo:
+            return self.conteudo
+        dicas = [d for d in (self.descricao_features, self.descricao_target, self.reflexao_final) if d]
+        link = ""
+        if self.fonte == "sklearn":
+            link = "https://scikit-learn.org/stable/datasets/toy_dataset.html"
+        elif self.fonte == "uci":
+            link = "https://archive.ics.uci.edu/"
+        return {
+            "titulo": self.nome,
+            "descricao": self.descricao,
+            "resumo_basico": self.descricao,
+            "intuicao": self.pergunta_guia or "",
+            "conceitos": [
+                c for c in [
+                    {"nome": "O que prever (alvo)", "desc": self.descricao_target} if self.descricao_target else None,
+                    {"nome": "As características (features)", "desc": self.descricao_features} if self.descricao_features else None,
+                ] if c
+            ],
+            "dicas": dicas,
+            "link_sklearn": link,
         }
 
 

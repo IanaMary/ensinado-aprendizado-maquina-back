@@ -194,7 +194,12 @@ class TestAvaliarModelos:
         for label in ["R²", "MSE", "RMSE", "MAE"]:
             assert isinstance(data[label]["Regressão Linear"], float)
         assert data["Acurácia"]["Regressão Linear"] == "N/A para regressão"
-        assert len(data["_visualizacoes"]["Regressão Linear"]) >= 1
+        vizs = data["_visualizacoes"]["Regressão Linear"]
+        assert len(vizs) >= 1
+        # Cada visualização carrega um grafico_id (slug) que casa com GRAFICOS_IDS.
+        from app.metricas.metricas import GRAFICOS_IDS
+        for v in vizs:
+            assert v.get("grafico_id") in GRAFICOS_IDS, v.get("titulo")
 
     @pytest.mark.asyncio
     async def test_resultado_json_nativo(self, client, mock_db, auth_headers):
