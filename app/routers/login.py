@@ -88,6 +88,14 @@ async def login(request: LoginRequest, req: Request):
             detail="Credenciais inválidas."
         )
 
+    # Registra o último acesso (exibido em "Gerenciar Usuários").
+    agora = datetime.now(timezone.utc)
+    await colecao_usuario.update_one(
+        {"_id": usuario["_id"]},
+        {"$set": {"ultimo_acesso": agora}}
+    )
+    usuario["ultimo_acesso"] = agora
+
     expira = datetime.now(
         timezone.utc
     ) + timedelta(
