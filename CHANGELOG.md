@@ -21,10 +21,14 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 - **Caveat esperado:** usuários existentes seguem com `-` até o **próximo login** (não há como
   saber o último login real retroativamente); telemetria em `atividade_usuario` poderia lastrear
   um backfill no futuro, mas não foi feito.
-- Também sobe (já em `origin/master`, ainda não implantado) o fix `1208973` da **matriz de
-  confusão zerada** em datasets multiclasse + 2 commits de docs (`33a71d8`, `fb192db`).
+- Prod estava em `33a71d8` (já incluía o fix `1208973` da **matriz de confusão zerada**); este
+  deploy subiu apenas o fix de login `5cc55e8`, o script de docs `fb192db` e este changelog.
+- **Fix propagado para todos os branches de código** (cherry-pick `-x` do `5cc55e8`): `master`,
+  `docker-compose-teste`, `feat/catalogo-modelos-tutor-chatbot`, `feat/pipeline-modal-refactor`
+  (pushados) + `refactor/security-jwt-dry`, `scripts-deploy` (locais, sem remote). `origin/main`
+  é branch órfão só-README (sem código) — não se aplica.
 - Verificação: `test_autenticacao.py` **8 passed** (inclui `test_login_sucesso`); login/usuario
-  **19 passed**. Front **inalterado**.
+  **19 passed**. Front **inalterado**. Backup `/home/ubuntu/backups/deploy-20260701-142638`.
 
 ## 2026-06-26 (conteúdo educacional versionado + Básico/Avançado para todos os elementos)
 
