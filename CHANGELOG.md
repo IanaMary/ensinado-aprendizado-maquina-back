@@ -8,6 +8,24 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-01 (Último Acesso em Gerenciar Usuários)
+
+### Login passa a registrar `ultimo_acesso`. Back `5cc55e8` (deploy só backend)
+- **Bug:** a coluna **"Último Acesso"** na tela **Gerenciar Usuários** exibia `-` para todos
+  os usuários. O wiring frontend→schema→endpoint (`ultimoAcesso` ← `ultimo_acesso`) já estava
+  correto; a causa era que o valor **nunca era gravado** — `criar_convite()` inicializava
+  `ultimo_acesso: None` e nada o atualizava (nem `login.py`, nem `convite.ativar_conta`).
+- **Fix (`app/routers/login.py`):** após validar a senha, `login()` faz
+  `colecao_usuario.update_one({"_id": ...}, {"$set": {"ultimo_acesso": datetime.now(utc)}})`
+  (antes de serializar `_id`) e reflete o valor na resposta. Aditivo, sem migração.
+- **Caveat esperado:** usuários existentes seguem com `-` até o **próximo login** (não há como
+  saber o último login real retroativamente); telemetria em `atividade_usuario` poderia lastrear
+  um backfill no futuro, mas não foi feito.
+- Também sobe (já em `origin/master`, ainda não implantado) o fix `1208973` da **matriz de
+  confusão zerada** em datasets multiclasse + 2 commits de docs (`33a71d8`, `fb192db`).
+- Verificação: `test_autenticacao.py` **8 passed** (inclui `test_login_sucesso`); login/usuario
+  **19 passed**. Front **inalterado**.
+
 ## 2026-06-26 (conteúdo educacional versionado + Básico/Avançado para todos os elementos)
 
 ### Conteúdo versionado no repo + seed idempotente + gráficos/datasets como elementos. Front `76dc145` (bundle `main-DR46LGHV.js`) · Back `9b9265c`
