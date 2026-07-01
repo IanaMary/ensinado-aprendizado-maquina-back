@@ -29,6 +29,9 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
   é branch órfão só-README (sem código) — não se aplica.
 - Verificação: `test_autenticacao.py` **8 passed** (inclui `test_login_sucesso`); login/usuario
   **19 passed**. Front **inalterado**. Backup `/home/ubuntu/backups/deploy-20260701-142638`.
+- **Revisão de segurança (`/security-review`): sem achados.** Filtro do `update_one` usa `ObjectId`
+  do servidor (não input do usuário), valor é timestamp do servidor, roda só após `verificar_senha`,
+  grava só `ultimo_acesso`, e `UsuarioResponse` descarta a chave nova (`extra="ignore"`).
 
 ## 2026-06-26 (conteúdo educacional versionado + Básico/Avançado para todos os elementos)
 
