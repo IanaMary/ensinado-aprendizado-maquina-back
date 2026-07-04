@@ -35,6 +35,7 @@ from app.routers import sgd
 from app.routers import perceptron
 from app.routers import toy_datasets
 from app.routers import pipelines
+from app.routers import turmas
 from app.routers import visualizacao
 from app.routers import admin
 from app.routers import atividade
@@ -122,6 +123,7 @@ app.include_router(perceptron.router, prefix="/classificador/treinamento", depen
 app.include_router(treinamento_base.router, prefix="/classificador", dependencies=auth_dependency)
 app.include_router(metricas_router, prefix="/classificador", dependencies=auth_dependency)
 app.include_router(pipelines.router, dependencies=auth_dependency)
+app.include_router(turmas.router, dependencies=auth_dependency)
 app.include_router(admin.router, dependencies=auth_dependency)
 app.include_router(atividade.router, dependencies=auth_dependency)
 app.include_router(visualizacao.router, prefix="/visualizacao", dependencies=auth_dependency)

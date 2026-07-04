@@ -29,6 +29,8 @@ def _pipeline_doc(p: dict) -> dict:
         "dificuldade": p.get("dificuldade", "iniciante"),
         "tags": p.get("tags", []),
         "professor_id": p.get("professor_id"),
+        "atividade_id": p.get("atividade_id"),
+        "turma_id": p.get("turma_id"),
     }
 
 
@@ -56,6 +58,8 @@ async def criar_pipeline(
         "dificuldade": body.dificuldade,
         "tags": body.tags,
         "professor_id": body.professor_id,
+        "atividade_id": body.atividade_id,
+        "turma_id": body.turma_id,
         "dataCriacao": agora,
         "dataModificacao": agora,
     }

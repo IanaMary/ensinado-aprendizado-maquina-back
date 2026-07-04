@@ -62,6 +62,12 @@ tutor_audit = db["tutor_audit"]
 pipelines = db["pipelines"]
 
 # =========================
+# TURMAS E ATIVIDADES (professor)
+# =========================
+turmas = db["turmas"]
+atividades = db["atividades"]
+
+# =========================
 # HISTÓRICO DE CHAT
 # =========================
 historico_chat = db["historico_chat"]

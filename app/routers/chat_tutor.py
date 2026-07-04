@@ -21,7 +21,7 @@ from fastapi.responses import StreamingResponse
 
 from app.database import historico_chat, configuracoes_tutor
 from app.routers.atividade import registrar_atividade
-from app.security import get_usuario_atual
+from app.security import get_usuario_atual, exigir_admin_ou_professor
 from app.tutor_kb import bloco_kb
 from app.schemas.chat import (
     ChatHistoricoListItem,
@@ -542,6 +542,30 @@ async def obter_historico(chat_id: str, usuario=Depends(get_usuario_atual)):
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+    return ChatHistoricoResponse(**_serializar_hist(doc))
+
+
+@router.get("/chat/aluno/{aluno_id}/historico", response_model=list[ChatHistoricoListItem])
+async def listar_historico_aluno(aluno_id: str, usuario=Depends(exigir_admin_ou_professor)):
+    """Professor/admin lê as conversas de um aluno. LGPD (menores): acesso gated por
+    papel e registrado na auditoria; use com parcimônia."""
+    if not ObjectId.is_valid(aluno_id):
+        raise HTTPException(status_code=400, detail="ID inválido.")
+    await registrar_atividade(usuario, "auditoria", "leu_chats_aluno",
+                              detalhes={"aluno_id": aluno_id})
+    cursor = historico_chat.find({"usuario_id": aluno_id}).sort("atualizado_em", -1).limit(50)
+    return [ChatHistoricoListItem(**_serializar_hist(d)) async for d in cursor]
+
+
+@router.get("/chat/aluno/{aluno_id}/historico/{chat_id}", response_model=ChatHistoricoResponse)
+async def obter_historico_aluno(aluno_id: str, chat_id: str, usuario=Depends(exigir_admin_ou_professor)):
+    if not (ObjectId.is_valid(aluno_id) and ObjectId.is_valid(chat_id)):
+        raise HTTPException(status_code=400, detail="ID inválido.")
+    doc = await historico_chat.find_one({"_id": ObjectId(chat_id), "usuario_id": aluno_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+    await registrar_atividade(usuario, "auditoria", "leu_chat_aluno",
+                              detalhes={"aluno_id": aluno_id, "chat_id": chat_id})
     return ChatHistoricoResponse(**_serializar_hist(doc))
 
 

@@ -17,6 +17,8 @@ class PipelineCreate(BaseModel):
     dificuldade: Optional[str] = "iniciante"
     tags: Optional[List[str]] = []
     professor_id: Optional[str] = None
+    atividade_id: Optional[str] = None   # submissão ligada a uma atividade de turma
+    turma_id: Optional[str] = None
 
 
 class PipelineUpdate(BaseModel):
@@ -33,3 +35,5 @@ class PipelineUpdate(BaseModel):
     is_public: Optional[bool] = None
     dificuldade: Optional[str] = None
     tags: Optional[List[str]] = None
+    atividade_id: Optional[str] = None
+    turma_id: Optional[str] = None
