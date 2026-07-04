@@ -8,6 +8,24 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-03 (fix 404 intermitente + API sob `/h2ia/tutor/api/`)
+
+### Sem mudança de código — infra (nginx + systemd). Backend segue em `1a964a5`
+
+- **Bug (404 intermitente em prod):** dois serviços systemd escutavam a **porta 8002** ao mesmo
+  tempo (SO_REUSEPORT) — `h2ia-backend.service` (código atual, `/home/ubuntu/ensinado-aprendizado-maquina-back`)
+  e uma cópia ANTIGA `h2ia-tutor.service` (`/home/ubuntu/servers/h2ia_tutor/backend`, `2a31d00`,
+  11/06). O kernel balanceava conexões entre os dois → parte das requisições caía no backend velho,
+  dando **404 aleatório** em rotas adicionadas depois de 11/06 (`conf_pipeline/pre_processamento/todos`,
+  `atividades/lote`, `sistema/erro`, `configurar_treinamento/.../redividir`), enquanto `/docs`
+  respondia 200. Fix: parado/desabilitado o `h2ia-tutor.service`, reiniciado o `h2ia-backend.service`.
+  Depois o unit e a cópia de 1.3G foram **removidos** (limpeza) — só `h2ia-backend.service` na 8002.
+- **API movida `/h2ia/api/` → `/h2ia/tutor/api/`:** o app do tutor agora vive todo sob `/h2ia/tutor/`;
+  nada fica solto direto em `/h2ia/`. Mudança em nginx (renomeia a `location`, proxy segue p/ 8002)
+  + `environment.prod.ts` (front). Path antigo `/h2ia/api/` **removido**.
+- Verificação ao vivo: novo path 401/405/422 (rota existe), path antigo 404, docs 200, front 200.
+  Backups: frontend/nginx `deploy-20260703-232436`, unit `h2ia-tutor.service.disabled-20260703-231826`.
+
 ## 2026-07-01 (Último Acesso em Gerenciar Usuários)
 
 ### Login passa a registrar `ultimo_acesso`. Back `5cc55e8` (deploy só backend)
