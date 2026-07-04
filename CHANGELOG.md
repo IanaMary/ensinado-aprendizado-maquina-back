@@ -8,6 +8,20 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-04 (legenda "Erros de Predição por Classe" fora das barras)
+
+### `_desenhar_erros_predicao`: legenda posicionada à direita. Backend `32ac226`
+
+- **Bug:** a legenda `classe prevista` (setosa/versicolor/virginica) do gráfico **Erros de Predição
+  por Classe** era desenhada com `ax.legend(...)` sem `loc`, caindo em `loc='best'` **por cima das
+  barras** e deixando o gráfico ilegível.
+- **Fix (`app/metricas/metricas.py`):** `ax.legend(..., loc='upper left', bbox_to_anchor=(1.02, 1),
+  borderaxespad=0)` — legenda fora da área de plotagem; o `bbox_inches='tight'` do `savefig` já a
+  inclui na imagem. Sem migração.
+- **Atenção:** os PNGs são "queimados" em base64 no momento da avaliação → **re-rodar a avaliação**
+  para regenerar (resultados antigos seguem com a legenda sobreposta).
+- Verificação: `pytest tests/test_metricas_avaliacao.py` 10 passed; legenda validada por render.
+
 ## 2026-07-03 (fix 404 intermitente + API sob `/h2ia/tutor/api/`)
 
 ### Sem mudança de código — infra (nginx + systemd). Backend segue em `1a964a5`
