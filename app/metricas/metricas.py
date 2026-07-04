@@ -320,7 +320,10 @@ def _desenhar_erros_predicao(ax, y_true, y_pred, labels_calc, labels_disp) -> No
     ax.set_xticks(x); ax.set_xticklabels(labels_disp)
     ax.set_xlabel("classe real"); ax.set_ylabel("nº de instâncias")
     ax.set_title("Erros de Predição por Classe")
-    ax.legend(title="classe prevista", fontsize=8)
+    # Legenda FORA da área de plotagem (à direita) para não cobrir as barras.
+    # bbox_inches="tight" no savefig expande a imagem para incluí-la.
+    ax.legend(title="classe prevista", fontsize=8,
+              loc="upper left", bbox_to_anchor=(1.02, 1), borderaxespad=0)
 
 
 def gerar_visualizacoes_classificacao(modelo_treinado, X_test, y_test, classes) -> list[dict]:
