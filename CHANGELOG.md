@@ -8,6 +8,25 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-04 (modelo como flavor mlflow.sklearn + endpoint de download)
+
+### Modelo logado no MLflow (configs + exemplo de uso) e baixável. Backend `b94ca13`
+
+- **`app/mlflow_client.py`:** novo `log_sklearn_model` — loga o modelo como **flavor
+  `mlflow.sklearn`** (gera `MLmodel`, `requirements.txt`, `python_env.yaml`, `input_example`).
+  Loga no **run já ativo** (não recria `start_run`, que dava "Run already active"); usa
+  `serialization_format="cloudpickle"` (o default **skops** do MLflow 3.x recusa tipos "não
+  confiáveis" como o `KDTree` do KNN). No-op se MLflow off; best-effort.
+- **`treinamento_base.py`:** no treino, desserializa os bytes do sandbox e loga o flavor
+  (substitui o `log_bytes_artifact` de `model.joblib`). Os bytes em `db.modelos_treinados`
+  seguem intactos — `/prever` e `/avaliar_modelos` inalterados.
+- **`metricas.py`:** novo **`GET /classificador/modelo/{id}/artefato`** → `.zip` do dir `model/`
+  do MLflow (fallback: `model.pkl` + `requirements.txt` fixo com as versões do treino). `ObjectId`
+  validado; auth herdada do prefixo `/classificador`.
+- Testes: download no fallback (zip com `model.pkl`+`requirements`) e 404. Suíte: **317 passed, 1 skipped**.
+- **Atenção:** modelos treinados **antes** deste deploy não têm o flavor → o endpoint usa o fallback
+  joblib (funciona). Novos treinos geram o modelo MLflow completo.
+
 ## 2026-07-04 (legenda "Erros de Predição por Classe" fora das barras)
 
 ### `_desenhar_erros_predicao`: legenda posicionada à direita. Backend `32ac226`
