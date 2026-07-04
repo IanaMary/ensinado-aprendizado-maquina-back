@@ -89,6 +89,30 @@ class TestAvaliarModelos:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
+    async def test_baixar_modelo_artefato_fallback_zip(self, client, mock_db, auth_headers):
+        """Download do modelo: sem MLflow run, cai no fallback (zip com model.pkl + requirements)."""
+        import zipfile
+        df, _, model_bytes = _treinar_knn()
+        doc = _doc_modelo(model_bytes, df, modelo="knn")  # sem mlflow_run_id
+        mock_db["modelos"].find_one = AsyncMock(return_value=doc)
+
+        response = await client.get(
+            f"/classificador/modelo/{doc['_id']}/artefato", headers=auth_headers
+        )
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/zip"
+        nomes = zipfile.ZipFile(io.BytesIO(response.content)).namelist()
+        assert "model.pkl" in nomes and "requirements.txt" in nomes
+
+    @pytest.mark.asyncio
+    async def test_baixar_modelo_artefato_inexistente_404(self, client, mock_db, auth_headers):
+        mock_db["modelos"].find_one = AsyncMock(return_value=None)
+        response = await client.get(
+            f"/classificador/modelo/{ObjectId()}/artefato", headers=auth_headers
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
     async def test_arquivo_teste_ausente_retorna_400(self, client, mock_db, auth_headers):
         df, _, model_bytes = _treinar_knn()
         doc = _doc_modelo(model_bytes, df, arq_teste=None)

@@ -121,6 +121,50 @@ def log_bytes_artifact(
         logger.warning(f"mlflow.log_artifact falhou: {e}")
 
 
+def log_sklearn_model(
+    modelo: Any,
+    *,
+    run_id: Optional[str],
+    artifact_path: str = "model",
+    input_example: Any = None,
+) -> None:
+    """Loga `modelo` como um modelo `mlflow.sklearn` (gera MLmodel, requirements.txt,
+    python_env.yaml e — com `input_example` — o exemplo de entrada/uso).
+
+    No-op quando o MLflow está desativado; best-effort (uma falha aqui não pode
+    quebrar o treinamento). A inferência de assinatura roda um `predict` no
+    `input_example`, então é embrulhada no try/except.
+    """
+    if run_id is None or not mlflow_enabled():
+        return
+    mlflow = _import_mlflow()
+    if mlflow is None:
+        return
+    try:
+        import mlflow.sklearn  # type: ignore
+
+        def _logar():
+            # cloudpickle (formato sklearn tradicional): serializa qualquer estimador.
+            # O default do MLflow 3.x (skops) recusa tipos "não confiáveis" como o
+            # KDTree do KNN, quebrando o log_model.
+            mlflow.sklearn.log_model(
+                modelo, artifact_path=artifact_path, input_example=input_example,
+                serialization_format="cloudpickle",
+            )
+
+        # Normalmente este helper roda DENTRO do `log_run` (run já ativo). Só reata
+        # o run se não houver um ativo com o mesmo id — senão o start_run duplicado
+        # dá "Run already active".
+        ativo = mlflow.active_run()
+        if ativo is not None and ativo.info.run_id == run_id:
+            _logar()
+        else:
+            with mlflow.start_run(run_id=run_id, nested=False):
+                _logar()
+    except Exception as e:
+        logger.warning(f"mlflow.sklearn.log_model falhou: {e}")
+
+
 def _coagir_params(params: dict[str, Any]) -> dict[str, str]:
     """MLflow exige params str-serializável e ≤500 chars."""
     out: dict[str, str] = {}

@@ -3,16 +3,22 @@ import logging
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from app.deps import pd, metricas_disponiveis
 from app.database import modelos_treinados, arquivos, opcoes_metricas
 from app.schemas.schemas import AvaliacaoModelosRequest
 from app.funcoes_genericas.validacao import validar_object_id, MAX_ARQUIVO_BASE64
 from app.funcoes_genericas.funcoes_genericas import converter_numpy
+from app.mlflow_client import mlflow_enabled
 from bson import ObjectId
 import importlib
 import joblib
 import base64
 import io
+import os
+import tempfile
+import zipfile
+from pathlib import Path
 import hashlib
 import sys
 import types
@@ -497,6 +503,61 @@ async def prever(body: dict):
         raise HTTPException(status_code=400, detail=f"Não foi possível prever: {e}")
 
     return converter_numpy({"predicao": pred})
+
+
+_REQUIREMENTS_MODELO = (
+    "scikit-learn==1.4.2\n"
+    "numpy==1.26.4\n"
+    "pandas==2.2.2\n"
+    "joblib>=1.4.2\n"
+)
+
+
+@router.get("/modelo/{modelo_id}/artefato")
+async def baixar_modelo_artefato(modelo_id: str):
+    """Baixa o modelo treinado como .zip, para reutilizar fora do sistema.
+
+    Preferência: os artefatos do modelo no MLflow (pasta `model/` com `MLmodel`,
+    `model.pkl`, `requirements.txt`, `python_env.yaml` e o exemplo de entrada — as
+    "configs + exemplo de uso"). Fallback (MLflow off ou artefato ausente): o joblib
+    puro (`model.pkl`) + um `requirements.txt` fixo com as versões do treino.
+    O front mescla o conteúdo do zip numa pasta `modelo/` do bundle exportado.
+    """
+    modelo_oid = validar_object_id(modelo_id, "modelo_id")
+    doc = await modelos_treinados.find_one({"_id": modelo_oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Modelo não encontrado.")
+
+    slug = str(doc.get("modelo") or "modelo")
+    run_id = doc.get("mlflow_run_id")
+    buffer = io.BytesIO()
+    escreveu_mlflow = False
+
+    if run_id and mlflow_enabled():
+        try:
+            import mlflow
+            mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+            with tempfile.TemporaryDirectory(prefix="modelo_dl_") as tmp:
+                local = Path(mlflow.artifacts.download_artifacts(
+                    run_id=run_id, artifact_path="model", dst_path=tmp
+                ))
+                with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                    for p in local.rglob("*"):
+                        if p.is_file():
+                            zf.write(p, arcname=str(p.relative_to(local)))
+                escreveu_mlflow = True
+        except Exception as e:
+            logger.warning(f"download do modelo MLflow falhou ({run_id}): {e}")
+            buffer = io.BytesIO()  # descarta parcial e cai no fallback
+
+    if not escreveu_mlflow:
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("model.pkl", bytes(doc["modelo_treinado"]))
+            zf.writestr("requirements.txt", _REQUIREMENTS_MODELO)
+
+    buffer.seek(0)
+    headers = {"Content-Disposition": f'attachment; filename="modelo_{slug}.zip"'}
+    return StreamingResponse(buffer, media_type="application/zip", headers=headers)
 
 
 @router.post("/avaliar_modelos")

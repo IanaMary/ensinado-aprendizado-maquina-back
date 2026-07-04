@@ -9,7 +9,8 @@ import bson.json_util as bson
 from fastapi import APIRouter, HTTPException
 from app.deps import pd
 from app.sandbox import SandboxError, executar_treinamento
-from app.mlflow_client import log_run, log_bytes_artifact
+import joblib
+from app.mlflow_client import log_run, log_bytes_artifact, log_sklearn_model
 from app.routers.artefatos import registrar_run_usuario
 from app.security import usuario_atual_ctx
 from app.schemas.schemas import DatasetRequest
@@ -199,13 +200,19 @@ async def treinar_modelo_generico(
             checksum = hashlib.sha256(modelo_bytes).hexdigest()
             classes = train_result.classes
 
-            # Artefato do modelo no MLflow (no-op se desativado).
-            log_bytes_artifact(
-                modelo_bytes,
-                run_id=mlflow_run_id,
-                filename="model.joblib",
-                artifact_path="model",
-            )
+            # Modelo no MLflow como flavor sklearn (gera MLmodel + requirements +
+            # exemplo de uso). No-op se MLflow desativado; best-effort. Desserializa
+            # os bytes do sandbox de volta para um objeto para poder logar o flavor.
+            try:
+                modelo_obj = joblib.load(BytesIO(modelo_bytes))
+                log_sklearn_model(
+                    modelo_obj,
+                    run_id=mlflow_run_id,
+                    artifact_path="model",
+                    input_example=X_train.head(3),
+                )
+            except Exception as e:
+                logger.warning(f"log do modelo sklearn no MLflow falhou: {e}")
 
             result = await modelos_treinados.insert_one({
                 "arquivo_id": request.arquivo_id,
