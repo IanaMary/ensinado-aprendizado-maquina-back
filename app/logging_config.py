@@ -35,11 +35,29 @@ def setup_logging():
     # logging.getLogger("motor").setLevel(logging.ERROR)
 
 def get_last_logs(lines=100):
+    """Últimas N linhas do log (mais recentes primeiro), já ACHATADAS no formato que
+    o painel admin espera: {time, level, module, function, message, exception}. O sink
+    do Loguru serializa como {"text":..., "record":{...}}; extrair o `record` — senão o
+    painel renderiza células vazias."""
     try:
         with open("logs/backend.log", "r") as f:
             all_lines = f.readlines()
-            # Retorna as últimas N linhas do arquivo de log invertidas (mais recentes primeiro)
-            recent_logs = [json.loads(line) for line in reversed(all_lines[-lines:])]
-            return recent_logs
     except FileNotFoundError:
         return []
+    saida = []
+    for line in reversed(all_lines[-lines:]):
+        try:
+            rec = json.loads(line).get("record", {})
+        except Exception:
+            continue
+        tempo = rec.get("time") or {}
+        exc = rec.get("exception")
+        saida.append({
+            "time": int(tempo.get("timestamp", 0) * 1000) if isinstance(tempo, dict) else None,
+            "level": (rec.get("level") or {}).get("name"),
+            "module": rec.get("module") or rec.get("name"),
+            "function": rec.get("function"),
+            "message": rec.get("message"),
+            "exception": (exc.get("traceback") if isinstance(exc, dict) else exc) or None,
+        })
+    return saida
