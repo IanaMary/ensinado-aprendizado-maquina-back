@@ -8,6 +8,23 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-04 (Turmas & Atividades + chat do aluno + fix de logs)
+
+### Backend `aec30b7` (+ `e786757` logs)
+
+- **Turmas & Atividades:** novo `app/routers/turmas.py` (montado `/turmas`) + `app/schemas/turmas.py`;
+  coleções `db.turmas`/`db.atividades`. Endpoints: criar/gerir turma, adicionar/remover alunos,
+  **entrar por código** (aluno), criar/listar/excluir atividades (template = pipeline parcial),
+  **ranking** por métrica (lê pipelines por `atividade_id`), **progresso** da turma. Escritas gated
+  `exigir_admin_ou_professor`; `ObjectId` validado.
+- **Submissão:** `PipelineCreate/Update` + doc ganham `atividade_id`/`turma_id` (a submissão do aluno
+  é um pipeline ligado à atividade → alimenta o ranking).
+- **Chat do aluno (professor):** `GET /tutor/chat/aluno/{id}/historico[/{chat_id}]` gated
+  professor/admin (transcript completo), com auditoria via `registrar_atividade` (LGPD).
+- **Logs do backend:** `get_last_logs` passou a **achatar** o formato do Loguru (`{text, record}`) para
+  `{time, level, module, function, message, exception}` — o painel admin renderizava células vazias.
+- Testes: `tests/test_turmas.py` (4). Suíte: **321 passed** (317+4), 1 skipped.
+
 ## 2026-07-04 (modelo como flavor mlflow.sklearn + endpoint de download)
 
 ### Modelo logado no MLflow (configs + exemplo de uso) e baixável. Backend `b94ca13`
