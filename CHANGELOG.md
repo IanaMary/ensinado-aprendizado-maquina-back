@@ -8,6 +8,23 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-05 (correções da revisão de código — Turmas)
+
+### Backend `14746d0`
+- **Ranking consertado (bug crítico):** buscava a métrica pelo slug (`accuracy_score`), mas
+  `resultadosDasAvaliacoes` é indexado pelo **rótulo** (`Acurácia`) → ranking sempre vazio.
+  Agora resolve o rótulo em `db.metricas` e tenta ambas as chaves; **deduplica por aluno**
+  (mantém a melhor submissão) e usa projeção (não puxa `resultadoColetaDado`).
+- **Chat do aluno gated por turma:** professor só lê o histórico de alunos das **suas** turmas
+  (admin vê todos) — LGPD/menores.
+- **`is_public` no servidor:** só professor/admin publicam (antes o gate era só no front → aluno
+  podia `POST is_public:true`).
+- **`atividade_id`/`turma_id` validados** contra participação na turma (impede injeção no ranking);
+  `turma_id` canônico vem da atividade.
+- **`progresso` escopado à turma** (submissões/último acesso) + N+1 → agregações e `$in`.
+- **Índices** novos (turmas.codigo único, atividades.turma_id, pipelines.atividade_id/turma_id);
+  valida `aluno_id`; remove no-ops. Testes: `test_turmas_fixes.py` (13). Suíte **334 passed**.
+
 ## 2026-07-04 (Turmas & Atividades + chat do aluno + fix de logs)
 
 ### Backend `aec30b7` (+ `e786757` logs)
