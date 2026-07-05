@@ -41,6 +41,10 @@ def _prof(pid=None):
             "email": "test@test.com", "role": "professor"}
 
 
+def _admin():
+    return {"_id": ObjectId(), "nome_usuario": "adm", "email": "a@a.com", "role": "admin"}
+
+
 # --------------------------------------------------------------- unit: _valor_metrica
 class TestValorMetrica:
     def test_le_por_rotulo_quando_slug_ausente(self):
@@ -115,6 +119,44 @@ class TestRemoverAluno:
                                     headers=auth_headers)
         assert r.status_code == 400
         turmas_m.update_one.assert_not_called()
+
+
+# --------------------------------------------------------------- admin: supervisão global
+class TestAdminSupervisao:
+    @pytest.mark.asyncio
+    async def test_admin_lista_todas_as_turmas(self, client, mock_db, auth_headers):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=_admin())
+        todas = [
+            {"_id": ObjectId(), "nome": "T1", "professor_id": str(ObjectId()), "alunos": []},
+            {"_id": ObjectId(), "nome": "T2", "professor_id": str(ObjectId()), "alunos": []},
+        ]
+        turmas_m = MagicMock(find=MagicMock(return_value=AsyncCursor(todas)))
+        with patch("app.routers.turmas.turmas", turmas_m):
+            r = await client.get("/turmas", headers=auth_headers)
+        assert r.status_code == 200
+        assert len(r.json()) == 2                       # vê turmas de vários professores
+        assert turmas_m.find.call_args[0][0] == {}      # filtro vazio = TODAS
+
+    @pytest.mark.asyncio
+    async def test_admin_gerencia_turma_de_outro_professor(self, client, mock_db, auth_headers):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=_admin())
+        turma = {"_id": ObjectId(), "nome": "T", "professor_id": str(ObjectId()), "alunos": []}  # dono é outro
+        turmas_m = MagicMock(find_one=AsyncMock(return_value=turma), update_one=AsyncMock())
+        with patch("app.routers.turmas.turmas", turmas_m):
+            r = await client.put(f"/turmas/{turma['_id']}", headers=auth_headers, json={"nome": "Novo"})
+        assert r.status_code == 200
+        # filtro do find_one NÃO restringe por professor_id (admin passa em qualquer turma)
+        assert "professor_id" not in turmas_m.find_one.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_professor_nao_ve_turma_alheia(self, client, mock_db, auth_headers):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=_prof())
+        # find_one com filtro incluindo professor_id (do outro) → None → 404
+        turmas_m = MagicMock(find_one=AsyncMock(return_value=None), update_one=AsyncMock())
+        with patch("app.routers.turmas.turmas", turmas_m):
+            r = await client.put(f"/turmas/{ObjectId()}", headers=auth_headers, json={"nome": "X"})
+        assert r.status_code == 404
+        assert "professor_id" in turmas_m.find_one.call_args[0][0]  # professor É restringido
 
 
 # --------------------------------------------------------------- pipelines: is_public gate

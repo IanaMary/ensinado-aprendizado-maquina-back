@@ -111,19 +111,27 @@ def _atividade_doc(a: dict) -> dict:
     }
 
 
-async def _turma_do_professor(turma_id: str, professor_id: str) -> dict:
+async def _turma_do_professor(turma_id: str, usuario: dict) -> dict:
+    """Turma que o usuário pode gerenciar: o professor DONO ou qualquer ADMIN
+    (supervisão global). Levanta 404 caso contrário."""
     oid = validar_object_id(turma_id, "turma_id")
-    t = await turmas.find_one({"_id": oid, "professor_id": professor_id})
+    filtro = {"_id": oid}
+    if (usuario or {}).get("role") != "admin":
+        filtro["professor_id"] = str(usuario["_id"])
+    t = await turmas.find_one(filtro)
     if not t:
         raise HTTPException(status_code=404, detail="Turma não encontrada.")
     return t
 
 
-async def _turma_membro(turma_id: str, user_id: str) -> dict:
-    """Turma acessível pelo aluno (membro) ou pelo professor dono."""
+async def _turma_membro(turma_id: str, usuario: dict) -> dict:
+    """Turma acessível pelo aluno (membro), pelo professor dono ou por admin."""
     oid = validar_object_id(turma_id, "turma_id")
     t = await turmas.find_one({"_id": oid})
-    if not t or (t.get("professor_id") != user_id and user_id not in t.get("alunos", [])):
+    uid = str(usuario["_id"])
+    if not t or not (usuario.get("role") == "admin"
+                     or t.get("professor_id") == uid
+                     or uid in t.get("alunos", [])):
         raise HTTPException(status_code=404, detail="Turma não encontrada.")
     return t
 
@@ -148,7 +156,9 @@ async def criar_turma(body: TurmaCreate, usuario: dict = Depends(exigir_admin_ou
 @router.get("")
 @router.get("/")
 async def listar_turmas(usuario: dict = Depends(exigir_admin_ou_professor)):
-    cur = turmas.find({"professor_id": str(usuario["_id"])}).sort("criado_em", -1)
+    # Admin supervisiona TODAS as turmas; professor vê apenas as suas.
+    filtro = {} if usuario.get("role") == "admin" else {"professor_id": str(usuario["_id"])}
+    cur = turmas.find(filtro).sort("criado_em", -1)
     return [_turma_doc(t) async for t in cur]
 
 
@@ -178,10 +188,17 @@ async def entrar_turma(body: EntrarTurma, usuario: dict = Depends(get_usuario_at
 
 @router.get("/{turma_id}")
 async def obter_turma(turma_id: str, usuario: dict = Depends(get_usuario_atual)):
-    t = await _turma_membro(turma_id, str(usuario["_id"]))
+    is_admin = usuario.get("role") == "admin"
+    if is_admin:
+        oid = validar_object_id(turma_id, "turma_id")
+        t = await turmas.find_one({"_id": oid})
+        if not t:
+            raise HTTPException(status_code=404, detail="Turma não encontrada.")
+    else:
+        t = await _turma_membro(turma_id, usuario)
     doc = _turma_doc(t)
-    # nomes dos alunos (só p/ o professor dono) — 1 query em lote (evita N+1).
-    if t.get("professor_id") == str(usuario["_id"]):
+    # nomes dos alunos (professor dono ou admin) — 1 query em lote (evita N+1).
+    if is_admin or t.get("professor_id") == str(usuario["_id"]):
         usuarios = await _mapa_usuarios(t.get("alunos", []))
         doc["alunos_detalhe"] = [
             {"id": aid, "nome": (usuarios.get(aid) or {}).get("nome_usuario") or (usuarios.get(aid) or {}).get("nome"),
@@ -193,7 +210,7 @@ async def obter_turma(turma_id: str, usuario: dict = Depends(get_usuario_atual))
 
 @router.put("/{turma_id}")
 async def atualizar_turma(turma_id: str, body: TurmaUpdate, usuario: dict = Depends(exigir_admin_ou_professor)):
-    t = await _turma_do_professor(turma_id, str(usuario["_id"]))
+    t = await _turma_do_professor(turma_id, usuario)
     campos = body.model_dump(exclude_none=True)
     if campos:
         await turmas.update_one({"_id": t["_id"]}, {"$set": campos})
@@ -202,7 +219,7 @@ async def atualizar_turma(turma_id: str, body: TurmaUpdate, usuario: dict = Depe
 
 @router.delete("/{turma_id}")
 async def excluir_turma(turma_id: str, usuario: dict = Depends(exigir_admin_ou_professor)):
-    t = await _turma_do_professor(turma_id, str(usuario["_id"]))
+    t = await _turma_do_professor(turma_id, usuario)
     await atividades.delete_many({"turma_id": str(t["_id"])})
     await turmas.delete_one({"_id": t["_id"]})
     return {"mensagem": "Turma excluída."}
@@ -211,7 +228,7 @@ async def excluir_turma(turma_id: str, usuario: dict = Depends(exigir_admin_ou_p
 # ---------------------------------------------------------------- Professor: alunos
 @router.post("/{turma_id}/alunos")
 async def adicionar_alunos(turma_id: str, body: AdicionarAlunos, usuario: dict = Depends(exigir_admin_ou_professor)):
-    t = await _turma_do_professor(turma_id, str(usuario["_id"]))
+    t = await _turma_do_professor(turma_id, usuario)
     ids = []
     for ref in body.alunos:
         ref = (ref or "").strip()
@@ -235,7 +252,7 @@ async def adicionar_alunos(turma_id: str, body: AdicionarAlunos, usuario: dict =
 
 @router.delete("/{turma_id}/alunos/{aluno_id}")
 async def remover_aluno(turma_id: str, aluno_id: str, usuario: dict = Depends(exigir_admin_ou_professor)):
-    t = await _turma_do_professor(turma_id, str(usuario["_id"]))
+    t = await _turma_do_professor(turma_id, usuario)
     validar_object_id(aluno_id, "aluno_id")  # os ids em `alunos` são str(ObjectId)
     await turmas.update_one({"_id": t["_id"]}, {"$pull": {"alunos": aluno_id}})
     return {"mensagem": "Aluno removido."}
@@ -244,7 +261,7 @@ async def remover_aluno(turma_id: str, aluno_id: str, usuario: dict = Depends(ex
 # ---------------------------------------------------------------- Atividades
 @router.post("/{turma_id}/atividades")
 async def criar_atividade(turma_id: str, body: AtividadeCreate, usuario: dict = Depends(exigir_admin_ou_professor)):
-    t = await _turma_do_professor(turma_id, str(usuario["_id"]))
+    t = await _turma_do_professor(turma_id, usuario)
     doc = {
         "turma_id": str(t["_id"]),
         "professor_id": str(usuario["_id"]),
@@ -262,7 +279,7 @@ async def criar_atividade(turma_id: str, body: AtividadeCreate, usuario: dict = 
 
 @router.get("/{turma_id}/atividades")
 async def listar_atividades(turma_id: str, usuario: dict = Depends(get_usuario_atual)):
-    t = await _turma_membro(turma_id, str(usuario["_id"]))
+    t = await _turma_membro(turma_id, usuario)
     cur = atividades.find({"turma_id": str(t["_id"])}).sort("criado_em", -1)
     return [_atividade_doc(a) async for a in cur]
 
@@ -270,7 +287,7 @@ async def listar_atividades(turma_id: str, usuario: dict = Depends(get_usuario_a
 @router.put("/{turma_id}/atividades/{atividade_id}")
 async def atualizar_atividade(turma_id: str, atividade_id: str, body: AtividadeUpdate,
                               usuario: dict = Depends(exigir_admin_ou_professor)):
-    await _turma_do_professor(turma_id, str(usuario["_id"]))
+    await _turma_do_professor(turma_id, usuario)
     aoid = validar_object_id(atividade_id, "atividade_id")
     campos = body.model_dump(exclude_none=True)  # CriterioRanking já vira dict aqui
     if campos:
@@ -283,7 +300,7 @@ async def atualizar_atividade(turma_id: str, atividade_id: str, body: AtividadeU
 
 @router.delete("/{turma_id}/atividades/{atividade_id}")
 async def excluir_atividade(turma_id: str, atividade_id: str, usuario: dict = Depends(exigir_admin_ou_professor)):
-    await _turma_do_professor(turma_id, str(usuario["_id"]))
+    await _turma_do_professor(turma_id, usuario)
     aoid = validar_object_id(atividade_id, "atividade_id")
     await atividades.delete_one({"_id": aoid, "turma_id": turma_id})
     return {"mensagem": "Atividade excluída."}
@@ -292,7 +309,7 @@ async def excluir_atividade(turma_id: str, atividade_id: str, usuario: dict = De
 @router.get("/{turma_id}/atividades/{atividade_id}")
 async def obter_atividade(turma_id: str, atividade_id: str, usuario: dict = Depends(get_usuario_atual)):
     """Aluno (membro) abre o template da atividade para realizá-la."""
-    await _turma_membro(turma_id, str(usuario["_id"]))
+    await _turma_membro(turma_id, usuario)
     aoid = validar_object_id(atividade_id, "atividade_id")
     a = await atividades.find_one({"_id": aoid, "turma_id": turma_id})
     if not a:
@@ -317,7 +334,7 @@ def _valor_metrica(resultados: dict, chaves: list, ordem: str):
 
 @router.get("/{turma_id}/atividades/{atividade_id}/ranking")
 async def ranking_atividade(turma_id: str, atividade_id: str, usuario: dict = Depends(exigir_admin_ou_professor)):
-    await _turma_do_professor(turma_id, str(usuario["_id"]))
+    await _turma_do_professor(turma_id, usuario)
     aoid = validar_object_id(atividade_id, "atividade_id")
     a = await atividades.find_one({"_id": aoid, "turma_id": turma_id})
     if not a:
@@ -356,7 +373,7 @@ async def ranking_atividade(turma_id: str, atividade_id: str, usuario: dict = De
 
 @router.get("/{turma_id}/progresso")
 async def progresso_turma(turma_id: str, usuario: dict = Depends(exigir_admin_ou_professor)):
-    t = await _turma_do_professor(turma_id, str(usuario["_id"]))
+    t = await _turma_do_professor(turma_id, usuario)
     tid = str(t["_id"])
     alunos = t.get("alunos", [])
     total_atividades = await atividades.count_documents({"turma_id": tid})
