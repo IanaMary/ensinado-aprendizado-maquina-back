@@ -8,6 +8,14 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-05 (admin: supervisão global de turmas)
+
+### Backend `77aeeda`
+- Admin passa a **ver e gerenciar TODAS as turmas** (de qualquer professor): `listar_turmas`
+  sem filtro de dono para admin; `_turma_do_professor`/`_turma_membro`/`obter_turma` liberam
+  admin em qualquer turma (atividades, ranking, progresso, alunos). Professor segue restrito
+  ao que é seu. +3 testes de regressão. Suíte **338 passed**.
+
 ## 2026-07-05 (correções da revisão de código — Turmas)
 
 ### Backend `14746d0`
