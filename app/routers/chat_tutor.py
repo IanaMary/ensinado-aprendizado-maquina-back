@@ -19,7 +19,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from app.database import historico_chat, configuracoes_tutor
+from app.database import historico_chat, configuracoes_tutor, turmas
 from app.routers.atividade import registrar_atividade
 from app.security import get_usuario_atual, exigir_admin_ou_professor
 from app.tutor_kb import bloco_kb
@@ -545,12 +545,23 @@ async def obter_historico(chat_id: str, usuario=Depends(get_usuario_atual)):
     return ChatHistoricoResponse(**_serializar_hist(doc))
 
 
+async def _autorizar_ver_aluno(usuario: dict, aluno_id: str) -> None:
+    """LGPD (menores): além do papel, o professor só lê o chat de alunos das SUAS
+    turmas. Admin vê qualquer aluno. Levanta 403 caso contrário."""
+    if (usuario or {}).get("role") == "admin":
+        return
+    vinculo = await turmas.find_one({"professor_id": str(usuario["_id"]), "alunos": aluno_id})
+    if not vinculo:
+        raise HTTPException(status_code=403, detail="Aluno não pertence a nenhuma turma sua.")
+
+
 @router.get("/chat/aluno/{aluno_id}/historico", response_model=list[ChatHistoricoListItem])
 async def listar_historico_aluno(aluno_id: str, usuario=Depends(exigir_admin_ou_professor)):
     """Professor/admin lê as conversas de um aluno. LGPD (menores): acesso gated por
-    papel e registrado na auditoria; use com parcimônia."""
+    papel + vínculo de turma e registrado na auditoria; use com parcimônia."""
     if not ObjectId.is_valid(aluno_id):
         raise HTTPException(status_code=400, detail="ID inválido.")
+    await _autorizar_ver_aluno(usuario, aluno_id)
     await registrar_atividade(usuario, "auditoria", "leu_chats_aluno",
                               detalhes={"aluno_id": aluno_id})
     cursor = historico_chat.find({"usuario_id": aluno_id}).sort("atualizado_em", -1).limit(50)
@@ -561,6 +572,7 @@ async def listar_historico_aluno(aluno_id: str, usuario=Depends(exigir_admin_ou_
 async def obter_historico_aluno(aluno_id: str, chat_id: str, usuario=Depends(exigir_admin_ou_professor)):
     if not (ObjectId.is_valid(aluno_id) and ObjectId.is_valid(chat_id)):
         raise HTTPException(status_code=400, detail="ID inválido.")
+    await _autorizar_ver_aluno(usuario, aluno_id)
     doc = await historico_chat.find_one({"_id": ObjectId(chat_id), "usuario_id": aluno_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Conversa não encontrada.")

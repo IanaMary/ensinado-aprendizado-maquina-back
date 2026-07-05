@@ -181,6 +181,22 @@ async def criar_indices_mlflow_runs():
 
 
 @app.on_event("startup")
+async def criar_indices_turmas():
+    # Índices para os novos padrões de consulta de Turmas & Atividades.
+    # create_index é idempotente. codigo é único (usado no join por código).
+    try:
+        from app.database import turmas, atividades, pipelines
+        await turmas.create_index("codigo", unique=True)
+        await turmas.create_index([("professor_id", 1), ("criado_em", -1)])
+        await turmas.create_index([("alunos", 1)])
+        await atividades.create_index([("turma_id", 1), ("criado_em", -1)])
+        await pipelines.create_index([("atividade_id", 1)])
+        await pipelines.create_index([("turma_id", 1), ("user_id", 1)])
+    except Exception:
+        pass
+
+
+@app.on_event("startup")
 def prewarm_datasets():
     # Pre-baixa os datasets UCI para o cache em disco em background, sem bloquear
     # o boot. Na primeira execucao baixa tudo; nos restarts seguintes e no-op.

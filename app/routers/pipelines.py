@@ -3,11 +3,50 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.database import pipelines
+from app.database import pipelines, turmas, atividades
 from app.schemas.pipelines import PipelineCreate, PipelineUpdate
 from app.security import get_usuario_atual
+from app.funcoes_genericas.validacao import validar_object_id
 
 router = APIRouter(prefix="/pipelines", tags=["Pipelines"])
+
+
+def _pode_publicar(usuario: dict) -> bool:
+    """Só professor/admin publicam na galeria. Enforcement no servidor (o
+    checkbox do front é só conveniência)."""
+    return (usuario or {}).get("role") in ("professor", "admin")
+
+
+async def _validar_vinculo_atividade(user_id: str, role: str, atividade_id, turma_id):
+    """Valida que o usuário pode ligar a submissão à atividade/turma informadas.
+
+    Impede um aluno de injetar sua submissão no ranking de uma turma da qual não
+    participa. Retorna (atividade_id, turma_id) canônicos; a `turma_id` vem da
+    própria atividade (não confia na informada pelo cliente). 403 se não for membro.
+    """
+    if not atividade_id and not turma_id:
+        return None, None
+
+    async def _e_membro(turma_id_alvo: str) -> bool:
+        if role == "admin":
+            return True
+        oid = validar_object_id(turma_id_alvo, "turma_id")
+        t = await turmas.find_one({"_id": oid})
+        return bool(t and (t.get("professor_id") == user_id or user_id in t.get("alunos", [])))
+
+    if atividade_id:
+        aoid = validar_object_id(atividade_id, "atividade_id")
+        a = await atividades.find_one({"_id": aoid})
+        if not a:
+            raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+        turma_real = a.get("turma_id")
+        if not await _e_membro(turma_real):
+            raise HTTPException(status_code=403, detail="Você não participa desta turma.")
+        return atividade_id, turma_real
+
+    if not await _e_membro(turma_id):
+        raise HTTPException(status_code=403, detail="Você não participa desta turma.")
+    return None, turma_id
 
 
 def _pipeline_doc(p: dict) -> dict:
@@ -42,6 +81,11 @@ async def criar_pipeline(
     user_id = str(current_user["_id"])
     agora = datetime.now(timezone.utc)
 
+    # Só professor/admin publicam; e a submissão só liga a atividades de turmas do usuário.
+    is_public = bool(body.is_public) and _pode_publicar(current_user)
+    atividade_id, turma_id = await _validar_vinculo_atividade(
+        user_id, current_user.get("role"), body.atividade_id, body.turma_id)
+
     doc = {
         "user_id": user_id,
         "nome": body.nome,
@@ -54,12 +98,12 @@ async def criar_pipeline(
         "resultadoTreinamento": body.resultadoTreinamento,
         "resultadosDasAvaliacoes": body.resultadosDasAvaliacoes,
         "status": body.status or "rascunho",
-        "is_public": body.is_public,
+        "is_public": is_public,
         "dificuldade": body.dificuldade,
         "tags": body.tags,
         "professor_id": body.professor_id,
-        "atividade_id": body.atividade_id,
-        "turma_id": body.turma_id,
+        "atividade_id": atividade_id,
+        "turma_id": turma_id,
         "dataCriacao": agora,
         "dataModificacao": agora,
     }
@@ -157,6 +201,17 @@ async def atualizar_pipeline(
     update = body.model_dump(exclude_none=True)
     if not update:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+
+    # is_public só por professor/admin (senão remove a flag do update, sem falhar).
+    if "is_public" in update and update["is_public"] and not _pode_publicar(current_user):
+        update["is_public"] = False
+    # Vínculo com atividade/turma validado contra a participação do usuário.
+    if "atividade_id" in update or "turma_id" in update:
+        atividade_id, turma_id = await _validar_vinculo_atividade(
+            user_id, current_user.get("role"), update.get("atividade_id"), update.get("turma_id"))
+        if "atividade_id" in update:
+            update["atividade_id"] = atividade_id
+        update["turma_id"] = turma_id
 
     update["dataModificacao"] = datetime.now(timezone.utc)
 

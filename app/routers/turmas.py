@@ -11,12 +11,13 @@ Escritas de professor: `exigir_admin_ou_professor`. O router é montado com o
 """
 import secrets
 from datetime import datetime, timezone
-from typing import Optional
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.database import turmas, atividades, pipelines, colecao_usuario, atividade_usuario
+from app.database import (
+    turmas, atividades, pipelines, colecao_usuario, atividade_usuario, opcoes_metricas,
+)
 from app.schemas.turmas import (
     TurmaCreate, TurmaUpdate, AdicionarAlunos, EntrarTurma,
     AtividadeCreate, AtividadeUpdate,
@@ -40,6 +41,47 @@ async def _codigo_unico() -> str:
         if not await turmas.find_one({"codigo": codigo}):
             return codigo
     return _gerar_codigo(8)
+
+
+def _nome_usuario(u: dict | None) -> str:
+    """Nome de exibição do aluno, com fallback consistente."""
+    u = u or {}
+    return u.get("nome_usuario") or u.get("nome") or "—"
+
+
+async def _mapa_usuarios(ids: list) -> dict:
+    """Busca vários usuários por id em UMA query (evita N+1). Retorna {id_str: doc}."""
+    oids = []
+    for aid in ids or []:
+        try:
+            oids.append(ObjectId(aid))
+        except Exception:
+            continue
+    if not oids:
+        return {}
+    mapa = {}
+    async for u in colecao_usuario.find({"_id": {"$in": oids}}):
+        mapa[str(u["_id"])] = u
+    return mapa
+
+
+async def _chaves_metrica(slug: str) -> list:
+    """Chaves candidatas p/ ler `resultadosDasAvaliacoes`.
+
+    A avaliação (app/metricas/metricas.py) indexa o dict pelo RÓTULO da métrica
+    (ex.: 'Acurácia'), mas o critério da atividade guarda o `valor`/slug
+    (ex.: 'accuracy_score'). Resolvemos o rótulo em `db.metricas` e tentamos
+    ambos, para ser robusto a como a submissão foi salva.
+    """
+    chaves = [slug]
+    try:
+        doc = await opcoes_metricas.find_one({"valor": slug})
+        rotulo = (doc or {}).get("label")
+        if rotulo and rotulo not in chaves:
+            chaves.append(rotulo)
+    except Exception:
+        pass
+    return chaves
 
 
 def _turma_doc(t: dict) -> dict:
@@ -138,24 +180,21 @@ async def entrar_turma(body: EntrarTurma, usuario: dict = Depends(get_usuario_at
 async def obter_turma(turma_id: str, usuario: dict = Depends(get_usuario_atual)):
     t = await _turma_membro(turma_id, str(usuario["_id"]))
     doc = _turma_doc(t)
-    # nomes dos alunos (só p/ o professor dono)
+    # nomes dos alunos (só p/ o professor dono) — 1 query em lote (evita N+1).
     if t.get("professor_id") == str(usuario["_id"]):
-        alunos = []
-        for aid in t.get("alunos", []):
-            try:
-                u = await colecao_usuario.find_one({"_id": ObjectId(aid)})
-            except Exception:
-                u = None
-            alunos.append({"id": aid, "nome": (u or {}).get("nome_usuario") or (u or {}).get("nome"),
-                           "email": (u or {}).get("email")})
-        doc["alunos_detalhe"] = alunos
+        usuarios = await _mapa_usuarios(t.get("alunos", []))
+        doc["alunos_detalhe"] = [
+            {"id": aid, "nome": (usuarios.get(aid) or {}).get("nome_usuario") or (usuarios.get(aid) or {}).get("nome"),
+             "email": (usuarios.get(aid) or {}).get("email")}
+            for aid in t.get("alunos", [])
+        ]
     return doc
 
 
 @router.put("/{turma_id}")
 async def atualizar_turma(turma_id: str, body: TurmaUpdate, usuario: dict = Depends(exigir_admin_ou_professor)):
     t = await _turma_do_professor(turma_id, str(usuario["_id"]))
-    campos = {k: v for k, v in body.model_dump(exclude_none=True).items()}
+    campos = body.model_dump(exclude_none=True)
     if campos:
         await turmas.update_one({"_id": t["_id"]}, {"$set": campos})
     return _turma_doc({**t, **campos})
@@ -197,6 +236,7 @@ async def adicionar_alunos(turma_id: str, body: AdicionarAlunos, usuario: dict =
 @router.delete("/{turma_id}/alunos/{aluno_id}")
 async def remover_aluno(turma_id: str, aluno_id: str, usuario: dict = Depends(exigir_admin_ou_professor)):
     t = await _turma_do_professor(turma_id, str(usuario["_id"]))
+    validar_object_id(aluno_id, "aluno_id")  # os ids em `alunos` são str(ObjectId)
     await turmas.update_one({"_id": t["_id"]}, {"$pull": {"alunos": aluno_id}})
     return {"mensagem": "Aluno removido."}
 
@@ -232,9 +272,7 @@ async def atualizar_atividade(turma_id: str, atividade_id: str, body: AtividadeU
                               usuario: dict = Depends(exigir_admin_ou_professor)):
     await _turma_do_professor(turma_id, str(usuario["_id"]))
     aoid = validar_object_id(atividade_id, "atividade_id")
-    campos = body.model_dump(exclude_none=True)
-    if "criterio" in campos and campos["criterio"] is not None:
-        campos["criterio"] = campos["criterio"]
+    campos = body.model_dump(exclude_none=True)  # CriterioRanking já vira dict aqui
     if campos:
         await atividades.update_one({"_id": aoid, "turma_id": turma_id}, {"$set": campos})
     a = await atividades.find_one({"_id": aoid})
@@ -262,10 +300,16 @@ async def obter_atividade(turma_id: str, atividade_id: str, usuario: dict = Depe
     return _atividade_doc(a)
 
 
-def _valor_metrica(resultados: dict, metrica: str, ordem: str):
-    """Melhor valor escalar da `metrica` entre os modelos avaliados (por `ordem`)."""
-    por_modelo = (resultados or {}).get(metrica) or {}
-    valores = [v for v in por_modelo.values() if isinstance(v, (int, float))]
+def _valor_metrica(resultados: dict, chaves: list, ordem: str):
+    """Melhor valor escalar da métrica (por qualquer uma das `chaves`) entre os
+    modelos avaliados, escolhido por `ordem` (desc = maior é melhor)."""
+    resultados = resultados or {}
+    por_modelo = {}
+    for chave in chaves:
+        por_modelo = resultados.get(chave) or {}
+        if por_modelo:
+            break
+    valores = [v for v in por_modelo.values() if isinstance(v, (int, float)) and not isinstance(v, bool)]
     if not valores:
         return None
     return max(valores) if ordem != "asc" else min(valores)
@@ -281,23 +325,29 @@ async def ranking_atividade(turma_id: str, atividade_id: str, usuario: dict = De
     criterio = a.get("criterio") or {}
     metrica = criterio.get("metrica", "accuracy_score")
     ordem = criterio.get("ordem", "desc")
+    chaves = await _chaves_metrica(metrica)
 
-    linhas = []
-    async for p in pipelines.find({"atividade_id": atividade_id}):
-        valor = _valor_metrica(p.get("resultadosDasAvaliacoes"), metrica, ordem)
+    # projeção: não trazer resultadoColetaDado (pode ser enorme) — só o necessário.
+    proj = {"resultadosDasAvaliacoes": 1, "user_id": 1, "nome": 1}
+    # melhor submissão POR ALUNO (evita linhas duplicadas quando o aluno salva várias vezes).
+    melhor: dict = {}
+    async for p in pipelines.find({"atividade_id": atividade_id}, proj):
         aluno_id = p.get("user_id")
-        u = None
-        try:
-            u = await colecao_usuario.find_one({"_id": ObjectId(aluno_id)}) if aluno_id else None
-        except Exception:
-            u = None
-        linhas.append({
-            "aluno_id": aluno_id,
-            "aluno_nome": (u or {}).get("nome_usuario") or (u or {}).get("nome") or "—",
-            "pipeline_id": str(p["_id"]),
-            "pipeline_nome": p.get("nome"),
-            "valor": valor,
-        })
+        valor = _valor_metrica(p.get("resultadosDasAvaliacoes"), chaves, ordem)
+        atual = melhor.get(aluno_id)
+        linha = {"aluno_id": aluno_id, "pipeline_id": str(p["_id"]),
+                 "pipeline_nome": p.get("nome"), "valor": valor}
+        if atual is None:
+            melhor[aluno_id] = linha
+        elif valor is not None and (atual["valor"] is None or
+                                    (valor > atual["valor"] if ordem != "asc" else valor < atual["valor"])):
+            melhor[aluno_id] = linha
+
+    usuarios = await _mapa_usuarios(list(melhor.keys()))
+    linhas = []
+    for aluno_id, l in melhor.items():
+        l["aluno_nome"] = _nome_usuario(usuarios.get(aluno_id))
+        linhas.append(l)
     com_valor = [l for l in linhas if l["valor"] is not None]
     com_valor.sort(key=lambda l: l["valor"], reverse=(ordem != "asc"))
     sem_valor = [l for l in linhas if l["valor"] is None]
@@ -307,24 +357,54 @@ async def ranking_atividade(turma_id: str, atividade_id: str, usuario: dict = De
 @router.get("/{turma_id}/progresso")
 async def progresso_turma(turma_id: str, usuario: dict = Depends(exigir_admin_ou_professor)):
     t = await _turma_do_professor(turma_id, str(usuario["_id"]))
-    total_atividades = await atividades.count_documents({"turma_id": str(t["_id"])})
+    tid = str(t["_id"])
+    alunos = t.get("alunos", [])
+    total_atividades = await atividades.count_documents({"turma_id": tid})
+
+    usuarios = await _mapa_usuarios(alunos)
+
+    # Submissões e último acesso ESCOPADOS À TURMA (via pipelines desta turma), 1 agregação.
+    # submissoes = nº de atividades DISTINTAS submetidas (não conta re-salvamentos).
+    por_aluno: dict = {}
+    try:
+        cur = pipelines.aggregate([
+            {"$match": {"turma_id": tid, "user_id": {"$in": alunos}}},
+            {"$group": {"_id": "$user_id",
+                        "atividades": {"$addToSet": "$atividade_id"},
+                        "ultimo": {"$max": "$dataModificacao"}}},
+        ])
+        for row in await cur.to_list(length=None):
+            por_aluno[row["_id"]] = {
+                "submissoes": len([a for a in (row.get("atividades") or []) if a]),
+                "ultimo_acesso": row.get("ultimo"),
+            }
+    except Exception:
+        por_aluno = {}
+
+    # Uso do tutor (chat) por aluno da turma, 1 agregação. É o total do aluno (a
+    # telemetria não guarda turma no evento); serve como sinal de engajamento.
+    chats_por_aluno: dict = {}
+    try:
+        cur = atividade_usuario.aggregate([
+            {"$match": {"usuario_id": {"$in": alunos}, "tipo": "chat"}},
+            {"$group": {"_id": "$usuario_id", "chats": {"$sum": 1}}},
+        ])
+        for row in await cur.to_list(length=None):
+            chats_por_aluno[row["_id"]] = row.get("chats", 0)
+    except Exception:
+        chats_por_aluno = {}
+
     linhas = []
-    for aid in t.get("alunos", []):
-        u = None
-        try:
-            u = await colecao_usuario.find_one({"_id": ObjectId(aid)})
-        except Exception:
-            u = None
-        submissoes = await pipelines.count_documents({"turma_id": str(t["_id"]), "user_id": aid})
-        chats = await atividade_usuario.count_documents({"usuario_id": aid, "tipo": "chat"})
-        ultimo = await atividade_usuario.find({"usuario_id": aid}).sort("timestamp", -1).limit(1).to_list(1)
+    for aid in alunos:
+        u = usuarios.get(aid)
+        agg = por_aluno.get(aid, {})
         linhas.append({
             "aluno_id": aid,
-            "aluno_nome": (u or {}).get("nome_usuario") or (u or {}).get("nome") or "—",
+            "aluno_nome": _nome_usuario(u),
             "email": (u or {}).get("email"),
-            "submissoes": submissoes,
+            "submissoes": agg.get("submissoes", 0),
             "total_atividades": total_atividades,
-            "chats": chats,
-            "ultimo_acesso": ultimo[0]["timestamp"] if ultimo else None,
+            "chats": chats_por_aluno.get(aid, 0),
+            "ultimo_acesso": agg.get("ultimo_acesso"),
         })
     return converter_numpy({"turma": _turma_doc(t), "total_atividades": total_atividades, "alunos": linhas})
