@@ -28,6 +28,16 @@ class TestTurmas:
         assert body["total_alunos"] == 0
 
     @pytest.mark.asyncio
+    async def test_criar_turma_admin(self, client, mock_db, auth_headers):
+        # Admin herda as capacidades de professor (exigir_admin_ou_professor).
+        mock_db["usuarios"].find_one = AsyncMock(return_value={
+            "_id": ObjectId(), "nome_usuario": "adm", "email": "a@a.com", "role": "admin"})
+        with patch("app.routers.turmas.turmas", _turmas_mock()):
+            r = await client.post("/turmas", headers=auth_headers, json={"nome": "Turma Admin"})
+        assert r.status_code == 200
+        assert r.json()["nome"] == "Turma Admin"
+
+    @pytest.mark.asyncio
     async def test_criar_turma_aluno_403(self, client, mock_db, auth_headers):
         # usuário padrão do mock tem role "aluno"
         r = await client.post("/turmas", headers=auth_headers, json={"nome": "Turma"})
