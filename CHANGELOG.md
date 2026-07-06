@@ -8,6 +8,12 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-06 (Artefatos: busca de usuários p/ autocomplete)
+
+### Backend `07c9fa3`
+- `GET /artefatos/usuarios?q=&limit=` — regex (nome/email) no servidor, limitado (escala p/
+  milhares), gated admin/professor. Teste incluído. Suíte **342 passed**.
+
 ## 2026-07-06 (Artefatos: /contexto liga run à atividade/turma)
 
 ### Backend `b7b320a`
