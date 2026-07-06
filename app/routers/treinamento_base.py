@@ -238,6 +238,7 @@ async def treinar_modelo_generico(
                 modelo=modelo_doc.get("valor"),
                 arquivo_id=request.arquivo_id,
                 configuracao_id=getattr(request, "configuracao_id", None),
+                dataset_nome=getattr(request, "dataset_nome", None),
             )
 
     except SandboxError as e:

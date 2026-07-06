@@ -36,6 +36,7 @@ async def registrar_run_usuario(
     modelo: Optional[str] = None,
     arquivo_id: Optional[str] = None,
     configuracao_id: Optional[str] = None,
+    dataset_nome: Optional[str] = None,
 ) -> None:
     """Associa uma run do MLflow ao usuário. Fire-and-forget: nunca quebra o treino."""
     if not run_id:
@@ -52,6 +53,7 @@ async def registrar_run_usuario(
             or (usuario or {}).get("email", ""),
             "usuario_role": (usuario or {}).get("role", ""),
             "modelo": modelo,
+            "dataset_nome": dataset_nome,
             "arquivo_id": arquivo_id,
             "configuracao_id": configuracao_id,
             "criado_em": datetime.now(timezone.utc),
@@ -86,7 +88,8 @@ async def facetas_runs(_: dict = Depends(exigir_admin_ou_professor)):
     """Valores distintos p/ popular os filtros (modelo, papel do usuário)."""
     modelos = [m for m in await mlflow_runs.distinct("modelo") if m]
     papeis = [p for p in await mlflow_runs.distinct("usuario_role") if p]
-    return {"modelos": sorted(modelos), "papeis": sorted(papeis)}
+    datasets = [d for d in await mlflow_runs.distinct("dataset_nome") if d]
+    return {"modelos": sorted(modelos), "papeis": sorted(papeis), "datasets": sorted(datasets)}
 
 
 @router.get("")
@@ -94,6 +97,7 @@ async def listar_runs(
     usuario_id: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
     papel: Optional[str] = Query(None),
+    dataset: Optional[str] = Query(None),
     data_inicio: Optional[str] = Query(None),
     data_fim: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
@@ -109,6 +113,8 @@ async def listar_runs(
         filtro["modelo"] = modelo
     if papel:
         filtro["usuario_role"] = papel
+    if dataset:
+        filtro["dataset_nome"] = dataset
     faixa = _faixa_tempo(_parse_data(data_inicio), _parse_data(data_fim))
     if faixa:
         filtro["criado_em"] = faixa

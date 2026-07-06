@@ -31,6 +31,7 @@ class DatasetRequest(BaseModel):
     modelo_id: str
     hiperparametros: Optional[Dict[str, Any]] = Field(default_factory=dict)
     pre_processamento: Optional[List[PreProcStep]] = Field(default_factory=list)
+    dataset_nome: Optional[str] = None  # nome amigável do dataset (p/ artefatos)
 
 class AvaliacaoRequest(BaseModel):
     dados_teste: List[Dict[str, Any]]
