@@ -145,6 +145,19 @@ class TestListarRuns:
         assert v[0]["turma_nome"] == "9A"
 
     @pytest.mark.asyncio
+    async def test_busca_usuarios(self, client, mock_db, auth_headers, mock_admin):
+        from bson import ObjectId
+        from unittest.mock import patch
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        col = MagicMock(find=MagicMock(return_value=_AsyncCursor([
+            {"_id": ObjectId(), "nome_usuario": "Ana", "email": "ana@x.com"}])))
+        with patch("app.routers.artefatos.colecao_usuario", col):
+            resp = await client.get("/tutor/artefatos/usuarios?q=an", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()[0]["nome"] == "Ana"
+        assert resp.json()[0]["email"] == "ana@x.com"
+
+    @pytest.mark.asyncio
     async def test_aluno_nao_pode_listar(self, client, mock_db, auth_headers):
         resp = await client.get("/tutor/artefatos", headers=auth_headers)
         assert resp.status_code == 403

@@ -16,7 +16,7 @@ from typing import Any, Optional
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.database import mlflow_runs, pipelines, atividades, turmas
+from app.database import mlflow_runs, pipelines, atividades, turmas, colecao_usuario
 from app.funcoes_genericas.funcoes_genericas import serialize_doc
 from app.mlflow_client import get_run_summary, mlflow_enabled
 from app.security import get_usuario_atual, exigir_admin_ou_professor
@@ -91,6 +91,28 @@ async def facetas_runs(_: dict = Depends(exigir_admin_ou_professor)):
     papeis = [p for p in await mlflow_runs.distinct("usuario_role") if p]
     datasets = [d for d in await mlflow_runs.distinct("dataset_nome") if d]
     return {"modelos": sorted(modelos), "papeis": sorted(papeis), "datasets": sorted(datasets)}
+
+
+@router.get("/usuarios")
+async def buscar_usuarios(
+    q: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=50),
+    _: dict = Depends(exigir_admin_ou_professor),
+):
+    """Busca leve de usuários (id/nome/email) p/ o autocomplete do filtro — escala p/
+    milhares de alunos (regex no servidor, resultado limitado)."""
+    filtro: dict[str, Any] = {}
+    if q:
+        rx = {"$regex": re.escape(q), "$options": "i"}
+        filtro = {"$or": [{"nome_usuario": rx}, {"nome": rx}, {"email": rx}]}
+    proj = {"nome_usuario": 1, "nome": 1, "email": 1}
+    cur = colecao_usuario.find(filtro, proj).sort("nome_usuario", 1).limit(limit)
+    return [
+        {"id": str(u["_id"]),
+         "nome": u.get("nome_usuario") or u.get("nome") or u.get("email"),
+         "email": u.get("email")}
+        async for u in cur
+    ]
 
 
 @router.get("")
