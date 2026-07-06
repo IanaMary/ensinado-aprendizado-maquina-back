@@ -13,9 +13,10 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.database import mlflow_runs
+from app.database import mlflow_runs, pipelines, atividades, turmas
 from app.funcoes_genericas.funcoes_genericas import serialize_doc
 from app.mlflow_client import get_run_summary, mlflow_enabled
 from app.security import get_usuario_atual, exigir_admin_ou_professor
@@ -144,3 +145,43 @@ async def obter_resumo_run(run_id: str, usuario: dict = Depends(get_usuario_atua
     if summary is None:
         raise HTTPException(status_code=404, detail="Run não encontrada.")
     return summary
+
+
+@router.get("/{run_id}/contexto")
+async def contexto_run(run_id: str, _: dict = Depends(exigir_admin_ou_professor)):
+    """Submissões de atividade que usaram esta run (liga a run à atividade/turma).
+
+    O pipeline salvo guarda `resultadoTreinamento[modelo].mlflow_run_id`; achamos as
+    submissões (com `atividade_id`) cujo treino referencia esta run, via `$objectToArray`.
+    """
+    if not _RUN_ID_RE.match(run_id):
+        raise HTTPException(status_code=400, detail="run_id inválido.")
+    cur = pipelines.aggregate([
+        {"$match": {"atividade_id": {"$nin": [None, ""]}}},
+        {"$addFields": {"_tr": {"$objectToArray": {"$ifNull": ["$resultadoTreinamento", {}]}}}},
+        {"$match": {"_tr.v.mlflow_run_id": run_id}},
+        {"$project": {"atividade_id": 1, "turma_id": 1, "nome": 1, "user_id": 1}},
+        {"$limit": 10},
+    ])
+    subs = await cur.to_list(length=10)
+
+    async def _doc(col, _id):
+        try:
+            return await col.find_one({"_id": ObjectId(_id)}) if _id else None
+        except Exception:
+            return None
+
+    vinculos = []
+    for s in subs:
+        atv = await _doc(atividades, s.get("atividade_id"))
+        tid = s.get("turma_id") or (atv or {}).get("turma_id")
+        turma = await _doc(turmas, tid)
+        vinculos.append({
+            "pipeline_id": str(s["_id"]),
+            "pipeline_nome": s.get("nome"),
+            "atividade_id": s.get("atividade_id"),
+            "atividade_titulo": (atv or {}).get("titulo"),
+            "turma_id": tid,
+            "turma_nome": (turma or {}).get("nome"),
+        })
+    return {"vinculos": vinculos}

@@ -124,6 +124,27 @@ class TestListarRuns:
         assert dados["datasets"] == ["iris", "wine"]
 
     @pytest.mark.asyncio
+    async def test_contexto_liga_run_a_atividade_e_turma(self, client, mock_db, auth_headers, mock_admin):
+        from bson import ObjectId
+        from unittest.mock import patch
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        aid, tid = ObjectId(), ObjectId()
+        sub = {"_id": ObjectId(), "nome": "Sub do aluno", "atividade_id": str(aid), "turma_id": str(tid)}
+        pipes = MagicMock(aggregate=MagicMock(return_value=MagicMock(
+            to_list=AsyncMock(return_value=[sub]))))
+        ativs = MagicMock(find_one=AsyncMock(return_value={"_id": aid, "titulo": "Classificar flores", "turma_id": str(tid)}))
+        turms = MagicMock(find_one=AsyncMock(return_value={"_id": tid, "nome": "9A"}))
+        with patch("app.routers.artefatos.pipelines", pipes), \
+             patch("app.routers.artefatos.atividades", ativs), \
+             patch("app.routers.artefatos.turmas", turms):
+            resp = await client.get("/tutor/artefatos/abc123def456/contexto", headers=auth_headers)
+        assert resp.status_code == 200
+        v = resp.json()["vinculos"]
+        assert len(v) == 1
+        assert v[0]["atividade_titulo"] == "Classificar flores"
+        assert v[0]["turma_nome"] == "9A"
+
+    @pytest.mark.asyncio
     async def test_aluno_nao_pode_listar(self, client, mock_db, auth_headers):
         resp = await client.get("/tutor/artefatos", headers=auth_headers)
         assert resp.status_code == 403
