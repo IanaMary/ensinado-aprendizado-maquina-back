@@ -81,19 +81,34 @@ def _faixa_tempo(inicio: Optional[datetime], fim: Optional[datetime]) -> Optiona
     return faixa or None
 
 
+@router.get("/facetas")
+async def facetas_runs(_: dict = Depends(exigir_admin_ou_professor)):
+    """Valores distintos p/ popular os filtros (modelo, papel do usuário)."""
+    modelos = [m for m in await mlflow_runs.distinct("modelo") if m]
+    papeis = [p for p in await mlflow_runs.distinct("usuario_role") if p]
+    return {"modelos": sorted(modelos), "papeis": sorted(papeis)}
+
+
 @router.get("")
 async def listar_runs(
     usuario_id: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    papel: Optional[str] = Query(None),
     data_inicio: Optional[str] = Query(None),
     data_fim: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     _: dict = Depends(exigir_admin_ou_professor),
 ):
-    """Lista runs (artefatos) associadas a usuários, com filtro por usuário e data."""
+    """Lista runs (artefatos) associadas a usuários, com filtro por usuário, modelo,
+    papel do usuário e data."""
     filtro: dict[str, Any] = {}
     if usuario_id:
         filtro["usuario_id"] = usuario_id
+    if modelo:
+        filtro["modelo"] = modelo
+    if papel:
+        filtro["usuario_role"] = papel
     faixa = _faixa_tempo(_parse_data(data_inicio), _parse_data(data_fim))
     if faixa:
         filtro["criado_em"] = faixa

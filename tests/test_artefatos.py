@@ -99,6 +99,29 @@ class TestListarRuns:
         assert dados["itens"][0]["run_id"] == "abc123"
 
     @pytest.mark.asyncio
+    async def test_filtra_por_modelo_e_papel(self, client, mock_db, auth_headers, mock_admin):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        cd = AsyncMock(return_value=0)
+        mock_db["mlflow_runs"].count_documents = cd
+        mock_db["mlflow_runs"].find = MagicMock(return_value=_AsyncCursor([]))
+        resp = await client.get("/tutor/artefatos?modelo=knn&papel=professor", headers=auth_headers)
+        assert resp.status_code == 200
+        filtro = cd.call_args[0][0]
+        assert filtro["modelo"] == "knn"
+        assert filtro["usuario_role"] == "professor"
+
+    @pytest.mark.asyncio
+    async def test_facetas(self, client, mock_db, auth_headers, mock_admin):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        mock_db["mlflow_runs"].distinct = AsyncMock(side_effect=[
+            ["random_forest", "knn", None], ["professor", "aluno"]])
+        resp = await client.get("/tutor/artefatos/facetas", headers=auth_headers)
+        assert resp.status_code == 200
+        dados = resp.json()
+        assert dados["modelos"] == ["knn", "random_forest"]   # sem None, ordenado
+        assert dados["papeis"] == ["aluno", "professor"]
+
+    @pytest.mark.asyncio
     async def test_aluno_nao_pode_listar(self, client, mock_db, auth_headers):
         resp = await client.get("/tutor/artefatos", headers=auth_headers)
         assert resp.status_code == 403
