@@ -8,6 +8,13 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-06 (Artefatos: /contexto liga run à atividade/turma)
+
+### Backend `b7b320a`
+- `GET /artefatos/{run_id}/contexto`: acha as submissões (pipelines com `atividade_id`) cujo
+  `resultadoTreinamento` referencia a run (`$objectToArray` → `_tr.v.mlflow_run_id`) e resolve
+  atividade + turma. Sem tocar no treino. Teste incluído. Suíte **341 passed**.
+
 ## 2026-07-06 (Artefatos: dataset_nome gravado na run)
 
 ### Backend `0dbd5b5`
