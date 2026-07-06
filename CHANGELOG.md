@@ -8,6 +8,13 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-06 (Artefatos: filtros modelo/papel + /facetas)
+
+### Backend `b1f6831`
+- `listar_runs` aceita `modelo` e `papel` (usuario_role); novo `GET /artefatos/facetas`
+  (modelos/papéis distintos p/ os selects). dataset/professor/turma não são gravados na run.
+  Testes: filtro + facetas. Suíte **340 passed**.
+
 ## 2026-07-05 (admin: supervisão global de turmas)
 
 ### Backend `77aeeda`
