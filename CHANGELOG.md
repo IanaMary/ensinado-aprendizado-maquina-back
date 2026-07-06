@@ -8,6 +8,13 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-06 (Artefatos: dataset_nome gravado na run)
+
+### Backend `0dbd5b5`
+- `DatasetRequest.dataset_nome` (opcional) → `registrar_run_usuario` grava na run;
+  `listar_runs` filtra por `dataset`; `/facetas` expõe `datasets`. Não retroativo.
+  Testes: filtro + faceta. Suíte **340 passed**.
+
 ## 2026-07-06 (Artefatos: filtros modelo/papel + /facetas)
 
 ### Backend `b1f6831`
