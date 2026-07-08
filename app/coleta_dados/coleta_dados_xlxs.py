@@ -101,6 +101,8 @@ async def upload_xlsx(
             raise HTTPException(400, "id_coleta é obrigatório para tipo 'teste'")
 
         if file_teste is None:
+            file_teste = file  # o frontend envia o arquivo de teste no campo 'file' (mesmo campo do CSV)
+        if file_teste is None:
             raise HTTPException(400, "Arquivo 'file_teste' obrigatório para tipo 'teste'")
 
         validar_xlsx(file_teste, "teste")
