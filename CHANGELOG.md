@@ -8,6 +8,16 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-08 (upload xlsx de teste + escopo do tutor LLM)
+
+### Backend `3c5043a`
+- `POST /coleta_dados/salvar_xlxs` tipo `teste` aceita o arquivo no campo `file` (o frontend usa
+  o mesmo campo do CSV); antes 400 "file_teste obrigatório". Testes novos
+  (`tests/test_coleta_dados_xlsx.py`, 3).
+- `SYSTEM_PROMPT` do chat tutor: responde **somente** sobre ML/plataforma/pipeline do aluno,
+  priorizando o pipeline atual (dataset, modelos, hiperparâmetros, métricas); recusa educadamente
+  assuntos fora do escopo (antes instruía a responder mesmo fora do contexto). Suíte **342 passed**.
+
 ## 2026-07-06 (Artefatos: busca de usuários p/ autocomplete)
 
 ### Backend `07c9fa3`
