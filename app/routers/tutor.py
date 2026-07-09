@@ -127,6 +127,43 @@ async def buscar_tutor_pipe(
         raise HTTPException(400, f"Erro: {e}")
 
 
+PIPES_VALIDOS = {
+    "inicio", "coleta-dado", "pre-processamento", "selecao-modelo",
+    "treinamento", "selecao-metricas", "avaliacao",
+}
+
+
+@router.put("/pipe/{pipe}")
+async def atualizar_por_pipe(
+    pipe: str,
+    request: AtualizarContextoRequest,
+    usuario: dict = Depends(exigir_admin_ou_professor),
+):
+    """Atualiza (com upsert) o conteúdo de um pipe pelo slug — dispensa conhecer o
+    _id e cobre o caso do documento ainda não existir (ex.: pipe 'inicio')."""
+    if pipe not in PIPES_VALIDOS:
+        raise HTTPException(status_code=404, detail="Pipe desconhecido")
+
+    set_data = {
+        k: v for k, v in (request.contexto or {}).items()
+        if v is not None and k not in {"pipe", "_id", "id"}
+    }
+    if not set_data:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+
+    await tutor.update_one(
+        {"pipe": pipe},
+        {"$set": set_data, "$setOnInsert": {"pipe": pipe}},
+        upsert=True,
+    )
+    doc = await tutor.find_one({"pipe": pipe}, {"_id": 1})
+    doc_id = str(doc["_id"]) if doc else ""
+
+    await _registrar_edicao(usuario, doc_id, set_data, "atualizar_por_pipe")
+
+    return {"detail": "Contexto atualizado com sucesso", "id": doc_id, "update_data": set_data}
+
+
 @router.put("/{id}")
 async def atualizar_descricao(
     id: str,

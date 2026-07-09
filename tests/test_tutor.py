@@ -130,3 +130,52 @@ class TestTutorEditar:
         )
         assert response.status_code == 200
         assert response.json()["update_data"]["supervisionado.classificacao.explicacao"] == "Classifica em categorias"
+
+
+class TestAtualizarPorPipe:
+    @pytest.mark.asyncio
+    async def test_upsert_pipe_inicio(self, client, mock_db, auth_headers, mock_admin):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        mock_db["tutor"].find_one = AsyncMock(return_value={"_id": ObjectId(), "pipe": "inicio"})
+        response = await client.put(
+            "/tutor/pipe/inicio",
+            headers=auth_headers,
+            json={"contexto": {"texto_pipe": "<h4>Bem-vindo!</h4>", "explicacao": "Como usar"}},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["update_data"]["texto_pipe"] == "<h4>Bem-vindo!</h4>"
+        assert data["id"]
+        # upsert por pipe: update_one deve ser chamado com upsert=True
+        args, kwargs = mock_db["tutor"].update_one.call_args
+        assert args[0] == {"pipe": "inicio"}
+        assert kwargs.get("upsert") is True
+
+    @pytest.mark.asyncio
+    async def test_pipe_desconhecido_404(self, client, mock_db, auth_headers, mock_admin):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        response = await client.put(
+            "/tutor/pipe/nao-existe",
+            headers=auth_headers,
+            json={"contexto": {"texto_pipe": "x"}},
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_pipe_aluno_403(self, client, mock_db, auth_headers):
+        response = await client.put(
+            "/tutor/pipe/inicio",
+            headers=auth_headers,
+            json={"contexto": {"texto_pipe": "x"}},
+        )
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_pipe_sem_campos_400(self, client, mock_db, auth_headers, mock_admin):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        response = await client.put(
+            "/tutor/pipe/inicio",
+            headers=auth_headers,
+            json={"contexto": {"pipe": "inicio"}},
+        )
+        assert response.status_code == 400
