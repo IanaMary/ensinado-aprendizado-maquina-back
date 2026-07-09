@@ -8,6 +8,14 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-08 (tutor: upsert de conteúdo por pipe)
+
+### Backend `4ed7562`
+- Novo `PUT /tutor/pipe/{pipe}`: upsert do conteúdo de uma etapa pelo slug (allowlist de pipes,
+  gate admin/professor, auditoria em `tutor_audit`). Usado pela aba "Início" do conf-tutor para o
+  texto de boas-vindas do tutor (pipe `inicio`), mesmo sem doc pré-existente. 4 testes novos;
+  suíte **349 passed**.
+
 ## 2026-07-08 (upload xlsx de teste + escopo do tutor LLM)
 
 ### Backend `3c5043a`
