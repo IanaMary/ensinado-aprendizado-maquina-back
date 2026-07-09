@@ -8,6 +8,16 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-09 (KB do assistente do admin + fix 404 do GET /tutor)
+
+### Backend `30f47a5`
+- Guia de preenchimento do conf-pipeline **versionado** (`app/conteudo/kb_conf_pipeline.py`),
+  semeado em `db.tutor {pipe:'conf-pipeline'}` (`scripts/deploy/seed_kb_conf_pipeline.py`,
+  idempotente); `GET /tutor/?pipe=conf-pipeline` com fallback no guia versionado; pipe no
+  allowlist do upsert. Contexto do chat do admin no conf-pipeline.
+- **Fix:** `GET /tutor/?pipe=` devolvia **400** quando o doc não existia (except genérico engolia
+  o 404) — visto no log de prod com `pipe=pre-processamento`. 4 testes novos; suíte **353 passed**.
+
 ## 2026-07-08 (tutor: upsert de conteúdo por pipe)
 
 ### Backend `4ed7562`
