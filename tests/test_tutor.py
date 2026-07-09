@@ -179,3 +179,40 @@ class TestAtualizarPorPipe:
             json={"contexto": {"pipe": "inicio"}},
         )
         assert response.status_code == 400
+
+
+class TestKbConfPipeline:
+    @pytest.mark.asyncio
+    async def test_get_conf_pipeline_fallback_versionado(self, client, mock_db, auth_headers):
+        """Sem doc no banco, o pipe conf-pipeline responde com a KB versionada (não 404)."""
+        mock_db["tutor"].find_one = AsyncMock(return_value=None)
+        response = await client.get("/tutor/?pipe=conf-pipeline", headers=auth_headers)
+        assert response.status_code == 200
+        assert "GUIA DE PREENCHIMENTO" in response.json()["descricao"]
+
+    @pytest.mark.asyncio
+    async def test_get_conf_pipeline_do_banco(self, client, mock_db, auth_headers):
+        mock_db["tutor"].find_one = AsyncMock(return_value={
+            "_id": ObjectId(), "pipe": "conf-pipeline", "texto_pipe": "Guia custom do admin",
+        })
+        response = await client.get("/tutor/?pipe=conf-pipeline", headers=auth_headers)
+        assert response.status_code == 200
+        assert "Guia custom" in response.json()["descricao"]
+
+    @pytest.mark.asyncio
+    async def test_get_pipe_sem_doc_retorna_404(self, client, mock_db, auth_headers):
+        """Regressão: o except genérico convertia o 404 em 400 (visto no log de prod)."""
+        mock_db["tutor"].find_one = AsyncMock(return_value=None)
+        response = await client.get("/tutor/?pipe=pre-processamento", headers=auth_headers)
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_upsert_pipe_conf_pipeline_permitido(self, client, mock_db, auth_headers, mock_admin):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        mock_db["tutor"].find_one = AsyncMock(return_value={"_id": ObjectId(), "pipe": "conf-pipeline"})
+        response = await client.put(
+            "/tutor/pipe/conf-pipeline",
+            headers=auth_headers,
+            json={"contexto": {"texto_pipe": "novo guia"}},
+        )
+        assert response.status_code == 200

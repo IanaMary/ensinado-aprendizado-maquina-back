@@ -67,8 +67,16 @@ async def buscar_tutor_descricao(
         texto = ''
         result = await tutor.find_one({"pipe": pipe})
         if result is None:
+            # Guia de preenchimento do admin: fallback versionado quando o doc
+            # ainda não foi semeado (o chat do conf-pipeline depende dele).
+            if pipe == 'conf-pipeline':
+                from app.conteudo.kb_conf_pipeline import KB_CONF_PIPELINE
+                return {'descricao': KB_CONF_PIPELINE, 'id': ''}
             raise HTTPException(status_code=404, detail="Documento do tutor não encontrado para o pipe informado.")
-        if(pipe == 'inicio'):
+        if(pipe == 'conf-pipeline'):
+            chaves = textos or ['texto_pipe', 'explicacao']
+            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
+        elif(pipe == 'inicio'):
             chaves = textos  or list(ContextoPipeInicio.model_fields.keys())
             texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
         elif(pipe == 'coleta-dado'):
@@ -92,6 +100,10 @@ async def buscar_tutor_descricao(
         
         
         return {'descricao': texto, 'id': str(result['_id'])}
+    except HTTPException:
+        # Doc ausente deve responder 404 (o except genérico transformava em 400,
+        # poluindo o log de erros do frontend).
+        raise
     except Exception as e:
         raise HTTPException(400, f"Erro: {e}")
     
@@ -130,6 +142,7 @@ async def buscar_tutor_pipe(
 PIPES_VALIDOS = {
     "inicio", "coleta-dado", "pre-processamento", "selecao-modelo",
     "treinamento", "selecao-metricas", "avaliacao",
+    "conf-pipeline",  # guia de preenchimento do admin (chat do conf-pipeline)
 }
 
 
