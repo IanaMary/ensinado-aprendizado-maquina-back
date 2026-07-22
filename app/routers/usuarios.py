@@ -85,11 +85,11 @@ def gerar_email_convite(nome: str, token: str) -> str:
     <body>
         <div class="container">
             <div class="header">
-                <h1>🎓 Iana - Plataforma de ML</h1>
+                <h1>🎓 H2IA Tutor</h1>
             </div>
             <div class="content">
                 <h2>Olá, {nome}!</h2>
-                <p>Você foi convidado a fazer parte da plataforma Iana, uma ferramenta interativa para aprendizado de Machine Learning.</p>
+                <p>Você foi convidado a fazer parte da plataforma H2IA Tutor, uma ferramenta interativa para o ensino de Aprendizado de Máquina.</p>
                 <p>Para criar sua senha e começar a usar a plataforma, clique no botão abaixo:</p>
                 <p style="text-align: center;">
                     <a href="{link_ativacao}" class="button">Criar Minha Senha</a>
@@ -102,7 +102,7 @@ def gerar_email_convite(nome: str, token: str) -> str:
                 <p>Se você não esperava este convite, ignore este email.</p>
             </div>
             <div class="footer">
-                <p>© 2024 Iana - Plataforma de Ensino de Machine Learning</p>
+                <p>© 2026 H2IA Tutor - Plataforma de Ensino de Aprendizado de Máquina</p>
             </div>
         </div>
     </body>
@@ -201,10 +201,10 @@ async def criar_convite(convite_data: UserInvite, current_user=Depends(get_usuar
     corpo_html = gerar_email_convite(convite_data.nome, token)
     email_enviado = await enviar_email(
         convite_data.email,
-        "Convite para a plataforma Iana",
+        "Convite para a plataforma H2IA Tutor",
         corpo_html
     )
-    
+
     return UserInviteResponse(
         id=str(result.inserted_id),
         nome=convite_data.nome,
@@ -285,7 +285,7 @@ async def reenviar_convite(user_id: str, current_user=Depends(get_usuario_atual)
     corpo_html = gerar_email_convite(user["nome_usuario"], token)
     email_enviado = await enviar_email(
         user["email"],
-        "Convite para a plataforma Iana - Reenvio",
+        "Convite para a plataforma H2IA Tutor - Reenvio",
         corpo_html
     )
 

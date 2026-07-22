@@ -285,6 +285,20 @@ async def delete_item(
 # Pre-processamento — chave eh "valor" (sem ObjectId);
 # o documento eh upsertado/atualizado por valor.
 # ======================================================
+@router.delete("/pre_processamento_doc/{valor}")
+async def delete_pre_processamento_doc(
+  valor: str,
+  usuario: dict = Depends(exigir_admin_ou_professor),
+):
+  if not valor or len(valor) > 100:
+    raise HTTPException(status_code=400, detail="Valor inválido")
+  resultado = await opcoes_pre_processamento.delete_one({"valor": valor})
+  if resultado.deleted_count == 0:
+    raise HTTPException(status_code=404, detail="Item não encontrado")
+  await _registrar_audit_catalogo(usuario, "pre_processamento", valor, "catalogo_remover", [])
+  return {"valor": valor, "removido": True}
+
+
 @router.put("/pre_processamento_doc/{valor}")
 async def put_pre_processamento_doc(
   valor: str,

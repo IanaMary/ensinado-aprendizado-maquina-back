@@ -10,6 +10,20 @@ from bson import ObjectId
 router = APIRouter(prefix="/tutor", tags=["Tutor"])
 
 
+# Fonte única de verdade para pipes: slug -> (schema Pydantic, chaves_default opcionais).
+# Alimenta tanto o GET /tutor/ quanto o PUT /tutor/pipe/{pipe} (validação).
+_PIPES_SCHEMA = {
+    "conf-pipeline": (None, ["texto_pipe", "explicacao"]),
+    "inicio": (ContextoPipeInicio, None),
+    "coleta-dado": (ContextoPipeColetaDados, None),
+    "pre-processamento": (ContextoPipePreProcessamento, None),
+    "selecao-modelo": (ContextoPipeSelecaoModelo, None),
+    "treinamento": (ContextoPipeTreinamento, None),
+    "selecao-metricas": (ContextoPipeSelecaoMetricas, None),
+    "avaliacao": (ContextoPipeSelecaoMetricas, None),
+}
+
+
 async def _registrar_edicao(usuario: dict, doc_id: str, set_data: dict, operacao: str):
     """Registra uma edicao no tutor em db.tutor_audit (auditoria)."""
     try:
@@ -65,6 +79,11 @@ async def buscar_tutor_descricao(
     try:
         sep='<br>'
         texto = ''
+        # Validação e lookup via fonte única (_PIPES_SCHEMA)
+        schema_info = _PIPES_SCHEMA.get(pipe)
+        if schema_info is None:
+            raise HTTPException(status_code=404, detail="Pipe desconhecido")
+
         result = await tutor.find_one({"pipe": pipe})
         if result is None:
             # Guia de preenchimento do admin: fallback versionado quando o doc
@@ -73,32 +92,13 @@ async def buscar_tutor_descricao(
                 from app.conteudo.kb_conf_pipeline import KB_CONF_PIPELINE
                 return {'descricao': KB_CONF_PIPELINE, 'id': ''}
             raise HTTPException(status_code=404, detail="Documento do tutor não encontrado para o pipe informado.")
-        if(pipe == 'conf-pipeline'):
-            chaves = textos or ['texto_pipe', 'explicacao']
-            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
-        elif(pipe == 'inicio'):
-            chaves = textos  or list(ContextoPipeInicio.model_fields.keys())
-            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
-        elif(pipe == 'coleta-dado'):
-            chaves = textos or list(ContextoPipeColetaDados.model_fields.keys())
-            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
-        elif(pipe == 'pre-processamento'):
-            chaves = textos or list(ContextoPipePreProcessamento.model_fields.keys())
-            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
-        elif(pipe == 'selecao-modelo'):
-            chaves = textos or list(ContextoPipeSelecaoModelo.model_fields.keys())
-            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
-        elif(pipe == 'treinamento'):
-            chaves = textos  or list(ContextoPipeTreinamento.model_fields.keys())
-            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
-        elif(pipe == 'selecao-metricas'):
-            chaves = textos or list(ContextoPipeSelecaoMetricas.model_fields.keys())
-            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
-        elif(pipe == 'avaliacao'):
-            chaves = textos or list(ContextoPipeSelecaoMetricas.model_fields.keys())
-            texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
-        
-        
+
+        schema_cls, default_keys = schema_info
+        if schema_cls is not None:
+            chaves = textos or list(schema_cls.model_fields.keys())
+        else:
+            chaves = textos or default_keys or []
+        texto = concatenar_campos(result, *chaves, sep=sep, ignorar_faltantes=True)
         return {'descricao': texto, 'id': str(result['_id'])}
     except HTTPException:
         # Doc ausente deve responder 404 (o except genérico transformava em 400,
@@ -139,13 +139,6 @@ async def buscar_tutor_pipe(
         raise HTTPException(400, f"Erro: {e}")
 
 
-PIPES_VALIDOS = {
-    "inicio", "coleta-dado", "pre-processamento", "selecao-modelo",
-    "treinamento", "selecao-metricas", "avaliacao",
-    "conf-pipeline",  # guia de preenchimento do admin (chat do conf-pipeline)
-}
-
-
 @router.put("/pipe/{pipe}")
 async def atualizar_por_pipe(
     pipe: str,
@@ -154,7 +147,7 @@ async def atualizar_por_pipe(
 ):
     """Atualiza (com upsert) o conteúdo de um pipe pelo slug — dispensa conhecer o
     _id e cobre o caso do documento ainda não existir (ex.: pipe 'inicio')."""
-    if pipe not in PIPES_VALIDOS:
+    if pipe not in _PIPES_SCHEMA:
         raise HTTPException(status_code=404, detail="Pipe desconhecido")
 
     set_data = {

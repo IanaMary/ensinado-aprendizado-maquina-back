@@ -8,6 +8,16 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-22 (e-mail de convite: marca H2IA Tutor + Aprendizado de Máquina)
+
+### Backend
+- `app/routers/usuarios.py`: o e-mail de convite/reenvio deixou de usar a marca antiga
+  "Iana / Plataforma de ML" e passa a usar **"H2IA Tutor"** no cabeçalho, corpo, rodapé e
+  nos dois assuntos; "Machine Learning" → "Aprendizado de Máquina" no corpo/rodapé.
+- Inclui também alterações em andamento em `conf_pipeline.py` e `tutor.py` (publicadas junto).
+
+---
+
 ## 2026-07-09 (KB do assistente do admin + fix 404 do GET /tutor)
 
 ### Backend `30f47a5`
