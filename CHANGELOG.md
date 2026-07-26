@@ -8,6 +8,34 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-26d (Fase 2: evolução do aluno na mesma base)
+
+> Backend `master` **`4204bc0`** / Frontend `mestrado-iana` `bda1294` (bundle `main-5OWPTQIF.js`).
+> Backup `/home/ubuntu/backups/deploy-20260726-102325`. Sem migração.
+
+### Adicionado
+- **`app/pipelines_evolucao.py`** — trajetória do aluno em cada base que ele já usou. Agrupa
+  por `(dataset, alvo)` atravessando atividades e projetos livres, em ordem cronológica, com
+  delta vs melhor anterior e vs chute burro (**sinal positivo = melhorou**, inclusive em
+  métricas de menor-é-melhor) e o que mudou entre tentativas.
+- **`app/metricas/resultado.py`** — leitura dos resultados gravados, EXTRAÍDA de `turmas.py`
+  (ranking e evolução precisam da mesma resolução rótulo × slug), mais o **chute burro**
+  derivado do que já está no banco: classe majoritária das somas das linhas da matriz de
+  confusão; R² = 0 por definição; `None` quando não há baseline barato e honesto.
+- **`GET /pipelines/evolucao`** (só os próprios pipelines): aceita `dataset` (repetível) e
+  `alvo` — o cliente manda os nomes que conhece e **quem decide a identidade é o servidor**,
+  para a regra não viver duplicada nas duas pontas.
+
+### Notas
+- Identidade da base **não** começa por `datasetId`: ele é o id do arquivo criado a cada
+  carregamento (`coleta-dado.component.ts:261`), então preferi-lo fragmentaria a história.
+- Métrica que define "melhorou": a do `criterio` da atividade quando há uma; fora dela, a
+  padrão da tarefa (acurácia / R² / silhueta).
+- Testes: 24 novos em `tests/test_pipelines_evolucao.py`. Suíte **420 passed, 1 skipped**.
+  O patch de `opcoes_metricas` em `test_turmas_fixes.py` mudou de alvo junto com a extração.
+
+---
+
 ## 2026-07-26b (desafio: simplificação da rubrica + progresso sem soma)
 
 > Backend `master` **`f17dfb8`** / Frontend `mestrado-iana` `0260394` (bundle `main-7ZCANP7T.js`).
