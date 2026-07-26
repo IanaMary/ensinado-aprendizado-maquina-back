@@ -8,6 +8,25 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-26g (documentação de arquitetura + nome de base normalizado)
+
+> Backend `master` **`a7c133e`** / Frontend `mestrado-iana` `11888e4` (bundle `main-EDMYYQK2.js`).
+> Backup `/home/ubuntu/backups/deploy-20260726-125237`. Sem migração.
+
+### Adicionado
+- `docs/desafios-montagem.md`, `docs/evolucao-aluno.md`, `docs/divisao-treino-teste.md` —
+  arquitetura, decisões não óbvias e onde estão os testes de cada funcionalidade.
+- `docs/DOCUMENTACAO.md`: pasta `desafios/`, seções **3.8** (divisão/estratificação) e **3.9**
+  (avaliação da aprendizagem), coleções `atividades` (`tipo`/`gabarito`) e `submissoes_montagem`.
+
+### Corrigido
+- `/pipelines/evolucao` comparava o nome da base cru: o mesmo dataset chega como `Iris` pelo
+  assistente de coleta e `Iris.xlsx` por outros caminhos, o que **fragmentava a história do
+  aluno** em duas bases. `normalizar_nome_base` (minúsculas, sem extensão) resolve. 2 testes
+  novos; suíte **443 passed, 1 skipped**.
+
+---
+
 ## 2026-07-26f (aviso efetivo de estratificação + testes da divisão em 3 níveis)
 
 > Backend `master` **`bf91612`** / Frontend `mestrado-iana` `3cec11c` (bundle `main-PTQJ6V2W.js`).
