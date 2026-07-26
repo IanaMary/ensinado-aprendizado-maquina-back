@@ -18,13 +18,13 @@ from bson import ObjectId
 from fastapi import APIRouter, Body, HTTPException
 
 from app.database import arquivos, configuracoes_treinamento
-from app.deps import train_test_split
+from app.coleta_dados.configuracao_treinamento import aviso_estratificacao, dividir_dataframe
+from app.schemas.schemas import ReDivisaoColetaRequest
 from app.funcoes_genericas.funcoes_genericas import (
     converter_numpy,
     df_para_base64,
     gerar_colunas_detalhes,
 )
-from app.utils.seed import get_sklearn_random_state
 
 router = APIRouter()
 
@@ -114,8 +114,11 @@ async def ingerir_url(payload: Dict[str, Any] = Body(...)):
         test_size = 0.2
     colunas_detalhes = gerar_colunas_detalhes(df)
     atributos = {c: False for c in df.columns}
-    df_treino, df_teste = train_test_split(
-        df, test_size=test_size, random_state=get_sklearn_random_state() or 42, shuffle=shuffle
+    # Mesmo divisor das outras portas. Na ingestão por URL ainda não há alvo escolhido, então
+    # a estratificação não se aplica aqui — antes o pedido era ignorado em silêncio e a config
+    # gravava `stratify: true`, mentindo sobre o que aconteceu.
+    df_treino, df_teste, estratificou = dividir_dataframe(
+        df, ReDivisaoColetaRequest(test_size=test_size, shuffle=shuffle, stratify=stratify, target=None)
     )
     nome_arq = (urlparse(url).path.rsplit("/", 1)[-1]) or "dados_url"
 
@@ -135,7 +138,7 @@ async def ingerir_url(payload: Dict[str, Any] = Body(...)):
 
     doc_config = {
         "id_coleta": ObjectId(id_coleta), "test_size": test_size, "shuffle": shuffle,
-        "stratify": stratify, "atributos": atributos, "tipo_target": None, "target": None,
+        "stratify": estratificou, "atributos": atributos, "tipo_target": None, "target": None,
         "prever_categoria": False, "dados_rotulados": False,
     }
     rconf = await configuracoes_treinamento.insert_one(doc_config)
@@ -149,6 +152,8 @@ async def ingerir_url(payload: Dict[str, Any] = Body(...)):
         "atributos": atributos,
         "preview_treino": df_treino.head(5).to_dict(orient="records"),
         "preview_teste": df_teste.head(5).to_dict(orient="records"),
-        "prever_categoria": False, "dados_rotulados": False, "shuffle": shuffle, "stratify": stratify,
+        "prever_categoria": False, "dados_rotulados": False, "shuffle": shuffle,
+        "stratify": estratificou,
+        "aviso_estratificacao": aviso_estratificacao(bool(stratify), estratificou),
         "origem_url": url,
     })

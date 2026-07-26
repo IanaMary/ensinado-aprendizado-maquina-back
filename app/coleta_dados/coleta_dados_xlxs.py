@@ -6,7 +6,7 @@ import pandas as pd
 from io import BytesIO
 import base64
 
-from app.coleta_dados.configuracao_treinamento import dividir_dataframe
+from app.coleta_dados.configuracao_treinamento import aviso_estratificacao, dividir_dataframe
 from app.database import arquivos, configuracoes_treinamento
 from app.schemas.schemas import ReDivisaoColetaRequest
 from app.funcoes_genericas.funcoes_genericas import validar_xlsx, ler_excel, df_para_base64, gerar_colunas_detalhes, montar_resposta_coleta, converter_numpy
@@ -48,6 +48,7 @@ async def upload_xlsx(
 
         # Mesmo divisor da redivisão: cai numa divisão simples quando o dataset não permite
         # estratificar, em vez de recusar o upload (ver `dividir_dataframe`).
+        pediu_estratificar = bool(stratify)
         df_treino, df_teste, estratificou = dividir_dataframe(
             df,
             ReDivisaoColetaRequest(test_size=test_size, shuffle=shuffle,
@@ -146,7 +147,7 @@ async def upload_xlsx(
             raise HTTPException(404, "Documento com id_coleta não encontrado")
 
     # Aqui retornamos a lista simples de nomes das colunas para o front
-    return converter_numpy(montar_resposta_coleta(
+    resposta = montar_resposta_coleta(
         id_configuracoes_treinamento=id_configuracoes_treinamento,
         id_coleta=str(id_coleta),
         atributos={coluna: False for coluna in df_treino.columns},  # retorna dicionário com False  # RETORNO: lista simples
@@ -156,7 +157,12 @@ async def upload_xlsx(
         df_treino=df_treino,
         df_teste=df_teste,
         colunas_detalhes=colunas_detalhes
-    ))
+    )
+    if tipo == "treino":
+        # A tela usa isto para refletir o que valeu e explicar quando não deu para estratificar.
+        resposta["stratify"] = estratificou
+        resposta["aviso_estratificacao"] = aviso_estratificacao(pediu_estratificar, estratificou)
+    return converter_numpy(resposta)
 
     
 @router.get("/unique")

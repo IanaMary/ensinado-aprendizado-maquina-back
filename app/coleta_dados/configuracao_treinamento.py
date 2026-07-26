@@ -35,6 +35,21 @@ def decode_base64_df(base64_string: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+AVISO_SEM_ESTRATIFICACAO = (
+    "Não foi possível estratificar: alguma categoria tem menos de 2 exemplos. "
+    "A divisão foi feita sem estratificar."
+)
+
+
+def aviso_estratificacao(pedido: bool, estratificou: bool) -> Optional[str]:
+    """Mensagem para o aluno quando a estratificação foi pedida e não deu (senão `None`).
+
+    Existe para as quatro portas de entrada de dados (CSV, XLSX, URL, dataset de exemplo)
+    dizerem a mesma coisa — a tela usa isto para desmarcar a caixa e explicar o motivo.
+    """
+    return AVISO_SEM_ESTRATIFICACAO if pedido and not estratificou else None
+
+
 def dividir_dataframe(df: pd.DataFrame, config: ReDivisaoColetaRequest,
                       estratificar: Optional[bool] = None) -> tuple[pd.DataFrame, pd.DataFrame, bool]:
     """Divide treino/teste e devolve também SE a estratificação realmente aconteceu.
@@ -246,10 +261,7 @@ async def redividir_coleta(configurar_treinamento_id: str, config: ReDivisaoCole
         "dados_rotulados": config_doc.get("dados_rotulados", False),
         "shuffle": config.shuffle,
         "stratify": estratificou,
-        # Só quando pedimos e não deu: a tela explica em vez de o aluno achar que estratificou.
-        "aviso_estratificacao": (
-            "Não foi possível estratificar: alguma categoria tem menos de 2 exemplos. "
-            "A divisão foi feita sem estratificar."
-            if pedido and not estratificou else None
-        ),
+        # Só quando pedimos e não deu: a tela desmarca a caixa e explica, em vez de o aluno
+        # achar que estratificou.
+        "aviso_estratificacao": aviso_estratificacao(bool(pedido), estratificou),
     })

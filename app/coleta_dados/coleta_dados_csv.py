@@ -5,7 +5,7 @@ import pandas as pd
 import base64
 from io import StringIO
 from bson import ObjectId
-from app.coleta_dados.configuracao_treinamento import dividir_dataframe
+from app.coleta_dados.configuracao_treinamento import aviso_estratificacao, dividir_dataframe
 from app.database import arquivos, configuracoes_treinamento
 from app.schemas.schemas import ReDivisaoColetaRequest
 from app.funcoes_genericas.funcoes_genericas import gerar_colunas_detalhes, df_para_base64, decode_excel_base64_df, converter_numpy
@@ -159,6 +159,7 @@ async def upload_csv(
     # Mesmo divisor da redivisão: estratifica quando pedido e possível, e cai numa divisão
     # simples quando o dataset não permite (classe com um único exemplo) em vez de recusar o
     # upload — com estratificação ligada por padrão, um 400 aqui barraria dados reais.
+    pediu_estratificar = bool(stratify)
     df_treino, df_teste, estratificou = dividir_dataframe(
         df,
         ReDivisaoColetaRequest(test_size=test_size, shuffle=shuffle,
@@ -217,4 +218,5 @@ async def upload_csv(
         "dados_rotulados": False,
         "shuffle": shuffle,
         "stratify": stratify,
+        "aviso_estratificacao": aviso_estratificacao(pediu_estratificar, estratificou),
     })

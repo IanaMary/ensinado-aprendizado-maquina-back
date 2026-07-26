@@ -8,7 +8,7 @@ import pandas as pd
 from app.models.dataset_config import (
     DatasetConfig, DatasetType, get_all_datasets, get_dataset_config
 )
-from app.coleta_dados.configuracao_treinamento import dividir_dataframe
+from app.coleta_dados.configuracao_treinamento import aviso_estratificacao, dividir_dataframe
 from app.schemas.schemas import ReDivisaoColetaRequest
 from app.utils.seed import seed_everything, get_seed, get_sklearn_random_state
 from app.database import arquivos, configuracoes_treinamento
@@ -212,6 +212,8 @@ async def carregar_dataset(
             "tipo_target": tipo_target,
             "prever_categoria": ds.tipo == DatasetType.CLASSIFICATION,
             "dados_rotulados": target_col is not None,
+            "stratify": estratificou,
+            "aviso_estratificacao": aviso_estratificacao(e_classificacao, estratificou),
             "n_amostras": ds.n_amostras,
             "n_features": ds.n_features,
             "pre_split": ds.pre_split.value,
