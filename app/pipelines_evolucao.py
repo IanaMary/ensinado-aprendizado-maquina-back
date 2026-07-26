@@ -34,6 +34,20 @@ def tarefa_do_pipeline(coleta: dict) -> str:
     return "classificacao" if coleta.get("preverCategoria", True) else "regressao"
 
 
+def normalizar_nome_base(nome: str) -> str:
+    """Nome comparável de uma base: minúsculas, sem extensão de arquivo.
+
+    O MESMO dataset chega com nomes diferentes conforme a porta de entrada — pelo assistente
+    de coleta o Iris vira `Iris`, por outros caminhos `Iris.xlsx`. Sem normalizar, a história
+    do aluno se fragmentaria em duas bases e ele não veria evolução nenhuma.
+    """
+    base = (nome or "").strip().lower()
+    for extensao in (".xlsx", ".xls", ".csv", ".tsv", ".json"):
+        if base.endswith(extensao):
+            return base[: -len(extensao)]
+    return base
+
+
 def chave_da_base(coleta: dict) -> Optional[tuple]:
     """Identidade da base: dataset + alvo. `None` quando o pipeline não tem dados
     (rascunho), caso em que não há o que comparar.

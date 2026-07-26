@@ -5,7 +5,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.database import pipelines, turmas, atividades
-from app.pipelines_evolucao import montar_evolucao
+from app.pipelines_evolucao import montar_evolucao, normalizar_nome_base
 from app.schemas.pipelines import PipelineCreate, PipelineUpdate
 from app.security import get_usuario_atual
 from app.funcoes_genericas.validacao import validar_object_id
@@ -184,9 +184,11 @@ async def evolucao_do_aluno(
 
     bases = await montar_evolucao(docs, criterios)
     if dataset or alvo:
-        candidatos = {d for d in dataset if d}
+        # Compara por nome normalizado: o mesmo dataset chega como "Iris" ou "Iris.xlsx"
+        # dependendo da porta de entrada (ver `normalizar_nome_base`).
+        candidatos = {normalizar_nome_base(d) for d in dataset if d}
         bases = [b for b in bases
-                 if (not candidatos or b["dataset"] in candidatos)
+                 if (not candidatos or normalizar_nome_base(b["dataset"]) in candidatos)
                  and (alvo is None or b["alvo"] == alvo)]
     return {"bases": bases}
 

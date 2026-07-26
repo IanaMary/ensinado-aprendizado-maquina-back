@@ -279,3 +279,30 @@ class TestFiltroDaBase:
              patch("app.metricas.resultado.opcoes_metricas", metr):
             r = await client.get("/pipelines/evolucao?dataset=Iris&alvo=species", headers=auth_headers)
         assert r.json()["bases"] == []
+
+
+class TestNomeNormalizado:
+    """O mesmo dataset chega como "Iris" (assistente de coleta) ou "Iris.xlsx" (outros
+    caminhos). Sem normalizar, a história do aluno se fragmentaria em duas bases."""
+
+    def test_normaliza_extensao_e_caixa(self):
+        from app.pipelines_evolucao import normalizar_nome_base
+        assert normalizar_nome_base("Iris.xlsx") == "iris"
+        assert normalizar_nome_base("Iris") == "iris"
+        assert normalizar_nome_base("titanic.CSV") == "titanic"
+        assert normalizar_nome_base(" dados.tsv ") == "dados"
+        assert normalizar_nome_base("") == ""
+
+    @pytest.mark.asyncio
+    async def test_filtro_casa_nome_com_e_sem_extensao(self, client, mock_db, auth_headers):
+        docs = [_pipeline("iris #1", "2026-07-10", 0.86, dataset="Iris.xlsx", target="target")]
+        pipe = MagicMock(find=MagicMock(return_value=AsyncCursor(docs)))
+        ativ = MagicMock(find=MagicMock(return_value=AsyncCursor([])))
+        metr = MagicMock(find_one=AsyncMock(return_value={"valor": "accuracy_score", "label": "Acurácia"}))
+        with patch("app.routers.pipelines.pipelines", pipe), \
+             patch("app.routers.pipelines.atividades", ativ), \
+             patch("app.metricas.resultado.opcoes_metricas", metr):
+            # o cliente conhece a base como "Iris" (e o slug "iris"); o histórico gravou "Iris.xlsx"
+            r = await client.get("/pipelines/evolucao?dataset=Iris&dataset=iris&alvo=target",
+                                 headers=auth_headers)
+        assert [b["dataset"] for b in r.json()["bases"]] == ["Iris.xlsx"]
