@@ -8,6 +8,43 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-26 (desafio de montagem de pipeline — Fase 1)
+
+> Backend `master` **`e6e90a5`** / Frontend `mestrado-iana` `a440695` (bundle `main-GT47M2MG.js`).
+> Backup `/home/ubuntu/backups/deploy-20260726-044207`. Sem migração.
+
+### Backend
+- **Novo pacote `app/desafios/`** — desafio de montagem: o aluno monta o pipeline como
+  quebra-cabeça e a montagem é avaliada **sem executar nada**.
+  - `catalogo.py`: normaliza as peças a partir de `db.modelos`/`db.metricas`/
+    `db.pre_processamento`/`db.coleta_dados` (família do pré-proc **derivada da classe
+    sklearn** do bloco `execucao`, para não manter uma lista paralela de slugs).
+  - `regras.py`: 8 regras com peso e **texto didático** (estrutura mínima, modelo↔tarefa,
+    métrica↔tarefa, escala p/ modelo de distância, imputação quando há faltantes, encoder
+    para texto, ordem imputação→escala, sem distrator).
+  - `sorteio.py`: tabuleiro **determinístico** por `(atividade, aluno, tentativa)` — o F5
+    devolve o mesmo, a próxima tentativa devolve outro; distratores vindos do catálogo.
+  - `avaliacao.py`: nota 0–10 pelos pesos das regras **aplicáveis**.
+- `db.atividades` ganhou `tipo: 'pipeline' | 'montagem'` (default `pipeline`, sem migração) e
+  `gabarito`. `_atividade_doc` só devolve o gabarito para professor/admin da turma.
+- Rotas: `GET /turmas/{id}/atividades/{aid}/tabuleiro` (sem gabarito nem o papel das peças)
+  e `POST .../submeter-montagem`. `ranking` ramifica por tipo (montagem ordena por nota e
+  desempata por **menos tentativas**); `progresso` passa a contar desafios e a melhor nota.
+- `db.submissoes_montagem`: coleção própria **sem TTL** (é registro de avaliação, diferente
+  da telemetria de `atividade_usuario`, que expira em 90 dias).
+
+### Corrigido (achados da própria verificação)
+- `sem-distrator` era satisfeita trivialmente por não montar nada — entrega em branco tirava
+  4/10. A regra passou a exigir que o aluno tenha montado algo.
+- A submissão aceitava peças **fora do tabuleiro** da tentativa, o que anulava o re-sorteio
+  (bastava reenviar o pipeline ideal aprendido no feedback anterior). Agora é 400.
+
+### Testes
+- `tests/test_desafio_montagem.py`: 44 testes (regras isoladas, pesos, determinismo do
+  sorteio, gabarito não vaza, gates de papel). Suíte: **396 passed, 1 skipped**.
+
+---
+
 ## 2026-07-22 (e-mail de convite: marca H2IA Tutor + Aprendizado de Máquina)
 
 ### Backend
