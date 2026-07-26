@@ -8,6 +8,36 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-26f (aviso efetivo de estratificação + testes da divisão em 3 níveis)
+
+> Backend `master` **`bf91612`** / Frontend `mestrado-iana` `3cec11c` (bundle `main-PTQJ6V2W.js`).
+> Backup `/home/ubuntu/backups/deploy-20260726-115357`. Sem migração.
+
+### Adicionado
+- `aviso_estratificacao(pedido, estratificou)` em `configuracao_treinamento`: uma única
+  mensagem para as quatro portas de entrada. CSV, XLSX, URL e dataset de exemplo passam a
+  devolver `stratify` **efetivo** + `aviso_estratificacao` (antes só a redivisão avisava; o
+  upload corrigia o valor em silêncio).
+
+### Corrigido
+- **Ingestão por URL:** o `stratify` pedido era ignorado e a config gravava `stratify: true`
+  mesmo assim. Agora usa `dividir_dataframe` e grava o efetivo (sem alvo escolhido na
+  ingestão, não estratifica).
+
+### Testes
+- Novo `tests/test_divisao_treino_teste.py` (16), em três níveis:
+  - **unidade** (`dividir_dataframe`): treino/teste disjuntos e somando o total, proporções
+    preservadas quando estratifica, fallback da categoria com 1 exemplo, sem alvo/sem
+    embaralhar não estratifica, override do servidor, 400 quando a divisão é impossível;
+  - **regressão do vazamento** (datasets de exemplo): o treino não é mais o dataframe
+    inteiro, nenhuma linha de teste aparece no treino, proporções de classe preservadas nos
+    dois lados, `content_completo_base64` gravado e `shuffle/stratify` na config;
+  - **integração** (redivisão): redividir duas vezes não encolhe o dataset, aviso e valor
+    efetivo chegam ao cliente, regressão não estratifica, escolha explícita do aluno vence.
+- Suíte: **441 passed, 1 skipped**.
+
+---
+
 ## 2026-07-26e (estratificação por padrão + fim do vazamento nos datasets de exemplo)
 
 > Backend `master` **`4a6ef48`** / Frontend `mestrado-iana` `de8301b` (bundle `main-OP3WGDPI.js`).
