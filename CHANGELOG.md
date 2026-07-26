@@ -8,6 +8,35 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-26e (estratificação por padrão + fim do vazamento nos datasets de exemplo)
+
+> Backend `master` **`4a6ef48`** / Frontend `mestrado-iana` `de8301b` (bundle `main-OP3WGDPI.js`).
+> Backup `/home/ubuntu/backups/deploy-20260726-110345`. Sem migração.
+
+### Alterado
+- `dividir_dataframe` devolve também **se estratificou** e, quando o dataset não permite
+  (categoria com um único exemplo), cai numa divisão simples em vez de recusar a operação —
+  com o padrão ligado, um erro duro barraria dados reais de aluno (antes: 400 no upload).
+- `POST /configurar_treinamento/{tipo}/{id}/redividir`: `stratify` virou `Optional[bool]`;
+  `None` = "o cliente não opinou" e o servidor liga quando a config diz classificação.
+  A resposta traz o valor **efetivo** e `aviso_estratificacao` quando pediu e não deu.
+- Uploads CSV/XLSX passaram a usar o mesmo divisor (removida a duplicação e o 400 duro).
+
+### Corrigido
+- **Vazamento treino/teste nos datasets de exemplo** (`toy_datasets`): `content_treino`
+  recebia o dataframe inteiro e `content_teste` a cauda de 25% — o teste era subconjunto do
+  treino e, sem embaralhar, a cauda de um dataset ordenado por classe só tinha uma categoria.
+  Agora há divisão real (estratificada em classificação) e o doc guarda
+  `content_completo_base64`, que é o que a redivisão relê. Verificado no iris: 112/38, 0 linha
+  de teste dentro do treino, proporções preservadas.
+
+### Testes
+- 8 novos (`TestEstratificacaoPadrao` + upload). **425 passed, 1 skipped.** Dois testes que
+  codificavam o contrato antigo (400 da classe única; default `False` do schema) foram
+  atualizados com o motivo no docstring.
+
+---
+
 ## 2026-07-26d (Fase 2: evolução do aluno na mesma base)
 
 > Backend `master` **`4204bc0`** / Frontend `mestrado-iana` `bda1294` (bundle `main-5OWPTQIF.js`).
