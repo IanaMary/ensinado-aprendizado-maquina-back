@@ -42,5 +42,7 @@ class TestReDivisaoColetaRequest:
         req = ReDivisaoColetaRequest(test_size=0.3)
         assert req.test_size == 0.3
         assert req.shuffle is True
-        assert req.stratify is False
+        # `None` = cliente não opinou; o servidor estratifica quando a tarefa é classificação
+        # (antes o default era False, o que impedia distinguir "não quero" de "não disse").
+        assert req.stratify is None
         assert req.target is None

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
 from bson import ObjectId
 
@@ -33,19 +35,39 @@ def decode_base64_df(base64_string: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def dividir_dataframe(df: pd.DataFrame, config: ReDivisaoColetaRequest) -> tuple[pd.DataFrame, pd.DataFrame]:
-    stratify = None
-    if config.stratify and config.target and config.target in df.columns:
-        stratify = df[config.target]
+def dividir_dataframe(df: pd.DataFrame, config: ReDivisaoColetaRequest,
+                      estratificar: Optional[bool] = None) -> tuple[pd.DataFrame, pd.DataFrame, bool]:
+    """Divide treino/teste e devolve também SE a estratificação realmente aconteceu.
 
-    try:
+    `estratificar` sobrepõe `config.stratify` (usado quando o servidor decide o padrão pela
+    tarefa). Quando a estratificação é pedida mas o dataset não permite — alguma classe com
+    um único exemplo, o caso mais comum em CSV de aluno — caímos numa divisão simples em vez
+    de recusar a operação: com estratificação LIGADA POR PADRÃO em classificação, um erro
+    duro aqui viraria parede para dados reais. Quem chama informa ao aluno o que valeu.
+    """
+    pedido = config.stratify if estratificar is None else estratificar
+    coluna = config.target if config.target and config.target in df.columns else None
+    stratify = df[coluna] if (pedido and coluna and config.shuffle) else None
+
+    def _dividir(valores):
         return train_test_split(
             df,
             test_size=config.test_size,
             random_state=get_sklearn_random_state() or 42,
             shuffle=config.shuffle,
-            stratify=stratify if config.shuffle else None,
+            stratify=valores,
         )
+
+    if stratify is not None:
+        try:
+            treino, teste = _dividir(stratify)
+            return treino, teste, True
+        except ValueError:
+            pass  # classe rara: segue sem estratificar (o retorno avisa)
+
+    try:
+        treino, teste = _dividir(None)
+        return treino, teste, False
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"Não foi possível dividir os dados com essa configuração: {exc}")
 
@@ -168,7 +190,14 @@ async def redividir_coleta(configurar_treinamento_id: str, config: ReDivisaoCole
     if df_completo.empty:
         raise HTTPException(status_code=400, detail="Conteúdo completo da coleta não encontrado.")
 
-    df_treino, df_teste = dividir_dataframe(df_completo, config)
+    # Padrão: classificação estratifica (mantém a proporção das classes no treino e no teste).
+    # Só respeita a escolha explícita do cliente quando ele mandou `stratify`.
+    prever_categoria = bool(config_doc.get("prever_categoria", False))
+    dados_rotulados = bool(config_doc.get("dados_rotulados", False))
+    e_classificacao = prever_categoria and dados_rotulados
+    pedido = config.stratify if config.stratify is not None else e_classificacao
+
+    df_treino, df_teste, estratificou = dividir_dataframe(df_completo, config, estratificar=pedido)
     content_treino_b64 = df_para_base64(df_treino)
     content_teste_b64 = df_para_base64(df_teste)
 
@@ -185,7 +214,9 @@ async def redividir_coleta(configurar_treinamento_id: str, config: ReDivisaoCole
     update_config = {
         "test_size": config.test_size,
         "shuffle": config.shuffle,
-        "stratify": config.stratify,
+        # Grava o que REALMENTE valeu: se o dataset não permitiu estratificar, o pipeline
+        # salvo (e o código exportado) não podem dizer que estratificaram.
+        "stratify": estratificou,
     }
     if config.target is not None:
         update_config["target"] = config.target
@@ -214,5 +245,11 @@ async def redividir_coleta(configurar_treinamento_id: str, config: ReDivisaoCole
         "prever_categoria": config_doc.get("prever_categoria", False),
         "dados_rotulados": config_doc.get("dados_rotulados", False),
         "shuffle": config.shuffle,
-        "stratify": config.stratify,
+        "stratify": estratificou,
+        # Só quando pedimos e não deu: a tela explica em vez de o aluno achar que estratificou.
+        "aviso_estratificacao": (
+            "Não foi possível estratificar: alguma categoria tem menos de 2 exemplos. "
+            "A divisão foi feita sem estratificar."
+            if pedido and not estratificou else None
+        ),
     })

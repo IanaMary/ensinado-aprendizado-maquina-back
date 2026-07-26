@@ -57,7 +57,9 @@ class ConfiguracaoColetaRequest(BaseModel):
 class ReDivisaoColetaRequest(BaseModel):
     test_size: float = 0.2
     shuffle: bool = True
-    stratify: bool = False
+    # `None` = "não opinei": o servidor estratifica quando a tarefa é classificação, que é o
+    # padrão desejado (mantém a divisão com a mesma proporção de classes do dataset).
+    stratify: Optional[bool] = None
     target: Optional[str] = None
 
 class KnnRequestById(BaseModel):

@@ -8,6 +8,8 @@ import pandas as pd
 from app.models.dataset_config import (
     DatasetConfig, DatasetType, get_all_datasets, get_dataset_config
 )
+from app.coleta_dados.configuracao_treinamento import dividir_dataframe
+from app.schemas.schemas import ReDivisaoColetaRequest
 from app.utils.seed import seed_everything, get_seed, get_sklearn_random_state
 from app.database import arquivos, configuracoes_treinamento
 from app.security import get_usuario_atual
@@ -140,8 +142,20 @@ async def carregar_dataset(
         # Persistir no MongoDB para que o pipeline de treinamento encontre os IDs
         # - Salva o dataframe completo em 'arquivos' (content_treino_base64/content_teste_base64)
         # - Salva configuração inicial em 'configuracoes_treinamento'
-        content_treino_b64 = df_para_base64(df)
-        content_teste_b64 = df_para_base64(df.tail(max(1, len(df) // 4)))
+        # Divisão REAL de treino/teste. Antes o treino recebia o dataframe inteiro e o teste
+        # a cauda de 25% — o teste era um subconjunto do treino (vazamento) e, sem embaralhar,
+        # a cauda de um dataset ordenado por classe (iris, wine) só tinha uma categoria.
+        # Classificação estratifica por padrão; `dividir_dataframe` cai numa divisão simples
+        # se alguma categoria tiver exemplos de menos.
+        e_classificacao = ds.tipo == DatasetType.CLASSIFICATION
+        df_treino, df_teste, estratificou = dividir_dataframe(
+            df,
+            ReDivisaoColetaRequest(test_size=0.25, shuffle=True,
+                                   stratify=e_classificacao, target=target_col),
+        )
+        content_completo_b64 = df_para_base64(df)
+        content_treino_b64 = df_para_base64(df_treino)
+        content_teste_b64 = df_para_base64(df_teste)
 
         atributos_iniciais = {c: True for c in colunas}
         if target_col and target_col in colunas:
@@ -150,13 +164,16 @@ async def carregar_dataset(
         doc_arquivo = {
             "arquivo_nome_treino": f"{ds.nome}.xlsx",
             "arquivo_nome_teste": f"{ds.nome}_teste.xlsx",
+            # `content_completo_base64` é o que a redivisão relê ao mudar a proporção/alvo —
+            # sem ele, redividir usaria o treino já dividido e o dataset encolheria a cada vez.
+            "content_completo_base64": content_completo_b64,
             "content_treino_base64": content_treino_b64,
             "content_teste_base64": content_teste_b64,
             "fonte": "toy_dataset",
             "dataset_nome": ds.nome,
             "num_linhas_total": len(df),
-            "num_linhas_treino": len(df),
-            "num_linhas_teste": max(1, len(df) // 4),
+            "num_linhas_treino": len(df_treino),
+            "num_linhas_teste": len(df_teste),
             "num_colunas": len(colunas),
             "atributos": atributos_iniciais,
             "colunas_detalhes": colunas_detalhes,
@@ -168,6 +185,8 @@ async def carregar_dataset(
         doc_config = {
             "id_coleta": result_arquivo.inserted_id,
             "test_size": 0.25,
+            "shuffle": True,
+            "stratify": estratificou,
             "atributos": atributos_iniciais,
             "tipo_target": tipo_target,
             "target": target_col,

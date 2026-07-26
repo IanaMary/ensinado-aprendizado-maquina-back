@@ -6,10 +6,10 @@ import pandas as pd
 from io import BytesIO
 import base64
 
+from app.coleta_dados.configuracao_treinamento import dividir_dataframe
 from app.database import arquivos, configuracoes_treinamento
-from app.deps import train_test_split
+from app.schemas.schemas import ReDivisaoColetaRequest
 from app.funcoes_genericas.funcoes_genericas import validar_xlsx, ler_excel, df_para_base64, gerar_colunas_detalhes, montar_resposta_coleta, converter_numpy
-from app.utils.seed import get_sklearn_random_state
 
 
 router = APIRouter()
@@ -46,20 +46,14 @@ async def upload_xlsx(
         if not 0 < test_size < 1:
             raise HTTPException(status_code=400, detail="test_size deve estar entre 0 e 1.")
 
-        stratify_values = df[stratify_column] if stratify and stratify_column in df.columns and shuffle else None
-        if stratify_values is not None and stratify_values.value_counts().min() < 2:
-            raise HTTPException(
-                status_code=400,
-                detail="Não é possível estratificar: cada classe precisa de ao menos 2 exemplos para estratificar."
-            )
-
-        df_treino, df_teste = train_test_split(
+        # Mesmo divisor da redivisão: cai numa divisão simples quando o dataset não permite
+        # estratificar, em vez de recusar o upload (ver `dividir_dataframe`).
+        df_treino, df_teste, estratificou = dividir_dataframe(
             df,
-            test_size=test_size,
-            random_state=get_sklearn_random_state() or 42,
-            shuffle=shuffle,
-            stratify=stratify_values,
+            ReDivisaoColetaRequest(test_size=test_size, shuffle=shuffle,
+                                   stratify=stratify, target=stratify_column),
         )
+        stratify = estratificou
 
         content_treino_b64 = df_para_base64(df_treino)
         content_teste_b64 = df_para_base64(df_teste)
