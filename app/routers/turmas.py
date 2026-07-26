@@ -568,8 +568,8 @@ async def progresso_turma(turma_id: str, usuario: dict = Depends(exigir_admin_ou
     except Exception:
         por_aluno = {}
 
-    # Desafios de montagem entram no MESMO contador de submissões: `total_atividades`
-    # conta os dois tipos, então sem isto o aluno que só fez desafios apareceria com 0.
+    # Desafios entram em coluna PRÓPRIA: `submissoes` continua significando pipelines
+    # submetidos (é o número que o professor já lia nesta tela).
     desafios_por_aluno: dict = {}
     try:
         cur = submissoes_montagem.aggregate([
@@ -612,7 +612,7 @@ async def progresso_turma(turma_id: str, usuario: dict = Depends(exigir_admin_ou
             "aluno_id": aid,
             "aluno_nome": _nome_usuario(u),
             "email": (u or {}).get("email"),
-            "submissoes": agg.get("submissoes", 0) + desafio.get("submissoes", 0),
+            "submissoes": agg.get("submissoes", 0),
             "desafios": desafio.get("submissoes", 0),
             "melhor_nota_desafio": desafio.get("melhor_nota"),
             "total_atividades": total_atividades,

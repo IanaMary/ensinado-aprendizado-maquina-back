@@ -35,11 +35,6 @@ class DadosDesafio(BaseModel):
     escalas_diferentes: bool = False
 
 
-class RegraSelecionada(BaseModel):
-    id: str
-    peso: Optional[int] = None
-
-
 class GabaritoMontagem(BaseModel):
     """Requisitos do desafio — NUNCA sai para o aluno (só o professor vê/edita).
 
@@ -49,7 +44,6 @@ class GabaritoMontagem(BaseModel):
     tarefa: str = "classificacao"                  # classificacao | regressao | agrupamento
     exige: List[str] = ["coleta", "modelo", "metrica"]
     dados: DadosDesafio = DadosDesafio()
-    regras: List[RegraSelecionada] = []            # vazio = todas as regras aplicáveis
     fixar: List[str] = []                          # peças que devem estar no tabuleiro
     vetar: List[str] = []                          # peças que nunca aparecem
     dificuldade: str = "medio"                     # facil | medio | dificil (nº de distratores)

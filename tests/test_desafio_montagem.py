@@ -219,18 +219,6 @@ class TestNota:
         assert ids == {"estrutura-minima", "modelo-compativel", "metrica-compativel"}
         assert r["pontos_max"] == 9
 
-    def test_professor_pode_selecionar_e_repesar_regras(self):
-        gab = {**GABARITO, "regras": [{"id": "modelo-compativel", "peso": 7}]}
-        r = _avaliar({"coleta": ["arquivo"], "modelo": ["knn"], "metrica": ["r2_score"]}, gab)
-        assert [x["id"] for x in r["regras"]] == ["modelo-compativel"]
-        assert r["pontos_max"] == 7          # peso do professor prevaleceu
-        assert r["nota"] == 10.0             # métrica errada não foi cobrada (regra não selecionada)
-
-    def test_regra_desconhecida_no_gabarito_e_ignorada(self):
-        gab = {**GABARITO, "regras": [{"id": "regra-que-nao-existe"}, {"id": "estrutura-minima"}]}
-        r = _avaliar({"coleta": ["arquivo"], "modelo": ["knn"], "metrica": ["accuracy_score"]}, gab)
-        assert [x["id"] for x in r["regras"]] == ["estrutura-minima"]
-
     def test_regras_aplicaveis_por_tarefa_de_agrupamento(self):
         gab = {"tarefa": "agrupamento", "exige": ["coleta", "modelo", "metrica"], "dados": {}}
         ctx = _ctx({"coleta": ["arquivo"], "modelo": ["k_means"], "metrica": ["silhouette_score"]}, gab)
@@ -535,6 +523,42 @@ class TestGabaritoNaListagem:
                    MagicMock(find=MagicMock(return_value=AsyncCursor([antiga])))):
             r = await client.get(f"/turmas/{turma['_id']}/atividades", headers=auth_headers)
         assert r.json()[0]["tipo"] == "pipeline"
+
+
+class TestProgressoComDesafios:
+    @pytest.mark.asyncio
+    async def test_desafios_em_coluna_propria_sem_inflar_submissoes(self, client, mock_db, auth_headers):
+        """`submissoes` continua significando pipelines submetidos — o professor já lia esse
+        número nesta tela. Desafios aparecem em `desafios`/`melhor_nota_desafio`."""
+        prof = _prof()
+        mock_db["usuarios"].find_one = AsyncMock(return_value=prof)
+        aluno = str(ObjectId())
+        turma = {"_id": ObjectId(), "professor_id": str(prof["_id"]), "alunos": [aluno]}
+
+        pipes = MagicMock(aggregate=MagicMock(return_value=MagicMock(to_list=AsyncMock(
+            return_value=[{"_id": aluno, "atividades": ["a1"], "ultimo": None}]))))
+        subm = MagicMock(aggregate=MagicMock(return_value=MagicMock(to_list=AsyncMock(
+            return_value=[{"_id": aluno, "atividades": ["a2", "a3"], "melhor_nota": 9.5,
+                           "ultimo": None}]))))
+        user_m = MagicMock(find=MagicMock(return_value=AsyncCursor(
+            [{"_id": ObjectId(aluno), "nome_usuario": "Ana"}])))
+        ativ_m = MagicMock(count_documents=AsyncMock(return_value=3))
+
+        with patch("app.routers.turmas.turmas", MagicMock(find_one=AsyncMock(return_value=turma))), \
+             patch("app.routers.turmas.atividades", ativ_m), \
+             patch("app.routers.turmas.pipelines", pipes), \
+             patch("app.routers.turmas.submissoes_montagem", subm), \
+             patch("app.routers.turmas.colecao_usuario", user_m), \
+             patch("app.routers.turmas.atividade_usuario",
+                   MagicMock(aggregate=MagicMock(return_value=MagicMock(
+                       to_list=AsyncMock(return_value=[]))))):
+            r = await client.get(f"/turmas/{turma['_id']}/progresso", headers=auth_headers)
+
+        assert r.status_code == 200
+        linha = r.json()["alunos"][0]
+        assert linha["submissoes"] == 1              # só o pipeline, não somado
+        assert linha["desafios"] == 2
+        assert linha["melhor_nota_desafio"] == 9.5
 
 
 class TestRankingMontagem:

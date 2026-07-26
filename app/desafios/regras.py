@@ -242,29 +242,9 @@ REGRAS_POR_ID: Dict[str, Regra] = {r.id: r for r in REGRAS}
 
 
 def regras_aplicaveis(ctx: Contexto) -> List[Regra]:
-    """Regras que valem para este desafio, respeitando a seleção/peso do professor.
-
-    `gabarito.regras = [{id, peso}]` restringe e repesa; ids desconhecidos são ignorados
-    (um gabarito antigo não deve quebrar a correção). Sem seleção, valem todas.
-    """
-    selecao = (ctx.gabarito or {}).get("regras")
-    candidatas: List[Regra] = []
-    if isinstance(selecao, list) and selecao:
-        for item in selecao:
-            if not isinstance(item, dict):
-                continue
-            base = REGRAS_POR_ID.get(item.get("id"))
-            if not base:
-                continue
-            peso = item.get("peso")
-            if isinstance(peso, int) and peso > 0 and peso != base.peso:
-                base = Regra(**{**base.__dict__, "peso": peso})
-            candidatas.append(base)
-    else:
-        candidatas = list(REGRAS)
-
+    """Regras que valem para ESTE desafio (as demais nem entram no total de pontos)."""
     aplicaveis = []
-    for regra in candidatas:
+    for regra in REGRAS:
         try:
             if regra.aplica(ctx):
                 aplicaveis.append(regra)
