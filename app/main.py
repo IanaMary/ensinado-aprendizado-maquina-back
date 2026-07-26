@@ -85,7 +85,7 @@ app.include_router(conf_pipeline.router, dependencies=auth_dependency)
 # chat_tutor ANTES de tutor: ambos têm prefixo /tutor, e tutor.router define um
 # catch-all PUT /tutor/{id}. Registrado depois, ele "roubava" PUT /tutor/modelo
 # (id="modelo") e validava o corpo como AtualizarContextoRequest → 422 ao trocar
-# o LLM. Com chat_tutor primeiro, suas rotas exatas (/modelo, /modelos) vencem.
+# o LLM. Com chat_tutor primeiro, suas rotas exatas (/modelo, /modelos, /system-prompt) vencem.
 app.include_router(chat_tutor.router, dependencies=auth_dependency)
 app.include_router(tutor.router, dependencies=auth_dependency)
 app.include_router(artefatos.router, dependencies=auth_dependency)

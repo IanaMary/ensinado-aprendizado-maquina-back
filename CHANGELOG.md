@@ -8,6 +8,37 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-26k (instrução do tutor: público da ONIA e edição sem deploy)
+
+> Backend `master` **`<pendente>`** / Frontend `mestrado-iana` `<pendente>`. Sem migração
+> (a personalização é uma chave nova em `db.configuracoes_tutor`, opcional).
+
+### Alterado
+- **Público do tutor**: o `system` do chat passou a descrever estudantes da **ONIA** (Olimpíada
+  Nacional de Inteligência Artificial, que seleciona quem representa o Brasil na **IOAI**), do
+  **8º ano do Fundamental ao 1º ano do Superior** — antes dizia "ensino fundamental e médio".
+- O texto saiu de uma constante no router para `app/conteudo/kb_tutor_chat.py`
+  (`SYSTEM_PROMPT_TUTOR`), mesma ideia das boas-vindas: fonte versionada + override no banco.
+- Nova frase para **distinguir quem pergunta**: o assistente de preenchimento do catálogo
+  (conf-pipeline, professor/admin) usa o MESMO endpoint e recebia respostas escritas para aluno.
+
+### Adicionado
+- `GET /tutor/system-prompt` (autenticado) e `PUT /tutor/system-prompt` (**admin**): editar a
+  instrução sem deploy. Texto vazio remove a personalização; teto de
+  `MAX_SYSTEM_PROMPT_CHARS = 6000` porque o `system` divide a janela com o contexto do pipeline
+  (8000) e a base de conhecimento (6000). Cada escrita é auditada em `db.tutor_audit`
+  (`pipe: 'llm'`, o mesmo histórico que a aba mostra).
+- `_system_prompt_vigente` resolve o texto por requisição com `try/except`: falha de leitura da
+  configuração cai no versionado em vez de derrubar o chat.
+
+### Notas
+- Documentação alinhada: `docs/dissertacao/03-chatbot-tutor-cag.md` (a transcrição do prompt
+  estava **desatualizada**) e `docs/DOCUMENTACAO.md`.
+- Testes: 488 passed, 1 skipped (novo `tests/test_tutor_system_prompt.py`, 15 casos — inclui
+  regressão de rota, já que `PUT /tutor/{id}` é catch-all e uma vez roubou `/tutor/modelo`).
+
+---
+
 ## 2026-07-26j (desafio de montagem nasce de um dataset de exemplo)
 
 > Backend `master` **`<pendente>`** / Frontend `mestrado-iana` `<pendente>`. Sem migração

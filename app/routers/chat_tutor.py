@@ -19,7 +19,8 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from app.database import historico_chat, configuracoes_tutor, turmas
+from app.conteudo.kb_tutor_chat import MAX_SYSTEM_PROMPT_CHARS, SYSTEM_PROMPT_TUTOR
+from app.database import historico_chat, configuracoes_tutor, tutor_audit, turmas
 from app.routers.atividade import registrar_atividade
 from app.security import get_usuario_atual, exigir_admin_ou_professor
 from app.tutor_kb import bloco_kb
@@ -245,6 +246,80 @@ async def saude_modelos(usuario=Depends(get_usuario_atual), forcar: bool = Query
     }
 
 
+async def _auditar_prompt(usuario: dict, operacao: str, tamanho: int) -> None:
+    """Registra a edição do prompt em db.tutor_audit (a mesma tela mostra o histórico).
+
+    Inserção própria em vez de reusar `_registrar_edicao` de app/routers/tutor.py: aquele
+    helper deriva o `pipe` de um documento de `db.tutor`, e o prompt vive em
+    `db.configuracoes_tutor`.
+
+    `pipe: "llm"` porque a tela mostra o histórico da ABA atual e o editor do prompt vive na aba
+    LLM — gravar com outro slug esconderia a entrada de quem acabou de editar.
+    """
+    try:
+        await tutor_audit.insert_one({
+            "pipe": "llm",
+            "tutor_id": "",
+            "operacao": operacao,
+            "campos_alterados": ["system_prompt"],
+            "tamanho": tamanho,
+            "usuario_id": str(usuario.get("_id") or usuario.get("id") or ""),
+            "usuario_email": usuario.get("email", ""),
+            "usuario_nome": usuario.get("nome") or usuario.get("name") or usuario.get("email", ""),
+            "timestamp": datetime.now(timezone.utc),
+        })
+    except Exception:
+        # Auditoria nao deve quebrar a edicao.
+        pass
+
+
+@router.get("/system-prompt")
+async def obter_system_prompt(usuario=Depends(get_usuario_atual)):
+    """Instrução de sistema vigente do chat, o padrão versionado e se está personalizada."""
+    vigente = await _system_prompt_vigente()
+    return {
+        "texto": vigente,
+        "padrao": SYSTEM_PROMPT_TUTOR,
+        "personalizado": vigente != SYSTEM_PROMPT_TUTOR,
+        "limite": MAX_SYSTEM_PROMPT_CHARS,
+    }
+
+
+@router.put("/system-prompt")
+async def definir_system_prompt(body: dict, usuario=Depends(get_usuario_atual)):
+    """Grava a instrução de sistema do chat. Texto vazio volta ao padrão versionado."""
+    if usuario.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas admins podem alterar o prompt do tutor.")
+
+    texto = body.get("texto")
+    if texto is not None and not isinstance(texto, str):
+        raise HTTPException(status_code=400, detail="Campo 'texto' deve ser texto.")
+    texto = (texto or "").strip()
+
+    if len(texto) > MAX_SYSTEM_PROMPT_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail=(f"O prompt tem {len(texto)} caracteres e o limite é {MAX_SYSTEM_PROMPT_CHARS}: "
+                    "o contexto do pipeline e a base de conhecimento também ocupam a janela do modelo."),
+        )
+
+    if not texto:
+        # Sem texto = sem personalização: volta a valer o versionado.
+        await configuracoes_tutor.delete_one({"chave": "system_prompt"})
+        await _auditar_prompt(usuario, "restaurou_padrao", len(SYSTEM_PROMPT_TUTOR))
+        return {"texto": SYSTEM_PROMPT_TUTOR, "personalizado": False}
+
+    await configuracoes_tutor.update_one(
+        {"chave": "system_prompt"},
+        {"$set": {"chave": "system_prompt", "valor": texto,
+                  "atualizado_por": str(usuario.get("_id", "")),
+                  "atualizado_em": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+    await _auditar_prompt(usuario, "editou", len(texto))
+    return {"texto": texto, "personalizado": texto != SYSTEM_PROMPT_TUTOR}
+
+
 @router.get("/modelo")
 async def obter_modelo(usuario=Depends(get_usuario_atual)):
     """Retorna o modelo LLM atualmente selecionado."""
@@ -270,23 +345,6 @@ async def definir_modelo(body: dict, usuario=Depends(get_usuario_atual)):
     )
     return {"modelo": modelo}
 
-SYSTEM_PROMPT = (
-    "Você é o tutor de Aprendizado de Máquina da plataforma Iana (H2IA Tutor). "
-    "Seu público são estudantes do ensino fundamental e médio. "
-    "Explique de forma clara, concreta e amigável, em português do Brasil, com exemplos do dia a dia. "
-    "Use o CONTEXTO DO PIPELINE abaixo para responder sobre os modelos usados, os pré-processamentos, "
-    "os dados, as métricas, os gráficos e o código Python gerado. "
-    "Responda SOMENTE sobre este projeto de tutor: aprendizado de máquina, a plataforma e o pipeline do aluno. "
-    "Priorize sempre o pipeline atual do aluno — o dataset carregado, os modelos escolhidos, os hiperparâmetros, "
-    "os pré-processamentos, as métricas, os gráficos e o código gerado — antes de explicar teoria geral. "
-    "Se a pergunta não tiver relação com aprendizado de máquina nem com a plataforma, recuse educadamente em "
-    "uma frase e convide o aluno a perguntar sobre o pipeline dele. "
-    "Seja conciso: respostas curtas e diretas, sem jargão desnecessário. Nunca invente resultados numéricos "
-    "que não estejam no contexto. "
-    "Quando houver uma BASE DE CONHECIMENTO abaixo, use-a como fonte sobre os modelos e métricas do catálogo "
-    "(nomes, para que servem, quando usar/evitar, hiperparâmetros e seus valores padrão, fórmulas); "
-    "não invente hiperparâmetros nem valores padrão diferentes dos que estão lá."
-)
 
 
 def _montar_contexto(contexto) -> str:
@@ -301,10 +359,26 @@ def _montar_contexto(contexto) -> str:
     return texto
 
 
+async def _system_prompt_vigente() -> str:
+    """Texto do `system`: o que o admin gravou, senão o versionado.
+
+    `try/except` amplo de propósito: uma falha de leitura da configuração não pode derrubar o
+    chat — o pior caso aceitável é responder com o prompt versionado.
+    """
+    try:
+        config = await configuracoes_tutor.find_one({"chave": "system_prompt"})
+        texto = ((config or {}).get("valor") or "").strip()
+        if texto:
+            return texto
+    except Exception:
+        pass
+    return SYSTEM_PROMPT_TUTOR
+
+
 async def _montar_system(contexto) -> str:
     """System prompt + contexto do pipeline + base de conhecimento do catálogo."""
     partes = [
-        SYSTEM_PROMPT,
+        await _system_prompt_vigente(),
         "=== CONTEXTO DO PIPELINE ===\n" + _montar_contexto(contexto),
     ]
     try:
