@@ -8,6 +8,29 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-26b (desafio: simplificação da rubrica + progresso sem soma)
+
+> Backend `master` **`f17dfb8`** / Frontend `mestrado-iana` `0260394` (bundle `main-7ZCANP7T.js`).
+> Backup `/home/ubuntu/backups/deploy-20260726-052138`. Sem migração.
+
+Revisão do que subiu horas antes, contra as *karpathy-guidelines*.
+
+### Removido
+- `gabarito.regras` (seleção e repesagem de regras por atividade): nenhuma tela alcançava e
+  a rubrica sempre usou o conjunto completo — flexibilidade sem consumidor. Os pesos seguem
+  na biblioteca versionada de `app/desafios/regras.py`. `fixar`/`vetar` ficaram (decisão
+  explícita do professor, agora com UI).
+
+### Alterado
+- `progresso`: `submissoes` volta a significar **pipelines submetidos** — a Fase 1 tinha
+  somado os desafios nesse campo, mudando um número que o professor já lia. Desafios seguem
+  em `desafios`/`melhor_nota_desafio`, agora em coluna própria na tela.
+
+### Testes
+- Novo teste do contrato do progresso (pipelines e desafios não se somam). 396 passed, 1 skipped.
+
+---
+
 ## 2026-07-26 (desafio de montagem de pipeline — Fase 1)
 
 > Backend `master` **`e6e90a5`** / Frontend `mestrado-iana` `a440695` (bundle `main-GT47M2MG.js`).
