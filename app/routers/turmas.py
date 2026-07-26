@@ -16,12 +16,13 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.database import (
-    turmas, atividades, pipelines, colecao_usuario, atividade_usuario, opcoes_metricas,
+    turmas, atividades, pipelines, colecao_usuario, atividade_usuario,
     submissoes_montagem,
 )
 from app.desafios import avaliar_montagem, carregar_pecas, montar_tabuleiro
 from app.desafios.avaliacao import normalizar_montagem
 from app.desafios.sorteio import papeis
+from app.metricas.resultado import chaves_metrica, valor_metrica
 from app.schemas.turmas import (
     TurmaCreate, TurmaUpdate, AdicionarAlunos, EntrarTurma,
     AtividadeCreate, AtividadeUpdate, SubmeterMontagem, GabaritoMontagem,
@@ -74,23 +75,10 @@ async def _mapa_usuarios(ids: list) -> dict:
     return mapa
 
 
-async def _chaves_metrica(slug: str) -> list:
-    """Chaves candidatas p/ ler `resultadosDasAvaliacoes`.
-
-    A avaliação (app/metricas/metricas.py) indexa o dict pelo RÓTULO da métrica
-    (ex.: 'Acurácia'), mas o critério da atividade guarda o `valor`/slug
-    (ex.: 'accuracy_score'). Resolvemos o rótulo em `db.metricas` e tentamos
-    ambos, para ser robusto a como a submissão foi salva.
-    """
-    chaves = [slug]
-    try:
-        doc = await opcoes_metricas.find_one({"valor": slug})
-        rotulo = (doc or {}).get("label")
-        if rotulo and rotulo not in chaves:
-            chaves.append(rotulo)
-    except Exception:
-        pass
-    return chaves
+# Leitura dos resultados vive em `app/metricas/resultado.py` (compartilhada com a evolução
+# do aluno). Os aliases mantêm os nomes usados aqui e nos testes.
+_chaves_metrica = chaves_metrica
+_valor_metrica = valor_metrica
 
 
 def _turma_doc(t: dict) -> dict:
@@ -445,21 +433,6 @@ async def submeter_montagem(turma_id: str, atividade_id: str, body: SubmeterMont
         "melhor_nota": max([n for n in (resultado["nota"], hist["melhor_nota"]) if n is not None]),
         **{k: v for k, v in resultado.items() if k != "montagem"},
     })
-
-
-def _valor_metrica(resultados: dict, chaves: list, ordem: str):
-    """Melhor valor escalar da métrica (por qualquer uma das `chaves`) entre os
-    modelos avaliados, escolhido por `ordem` (desc = maior é melhor)."""
-    resultados = resultados or {}
-    por_modelo = {}
-    for chave in chaves:
-        por_modelo = resultados.get(chave) or {}
-        if por_modelo:
-            break
-    valores = [v for v in por_modelo.values() if isinstance(v, (int, float)) and not isinstance(v, bool)]
-    if not valores:
-        return None
-    return max(valores) if ordem != "asc" else min(valores)
 
 
 @router.get("/{turma_id}/atividades/{atividade_id}/ranking")

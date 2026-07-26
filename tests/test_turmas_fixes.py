@@ -91,7 +91,7 @@ class TestRanking:
 
         with patch("app.routers.turmas.turmas", turmas_m), \
              patch("app.routers.turmas.atividades", ativ_m), \
-             patch("app.routers.turmas.opcoes_metricas", metr_m), \
+             patch("app.metricas.resultado.opcoes_metricas", metr_m), \
              patch("app.routers.turmas.pipelines", pipe_m), \
              patch("app.routers.turmas.colecao_usuario", user_m):
             r = await client.get(

@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
+from typing import List, Optional
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.database import pipelines, turmas, atividades
+from app.pipelines_evolucao import montar_evolucao
 from app.schemas.pipelines import PipelineCreate, PipelineUpdate
 from app.security import get_usuario_atual
 from app.funcoes_genericas.validacao import validar_object_id
@@ -128,6 +130,65 @@ async def listar_pipelines(
     )
     docs = await cursor.to_list(length=limite)
     return [_pipeline_doc(d) for d in docs]
+
+
+@router.get("/evolucao")
+async def evolucao_do_aluno(
+    current_user: dict = Depends(get_usuario_atual),
+    limite: int = Query(200, ge=1, le=500),
+    dataset: List[str] = Query(default=[], description="Nomes candidatos da base (filtro)"),
+    alvo: Optional[str] = Query(default=None, description="Coluna alvo (filtro)"),
+):
+    """Trajetória do usuário em cada base que ele já usou (mais recente primeiro).
+
+    `dataset`/`alvo` filtram para a base de um pipeline que o cliente tem em mãos (pode
+    estar aberto e ainda não salvo). O cliente manda os NOMES que conhece — nome do
+    dataset, do arquivo, id — e quem decide a identidade é aqui, para a regra não viver
+    duplicada nas duas pontas (foi o que fez o bloco de evolução não casar em 2026-07-26).
+
+    Só lê os próprios pipelines — professor não vê os de aluno por aqui (para isso existe o
+    ranking da atividade, escopado à turma). Projeção enxuta: `resultadoColetaDado` inteiro
+    pode ser enorme, mas precisamos dele para identificar a base, então trazemos apenas os
+    campos de identidade e divisão.
+    """
+    user_id = str(current_user["_id"])
+    projecao = {
+        "nome": 1, "dataCriacao": 1, "dataModificacao": 1, "atividade_id": 1,
+        "modeloSelecionado": 1, "modelosSelecionados": 1, "preProcessamentoConfig": 1,
+        "resultadosDasAvaliacoes": 1,
+        "resultadoColetaDado.datasetId": 1, "resultadoColetaDado.nomeDataset": 1,
+        "resultadoColetaDado.treino.nomeArquivo": 1, "resultadoColetaDado.target": 1,
+        "resultadoColetaDado.preverCategoria": 1, "resultadoColetaDado.dadosRotulados": 1,
+        "resultadoColetaDado.porcentagemTreino": 1,
+    }
+    cursor = pipelines.find({"user_id": user_id}, projecao).sort("dataCriacao", -1).limit(limite)
+    docs = await cursor.to_list(length=limite)
+
+    # Dentro de uma atividade vale a métrica escolhida pelo professor; fora dela, a padrão
+    # da tarefa. Uma consulta só para todas as atividades citadas.
+    criterios: dict = {}
+    ids = {d.get("atividade_id") for d in docs if d.get("atividade_id")}
+    oids = []
+    for aid in ids:
+        try:
+            oids.append(ObjectId(aid))
+        except Exception:
+            continue
+    if oids:
+        try:
+            async for a in atividades.find({"_id": {"$in": oids}}, {"criterio": 1}):
+                if a.get("criterio"):
+                    criterios[str(a["_id"])] = a["criterio"]
+        except Exception:
+            criterios = {}
+
+    bases = await montar_evolucao(docs, criterios)
+    if dataset or alvo:
+        candidatos = {d for d in dataset if d}
+        bases = [b for b in bases
+                 if (not candidatos or b["dataset"] in candidatos)
+                 and (alvo is None or b["alvo"] == alvo)]
+    return {"bases": bases}
 
 
 @router.get("/galeria")
