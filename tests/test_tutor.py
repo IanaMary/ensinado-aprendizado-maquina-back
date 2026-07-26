@@ -181,6 +181,29 @@ class TestAtualizarPorPipe:
         assert response.status_code == 400
 
 
+class TestBoasVindasInicio:
+    """O pipe 'inicio' é a primeira coisa que o aluno lê: nunca pode ficar em branco."""
+
+    @pytest.mark.asyncio
+    async def test_fallback_versionado_quando_nao_ha_doc(self, client, mock_db, auth_headers):
+        mock_db["tutor"].find_one = AsyncMock(return_value=None)
+        response = await client.get("/tutor/?pipe=inicio", headers=auth_headers)
+        assert response.status_code == 200
+        descricao = response.json()["descricao"]
+        assert "Coleta" in descricao and "Métricas" in descricao
+        assert len(descricao) > 500, "as boas-vindas precisam orientar, não só saudar"
+
+    @pytest.mark.asyncio
+    async def test_texto_do_banco_prevalece(self, client, mock_db, auth_headers):
+        """Edição do admin em conf-tutor → Início vence o texto versionado."""
+        mock_db["tutor"].find_one = AsyncMock(return_value={
+            "_id": ObjectId(), "pipe": "inicio", "texto_pipe": "Boas-vindas da professora",
+        })
+        response = await client.get("/tutor/?pipe=inicio", headers=auth_headers)
+        assert response.status_code == 200
+        assert "Boas-vindas da professora" in response.json()["descricao"]
+
+
 class TestKbConfPipeline:
     @pytest.mark.asyncio
     async def test_get_conf_pipeline_fallback_versionado(self, client, mock_db, auth_headers):

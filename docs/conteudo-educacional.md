@@ -98,3 +98,27 @@ mão; rode o gerador após mudar o conteúdo.
 - `tests/test_conf_pipeline_graficos.py` — endpoints de gráficos.
 - `tests/test_metricas_avaliacao.py` — cada viz carrega `grafico_id`.
 - `tests/test_toy_datasets.py` — `/{name}/conteudo` read-only.
+
+## Boas-vindas do tutor (pipe `inicio`)
+
+O texto que o aluno lê no painel do tutor **antes de clicar em qualquer coisa** segue a
+mesma ideia: fonte versionada no repo → semeada no banco → editável pelo admin.
+
+| Onde | O quê |
+|---|---|
+| `app/conteudo/kb_tutor_inicio.py` | `TUTOR_INICIO_HTML` — fonte da verdade. Resume o Manual do Aluno (Carregar Dados → Pré-processamento → Treinar e Avaliar → Exportar) e diz onde ficam turmas/desafios, projetos e o manual. |
+| `scripts/deploy/seed_tutor_inicio.py` | Semeia `db.tutor {pipe:'inicio'}.texto_pipe`. Roda no `deploy.sh` (etapa 5b). |
+| `GET /tutor/?pipe=inicio` | Devolve o doc; **sem doc, devolve o texto versionado** (nunca 404 para o aluno). |
+| conf-tutor → aba **Início** | O admin edita `texto_pipe`/`explicacao` (`PUT /tutor/pipe/inicio`). |
+| `execucoes.component.ts` (`TUTOR_BOAS_VINDAS`) | Fallback **curto** para servidor fora do ar. Mantido curto de propósito: duas cópias longas divergem. |
+
+O seed é **conservador**: escreve só quando o doc não existe ou quando o `texto_pipe` é o
+legado de uma frase gravado pelo `seed-mongodb.sh` antigo (`TUTOR_INICIO_LEGADO`). Texto
+editado pelo admin é preservado — `--forcar` sobrescreve de propósito.
+
+> **Era esse o bug.** O `seed-mongodb.sh` gravava `texto_pipe: "Bem-vindo ao tutor de
+> Aprendizado de Máquina!"`, e como o banco vence o fallback, em produção o aluno lia uma
+> única frase — o texto rico que existia no frontend nunca aparecia.
+
+Formato: **HTML** (`h4/p/b/i/ul/ol/li`). O front renderiza com `[innerHTML]` sob o
+sanitizer do Angular, que remove `style`, `script` e handlers.

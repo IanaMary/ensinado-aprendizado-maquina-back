@@ -713,6 +713,9 @@ mongosh --quiet "$DB_NAME" --eval '
 db.tutor.deleteMany({});
 db.tutor.insertMany([
     {
+        // Placeholder: as boas-vindas de verdade vêm de app/conteudo/kb_tutor_inicio.py,
+        // gravadas por scripts/deploy/seed_tutor_inicio.py (que reconhece esta frase
+        // legada e a substitui). Não edite o texto aqui.
         pipe: "inicio",
         texto_pipe: "Bem-vindo ao tutor de Aprendizado de Máquina!",
         introducao: "Este tutor vai guiar você pelos conceitos fundamentais de aprendizado de máquina.",

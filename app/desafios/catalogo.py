@@ -96,7 +96,7 @@ async def carregar_pecas() -> Dict[str, Dict[str, Any]]:
     """
     pecas: Dict[str, Dict[str, Any]] = {}
 
-    for doc in await _listar(opcoes_coletas, {"valor": 1, "nome": 1, "habilitado": 1}):
+    for doc in await _listar(opcoes_coletas, {"valor": 1, "nome": 1, "label": 1, "titulo": 1, "habilitado": 1}):
         if not _habilitado(doc) or not doc.get("valor"):
             continue
         pecas[doc["valor"]] = {
@@ -107,7 +107,8 @@ async def carregar_pecas() -> Dict[str, Dict[str, Any]]:
 
     for doc in await _listar(
         opcoes_pre_processamento,
-        {"valor": 1, "nome": 1, "habilitado": 1, "execucao": 1, "grupo": 1},
+        {"valor": 1, "nome": 1, "label": 1, "titulo": 1, "habilitado": 1,
+         "execucao": 1, "grupo": 1},
     ):
         valor = doc.get("valor")
         if not _habilitado(doc) or not valor:
@@ -123,8 +124,8 @@ async def carregar_pecas() -> Dict[str, Dict[str, Any]]:
 
     for doc in await _listar(
         opcoes_modelos,
-        {"valor": 1, "nome": 1, "habilitado": 1, "prever_categoria": 1,
-         "dados_rotulados": 1, "metricas": 1},
+        {"valor": 1, "nome": 1, "label": 1, "titulo": 1, "habilitado": 1,
+         "prever_categoria": 1, "dados_rotulados": 1, "metricas": 1},
     ):
         valor = doc.get("valor")
         if not _habilitado(doc) or not valor:
@@ -137,7 +138,7 @@ async def carregar_pecas() -> Dict[str, Dict[str, Any]]:
             "metricas": [m for m in (doc.get("metricas") or []) if isinstance(m, str)],
         }
 
-    for doc in await _listar(opcoes_metricas, {"valor": 1, "label": 1, "habilitado": 1, "grupo": 1}):
+    for doc in await _listar(opcoes_metricas, {"valor": 1, "label": 1, "nome": 1, "titulo": 1, "habilitado": 1, "grupo": 1}):
         valor = doc.get("valor")
         if not _habilitado(doc) or not valor:
             continue

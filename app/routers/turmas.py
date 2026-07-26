@@ -182,6 +182,38 @@ async def turmas_do_aluno(usuario: dict = Depends(get_usuario_atual)):
     } async for t in cur]
 
 
+@router.get("/minhas/desafios")
+async def desafios_do_aluno(usuario: dict = Depends(get_usuario_atual)):
+    """Desafios de montagem de TODAS as turmas do aluno, com o histórico dele em cada um.
+
+    Existe para o aluno descobrir os desafios sem procurar turma por turma: uma chamada só,
+    porque quem consome é a Área de Trabalho (a tela mais crítica do sistema) — 1+N
+    requisições ali atrasariam o carregamento do pipeline.
+
+    Nunca inclui `gabarito` (ele resolveria o desafio).
+    """
+    uid = str(usuario["_id"])
+    minhas = [t async for t in turmas.find({"alunos": uid}, {"nome": 1}).sort("criado_em", -1)]
+    if not minhas:
+        return []
+    nome_por_turma = {str(t["_id"]): t.get("nome") for t in minhas}
+    cur = atividades.find(
+        {"turma_id": {"$in": list(nome_por_turma.keys())}, "tipo": TIPO_MONTAGEM}
+    ).sort("criado_em", -1)
+    resultado = []
+    async for a in cur:
+        hist = await _historico_montagem(str(a["_id"]), uid)
+        resultado.append({
+            "atividade_id": str(a["_id"]),
+            "titulo": a.get("titulo"),
+            "descricao": a.get("descricao"),
+            "turma_id": a.get("turma_id"),
+            "turma_nome": nome_por_turma.get(a.get("turma_id")),
+            **hist,
+        })
+    return resultado
+
+
 @router.post("/entrar")
 async def entrar_turma(body: EntrarTurma, usuario: dict = Depends(get_usuario_atual)):
     codigo = (body.codigo or "").strip().upper()

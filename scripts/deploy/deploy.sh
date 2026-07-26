@@ -97,6 +97,7 @@ echo ""
 echo "=== [5b/6] Semeando conteúdo educacional (app/conteudo/*.json) ==="
 cd "$PROJECT_DIR"
 PYTHONPATH="$PROJECT_DIR" python -m scripts.deploy.seed_conteudo || echo "  AVISO: seed de conteúdo falhou"
+PYTHONPATH="$PROJECT_DIR" python -m scripts.deploy.seed_tutor_inicio || echo "  AVISO: seed das boas-vindas do tutor falhou"
 
 # ---- Reiniciar serviço ----
 echo ""

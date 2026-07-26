@@ -8,6 +8,45 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-26h (boas-vindas do tutor + entrada dos desafios + contas da banca)
+
+> Backend `master` **`<pendente>`** / Frontend `mestrado-iana` `<pendente>`.
+> Sem migração de dados; dois seeds idempotentes novos.
+
+### Corrigido
+- **O tutor não recebia quem chegava.** O `seed-mongodb.sh` gravava em
+  `db.tutor {pipe:'inicio'}` um `texto_pipe` de uma frase, e o banco vence o fallback do
+  frontend — em produção o aluno lia só "Bem-vindo ao tutor de Aprendizado de Máquina!". As
+  boas-vindas agora são versionadas em `app/conteudo/kb_tutor_inicio.py` (resumo do Manual
+  do Aluno: 4 passos, onde pedir ajuda, onde ficam turmas/desafios/projetos/manual),
+  semeadas por `scripts/deploy/seed_tutor_inicio.py` (roda no `deploy.sh`) e devolvidas
+  como fallback pelo `GET /tutor/?pipe=inicio`. O seed **preserva** texto editado pelo
+  admin (só substitui o legado de uma frase; `--forcar` sobrescreve).
+- **Peças do desafio mostravam o slug** (`mlp_regressor`, `robust_scaler`) em vez do nome
+  legível: `_nome` já tentava `nome → label → titulo`, mas a projeção do Mongo em
+  `app/desafios/catalogo.py` não trazia `label`/`titulo` — o fallback nunca tinha o que ler.
+- **`/atividades` mostrava "Acesso negado" ao abrir** como professor: a tela chamava
+  `GET /usuario/` (admin-only) só para preencher o seletor de usuário; agora só o admin
+  chama, e o professor segue filtrando por usuário clicando na linha.
+
+### Adicionado
+- `GET /turmas/minhas/desafios` — desafios de montagem de todas as turmas do aluno **numa
+  chamada**, com tentativas e melhor nota (sem gabarito). A Área de Trabalho mostra um aviso
+  quando há desafio nunca tentado, indo direto a ele quando é o único; a lista de turmas
+  ("Turmas e desafios") passa a mostrar os desafios primeiro, com o histórico do aluno.
+- `scripts/deploy/seed_usuarios_demo.py` — contas de demonstração (admin/professor/aluno) com
+  turma, dois desafios e histórico real (submissões corrigidas pela rubrica + duas
+  submissões de pipeline no Iris). Idempotente, aborta se o e-mail já for de conta real, e
+  `--remover` apaga tudo. Doc: `docs/contas-demo-banca.md`.
+
+### Notas
+- `ShellComponent` (barra lateral com Home/Pipeline/Resultados) é **código morto** nesta
+  branch: `InternoComponent` nunca é roteado. Por isso a entrada dos desafios foi para o
+  aviso da Área de Trabalho e para o menu do avatar (renomeado "Turmas e desafios").
+- Testes: backend 449 passed/1 skipped; frontend 153/153.
+
+---
+
 ## 2026-07-26g (documentação de arquitetura + nome de base normalizado)
 
 > Backend `master` **`a7c133e`** / Frontend `mestrado-iana` `11888e4` (bundle `main-EDMYYQK2.js`).

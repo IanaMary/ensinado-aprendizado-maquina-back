@@ -603,3 +603,103 @@ class TestRankingMontagem:
             r = await client.get(f"/turmas/{turma['_id']}/atividades/{ObjectId()}/ranking",
                                  headers=auth_headers)
         assert r.status_code == 403
+
+
+class TestDesafiosDoAluno:
+    """`GET /turmas/minhas/desafios` — como o aluno descobre que tem desafio a fazer."""
+
+    @pytest.mark.asyncio
+    async def test_lista_desafios_das_turmas_do_aluno_com_historico(
+            self, client, mock_db, auth_headers, mock_user):
+        uid = str(mock_user["_id"])
+        t1, t2 = ObjectId(), ObjectId()
+        turmas_m = MagicMock(find=MagicMock(return_value=AsyncCursor([
+            {"_id": t1, "nome": "9º ano B"},
+            {"_id": t2, "nome": "1º ano A"},
+        ])))
+        a1, a2 = ObjectId(), ObjectId()
+        ativ_m = MagicMock(find=MagicMock(return_value=AsyncCursor([
+            {"_id": a1, "turma_id": str(t1), "tipo": "montagem", "titulo": "Prever espécie",
+             "descricao": "Monte o pipeline", "gabarito": GABARITO},
+            {"_id": a2, "turma_id": str(t2), "tipo": "montagem", "titulo": "Prever preço",
+             "gabarito": GABARITO},
+        ])))
+        # 2 tentativas na primeira (melhor 8.5), nenhuma na segunda
+        def _count(filtro):
+            return 2 if filtro["atividade_id"] == str(a1) else 0
+        subm = MagicMock(
+            count_documents=AsyncMock(side_effect=_count),
+            find=MagicMock(return_value=AsyncCursor([{"nota": 8.5}])),
+        )
+        with patch("app.routers.turmas.turmas", turmas_m), \
+             patch("app.routers.turmas.atividades", ativ_m), \
+             patch("app.routers.turmas.submissoes_montagem", subm):
+            r = await client.get("/turmas/minhas/desafios", headers=auth_headers)
+        assert r.status_code == 200
+        body = r.json()
+        assert [d["titulo"] for d in body] == ["Prever espécie", "Prever preço"]
+        assert body[0]["turma_nome"] == "9º ano B"
+        assert body[0]["tentativas"] == 2 and body[0]["melhor_nota"] == 8.5
+        assert body[1]["tentativas"] == 0
+        # só as turmas em que ELE é aluno entram na consulta
+        assert turmas_m.find.call_args[0][0] == {"alunos": uid}
+        # e só atividades de montagem dessas turmas
+        filtro_ativ = ativ_m.find.call_args[0][0]
+        assert filtro_ativ["tipo"] == "montagem"
+        assert set(filtro_ativ["turma_id"]["$in"]) == {str(t1), str(t2)}
+
+    @pytest.mark.asyncio
+    async def test_nao_vaza_gabarito(self, client, mock_db, auth_headers):
+        t = ObjectId()
+        turmas_m = MagicMock(find=MagicMock(return_value=AsyncCursor([{"_id": t, "nome": "T"}])))
+        ativ_m = MagicMock(find=MagicMock(return_value=AsyncCursor([
+            {"_id": ObjectId(), "turma_id": str(t), "tipo": "montagem", "titulo": "X",
+             "gabarito": GABARITO},
+        ])))
+        subm = MagicMock(count_documents=AsyncMock(return_value=0),
+                         find=MagicMock(return_value=AsyncCursor([])))
+        with patch("app.routers.turmas.turmas", turmas_m), \
+             patch("app.routers.turmas.atividades", ativ_m), \
+             patch("app.routers.turmas.submissoes_montagem", subm):
+            r = await client.get("/turmas/minhas/desafios", headers=auth_headers)
+        assert r.status_code == 200
+        assert "gabarito" not in r.json()[0]
+
+    @pytest.mark.asyncio
+    async def test_sem_turma_devolve_lista_vazia_sem_consultar_atividades(
+            self, client, mock_db, auth_headers):
+        turmas_m = MagicMock(find=MagicMock(return_value=AsyncCursor([])))
+        ativ_m = MagicMock(find=MagicMock(return_value=AsyncCursor([])))
+        with patch("app.routers.turmas.turmas", turmas_m), \
+             patch("app.routers.turmas.atividades", ativ_m):
+            r = await client.get("/turmas/minhas/desafios", headers=auth_headers)
+        assert r.status_code == 200 and r.json() == []
+        ativ_m.find.assert_not_called()
+
+
+class TestNomesDasPecas:
+    """Regressão: a peça mostrava o slug (`mlp_regressor`) em vez do nome legível.
+
+    `_nome` já tentava nome → label → titulo, mas a PROJEÇÃO do Mongo não trazia `label`
+    nem `titulo`, então o fallback nunca tinha o que ler. Visto no tabuleiro real.
+    """
+
+    @pytest.mark.asyncio
+    async def test_usa_label_quando_nao_ha_nome(self):
+        from app.desafios import catalogo
+
+        def col(docs):
+            return MagicMock(find=MagicMock(return_value=AsyncCursor(docs)))
+
+        with patch.object(catalogo, "opcoes_coletas", col([{"valor": "arquivo", "label": "Arquivo"}])), \
+             patch.object(catalogo, "opcoes_pre_processamento",
+                          col([{"valor": "robust_scaler", "label": "RobustScaler"}])), \
+             patch.object(catalogo, "opcoes_modelos",
+                          col([{"valor": "mlp_regressor", "label": "Rede Neural (MLP) Regressora"}])), \
+             patch.object(catalogo, "opcoes_metricas",
+                          col([{"valor": "r2_score", "label": "R² (Coef. de Determinação)"}])):
+            pecas = await catalogo.carregar_pecas()
+        assert pecas["arquivo"]["nome"] == "Arquivo"
+        assert pecas["robust_scaler"]["nome"] == "RobustScaler"
+        assert pecas["mlp_regressor"]["nome"] == "Rede Neural (MLP) Regressora"
+        assert pecas["r2_score"]["nome"] == "R² (Coef. de Determinação)"

@@ -91,6 +91,11 @@ async def buscar_tutor_descricao(
             if pipe == 'conf-pipeline':
                 from app.conteudo.kb_conf_pipeline import KB_CONF_PIPELINE
                 return {'descricao': KB_CONF_PIPELINE, 'id': ''}
+            # Boas-vindas da Área de Trabalho: é a primeira coisa que o aluno lê, então
+            # nunca deve ficar em branco por falta de seed.
+            if pipe == 'inicio':
+                from app.conteudo.kb_tutor_inicio import TUTOR_INICIO_HTML
+                return {'descricao': TUTOR_INICIO_HTML, 'id': ''}
             raise HTTPException(status_code=404, detail="Documento do tutor não encontrado para o pipe informado.")
 
         schema_cls, default_keys = schema_info
