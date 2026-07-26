@@ -28,8 +28,11 @@ class CriterioRanking(BaseModel):
 
 class DadosDesafio(BaseModel):
     """Características da base descritas no enunciado. São o que liga as regras
-    condicionais da rubrica (imputação, codificação, escala) — o desafio não executa
-    nada, então essas flags substituem a inspeção do dataset real."""
+    condicionais da rubrica (imputação, codificação, escala) — o desafio não executa nada.
+
+    Quando o desafio nasce de um dataset de exemplo (`GabaritoMontagem.dataset`), a tela do
+    professor pré-preenche estas flags com a inspeção do dataframe real
+    (`app/desafios/base_dados.py`); ele pode ajustar, porque é dele a decisão do que cobrar."""
     faltantes: bool = False
     texto: bool = False
     escalas_diferentes: bool = False
@@ -41,9 +44,16 @@ class GabaritoMontagem(BaseModel):
     Não é a solução: é o que a rubrica cobra. Vários pipelines diferentes podem
     satisfazer o mesmo gabarito, que é a realidade de aprendizado de máquina.
     """
+    # Dataset de exemplo que origina o enunciado. Quando presente, o SERVIDOR deriva a
+    # `tarefa` dele (o cliente não decide). Opcional para não invalidar desafios antigos.
+    dataset: Optional[str] = None
     tarefa: str = "classificacao"                  # classificacao | regressao | agrupamento
     exige: List[str] = ["coleta", "modelo", "metrica"]
     dados: DadosDesafio = DadosDesafio()
+    # True: o sistema sorteia as peças úteis (varia entre alunos e tentativas).
+    # False: valem as peças escolhidas pelo professor em `fixar` — mais o mínimo que o
+    # tabuleiro precisa para ter solução, que o sorteio garante de todo jeito.
+    sortear_pecas: bool = True
     fixar: List[str] = []                          # peças que devem estar no tabuleiro
     vetar: List[str] = []                          # peças que nunca aparecem
     dificuldade: str = "medio"                     # facil | medio | dificil (nº de distratores)

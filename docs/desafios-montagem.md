@@ -11,6 +11,8 @@ Documento de arquitetura. A justificativa pedagógica e as telas estão em
 
 | Arquivo | Responsabilidade |
 |---|---|
+| `app/desafios/base_dados.py` | **Perfil do dataset de exemplo**: tarefa, textos do enunciado e as características da base lidas do dataframe. |
+| `app/models/dataset_loaders.py` | Carregadores dos datasets em DataFrame (extraídos do router de toy datasets para poderem ser reusados aqui). |
 | `app/desafios/catalogo.py` | Lê `db.modelos`/`db.metricas`/`db.pre_processamento`/`db.coleta_dados` e normaliza as **peças**. |
 | `app/desafios/regras.py` | Biblioteca versionada de regras (peso + textos didáticos + predicados). |
 | `app/desafios/sorteio.py` | Monta o **tabuleiro** da tentativa (determinístico; distratores do catálogo). |
@@ -26,15 +28,37 @@ Documento de arquitetura. A justificativa pedagógica e as telas estão em
 {
   "tipo": "pipeline" | "montagem",   // 'pipeline' = comportamento histórico
   "gabarito": {                       // só em 'montagem'; NUNCA sai para o aluno
-    "tarefa": "classificacao",        // classificacao | regressao | agrupamento
+    "dataset": "iris",                // dataset de exemplo que origina o enunciado
+    "tarefa": "classificacao",        // DERIVADA do dataset pelo servidor
     "exige": ["coleta", "pre_processamento", "modelo", "metrica"],
     "dados": { "faltantes": true, "texto": false, "escalas_diferentes": true },
     "dificuldade": "medio",           // facil (2 distratores) | medio (4) | dificil (6)
-    "fixar": ["minmax_scaler"],       // peças que sempre entram no tabuleiro
+    "sortear_pecas": true,            // false = valem só as peças escolhidas (+ o mínimo)
+    "fixar": ["minmax_scaler"],       // peças escolhidas pelo professor
     "vetar": ["pca"]                  // peças que nunca aparecem
   }
 }
 ```
+
+## O desafio nasce de uma base
+
+O professor começa escolhendo um **dataset de exemplo**; o resto decorre dele:
+
+| O que vem do dataset | Como |
+|---|---|
+| **Tarefa** | `DatasetType` usa exatamente o mesmo vocabulário do gabarito, então `ds.tipo.value` vai direto. O **servidor** faz essa derivação em `criar_atividade`/`atualizar_atividade` (`_gabarito_com_dataset`) — o cliente não decide, e um id inexistente é `400`. |
+| **Enunciado sugerido** | `pergunta_guia` + `descricao` + `descricao_target` (`_enunciado`). A tela pré-preenche e o professor edita. |
+| **O que a base exige** | Inspeção do dataframe real (`inspecionar_dados`): NaN → `faltantes`; coluna não numérica fora do alvo → `texto`; razão entre a maior e a menor amplitude ≥ 10× → `escalas_diferentes`. |
+| **Peças compatíveis** | A tela só oferece modelos da tarefa e métricas do grupo. |
+
+`GET /toy_datasets/{nome}/perfil-desafio` (professor/admin) devolve esse perfil. Carrega o
+dataframe, então tem cache em memória e `try/except` amplo: falha de carga cai no conservador
+(as três flags `False`) em vez de impedir a criação. O aluno recebe apenas o **nome** da base,
+como um chip no tabuleiro (`dataset_nome`, resolvido sem carregar dados).
+
+> Por que a inspeção importa: antes as três flags eram marcadas à mão e podiam **desmentir a
+> base** — cobrar imputação de um dataset sem valores faltando torna a regra impossível de
+> satisfazer, e o aluno perde ponto por algo que não existe.
 
 `db.submissoes_montagem` — uma tentativa por documento, **sem TTL** (é registro de avaliação,
 diferente da telemetria de `atividade_usuario`, que expira em 90 dias):
@@ -98,6 +122,12 @@ textos são o produto mais importante — linguagem de sala de aula, dizendo o *
   pipeline ideal aprendido no retorno anterior).
 - **A regra `sem-distrator` exige ter montado algo.** Antes, entregar em branco a satisfazia
   trivialmente e rendia 4/10.
+- **O tabuleiro sempre permite uma solução** (`_garantir_minimo`). O professor pode curar as
+  peças (`sortear_pecas: false`) ou deixar o sorteio; em qualquer caso, lane exigida sem peça —
+  ou sem peça compatível com a tarefa — é completada, **mesmo contra um `vetar`**, em silêncio.
+  Sem isso `estrutura-minima` (peso 3) ficava insatisfazível por configuração do professor: era
+  o que acontecia ao marcar "Exigir a etapa de pré-processamento" numa base que não pedia
+  nenhuma família — o sorteio não colocava peça de pré-proc alguma.
 - **Nota ≠ pontos.** `nota = 10 × pontos/pontos_max`, com `pontos_max` somando só as regras
   aplicáveis; ambos são devolvidos para o professor poder explicar de onde veio a nota.
 
@@ -110,6 +140,12 @@ errado) não são verificáveis aqui.
 
 ## Testes
 
-`tests/test_desafio_montagem.py` (44): cada regra isolada, pesos e nota, normalização da
+`tests/test_desafio_montagem.py` (47): cada regra isolada, pesos e nota, normalização da
 montagem (entrada não confiável), determinismo e re-sorteio, `fixar`/`vetar`, gabarito que não
-vaza, peça fora do tabuleiro, ranking e gates de papel.
+vaza, peça fora do tabuleiro, ranking, gates de papel e nome legível das peças.
+
+`tests/test_desafio_dataset.py` (24): inspeção da base (NaN, coluna de texto, alvo categórico
+que **não** conta como texto, amplitudes), perfil com cache e com falha de carga, tarefa
+derivada sobrepondo o cliente, dataset inexistente (`400`/`404`), modo curado sem extras,
+mínimo garantido nos quatro casos (coleta/métrica/pré-proc exigido/veto conflitante),
+determinismo preservado e o chip da base chegando ao aluno.

@@ -1,43 +1,25 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
-from pathlib import Path
-import os
 import logging
 import pandas as pd
 
 from app.models.dataset_config import (
-    DatasetConfig, DatasetType, get_all_datasets, get_dataset_config
+    DatasetType, get_all_datasets, get_dataset_config
+)
+from app.models.dataset_loaders import (
+    DatasetNaoConfigurado, carregar_gerador, carregar_sklearn, carregar_uci,
+    # Reexportado: o startup em app/main.py chama toy_datasets.prewarm_uci_cache.
+    prewarm_uci_cache,
 )
 from app.coleta_dados.configuracao_treinamento import aviso_estratificacao, dividir_dataframe
 from app.schemas.schemas import ReDivisaoColetaRequest
 from app.utils.seed import seed_everything, get_seed, get_sklearn_random_state
 from app.database import arquivos, configuracoes_treinamento
-from app.security import get_usuario_atual
+from app.security import exigir_admin_ou_professor, get_usuario_atual
+from app.desafios.base_dados import perfil_do_dataset
 from app.funcoes_genericas.funcoes_genericas import df_para_base64
 
 logger = logging.getLogger("uvicorn")
-
-# Cache em disco dos datasets UCI (ucimlrepo nao faz cache proprio).
-# Fica na raiz do backend; sobrevive a restarts e ao git pull (nao versionado).
-# Sobrescrevivel via DATASET_CACHE_DIR (usado nos testes para isolar o cache).
-CACHE_DIR = Path(os.getenv("DATASET_CACHE_DIR") or (Path(__file__).resolve().parents[2] / "dataset_cache"))
-
-# Mapeamento de dataset ID -> UCI ID
-UCI_IDS = {
-    "adult": 2,
-    "wine_quality": 186,
-    "heart_disease": 45,
-    "titanic": 597,
-    "abalone": 1,
-    "housing": 601,
-    "car_evaluation": 19,
-    "mushroom": 73,
-    # Datasets de Clustering
-    "wholesale_customers": 292,
-    "obesity_levels": 544,
-    "online_shoppers": 468,
-    "heart_failure": 519,
-}
 
 router = APIRouter(prefix="/toy_datasets", tags=["Toy Datasets"])
 
@@ -75,6 +57,22 @@ async def conteudo_dataset(dataset_name: str):
     return ds.conteudo_card()
 
 
+@router.get("/{dataset_name}/perfil-desafio")
+async def perfil_desafio_dataset(
+    dataset_name: str,
+    _: dict = Depends(exigir_admin_ou_professor),
+):
+    """Perfil do dataset para criar um desafio de montagem: tarefa, textos do enunciado e as
+    características da base lidas do dataframe (valores faltando, texto, escalas).
+
+    Carrega o dataframe (por isso o gate de professor/admin), mas **não** escreve no banco.
+    """
+    perfil = perfil_do_dataset(dataset_name)
+    if perfil is None:
+        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' nao encontrado")
+    return perfil
+
+
 @router.get("/{dataset_name}")
 async def carregar_dataset(
     dataset_name: str,
@@ -101,11 +99,11 @@ async def carregar_dataset(
 
         # Carregar baseado na fonte
         if ds.fonte == "sklearn":
-            df, target_names = _carregar_sklearn(dataset_name)
+            df, target_names = carregar_sklearn(dataset_name)
         elif ds.fonte == "uci":
-            df = _carregar_uci(dataset_name, ds)
+            df = carregar_uci(dataset_name, ds)
         elif ds.fonte == "gerador":
-            df, target_names = _carregar_gerador(
+            df, target_names = carregar_gerador(
                 dataset_name, ds, n_amostras, n_features, ruido, n_classes, n_clusters
             )
         
@@ -228,159 +226,11 @@ async def carregar_dataset(
     
     except HTTPException:
         raise
+    except DatasetNaoConfigurado as e:
+        # Antes o próprio carregador levantava HTTPException(400); a exceção do módulo
+        # extraído preserva esse status (o except genérico abaixo devolveria 500).
+        raise HTTPException(status_code=400, detail=str(e))
     except ImportError as e:
         raise HTTPException(status_code=500, detail=f"Biblioteca nao instalada: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao carregar dataset: {str(e)}")
-
-
-def _carregar_gerador(dataset_name, ds, n_amostras, n_features, ruido, n_classes, n_clusters):
-    """Gera um dataset sintetico com os make_* do sklearn. Retorna (df, target_names)."""
-    from sklearn.datasets import (
-        make_classification, make_blobs, make_moons, make_circles, make_regression
-    )
-    rs = get_sklearn_random_state()
-    n = n_amostras or ds.n_amostras
-
-    if dataset_name == "gen_classification":
-        import math
-        nf = n_features or ds.n_features
-        nc = n_classes or 2
-        # n_clusters_per_class=1 e n_informative suficiente p/ separar nc classes (2**n_inf >= nc).
-        n_inf = min(nf, max(2, nf // 2, math.ceil(math.log2(nc))))
-        X, y = make_classification(
-            n_samples=n, n_features=nf, n_informative=n_inf, n_redundant=0,
-            n_classes=nc, n_clusters_per_class=1, random_state=rs,
-        )
-        cols = [f"atributo_{i + 1}" for i in range(nf)]
-    elif dataset_name == "gen_blobs":
-        nf = n_features or 2
-        X, y = make_blobs(n_samples=n, n_features=nf, centers=n_clusters or 3, random_state=rs)
-        cols = [f"atributo_{i + 1}" for i in range(nf)]
-    elif dataset_name == "gen_moons":
-        X, y = make_moons(n_samples=n, noise=ruido if ruido is not None else 0.1, random_state=rs)
-        cols = ["atributo_1", "atributo_2"]
-    elif dataset_name == "gen_circles":
-        X, y = make_circles(
-            n_samples=n, noise=ruido if ruido is not None else 0.05, factor=0.5, random_state=rs
-        )
-        cols = ["atributo_1", "atributo_2"]
-    elif dataset_name == "gen_regression":
-        nf = n_features or ds.n_features
-        X, y = make_regression(
-            n_samples=n, n_features=nf, noise=ruido if ruido is not None else 10.0, random_state=rs
-        )
-        cols = [f"atributo_{i + 1}" for i in range(nf)]
-    elif dataset_name == "gen_sorvete":
-        # Regressão lúdica: prever vendas de sorvete a partir do calor e do movimento.
-        # Valores em faixas amigáveis (não padronizados) p/ fazer sentido para crianças:
-        # temperatura 15–40 °C, pessoas 0–500, vendas sempre >= 0.
-        import numpy as np
-        rng = np.random.RandomState(rs)
-        temperatura = rng.uniform(15, 40, n)
-        pessoas = rng.uniform(0, 500, n)
-        rv = ruido if ruido is not None else 1.0
-        y = np.clip(3.0 * (temperatura - 15) + 0.2 * pessoas + rng.normal(0, 12 * rv, n), 0, None).round()
-        X = np.column_stack([temperatura.round(1), pessoas.round()])
-        cols = ["temperatura", "pessoas_na_praia"]
-    elif dataset_name == "gen_cardume":
-        # Agrupamento lúdico: separar peixinhos em cardumes (sem target).
-        X, y = make_blobs(n_samples=n, n_features=2, centers=n_clusters or 3, random_state=rs)
-        cols = ["velocidade", "direcao"]
-    elif dataset_name == "gen_cachorro":
-        # Regressão lúdica: descobrir o PESO do cachorro pela ALTURA dele.
-        # Faixas amigáveis: altura 20–70 cm, peso sempre >= 1 kg, com correlação
-        # positiva (cachorro mais alto tende a ser mais pesado) + um pouco de ruído.
-        import numpy as np
-        rng = np.random.RandomState(rs)
-        altura = rng.uniform(20, 70, n)
-        rv = ruido if ruido is not None else 1.0
-        peso = np.clip(0.6 * (altura - 15) + rng.normal(0, 3 * rv, n), 1, None).round(1)
-        X = altura.round(1).reshape(-1, 1)
-        y = peso
-        cols = ["altura_cm"]
-    else:
-        return None, None
-
-    df = pd.DataFrame(X, columns=cols)
-    # Clustering (blobs) nao expoe target; os demais sim.
-    if ds.tipo != DatasetType.CLUSTERING:
-        df["target"] = y
-    return df, None
-
-
-def _carregar_sklearn(dataset_name: str):
-    """Carrega um dataset do sklearn."""
-    from sklearn.datasets import (
-        load_iris, load_wine, load_breast_cancer, load_digits,
-        load_diabetes, fetch_california_housing
-    )
-    
-    loaders = {
-        "iris": load_iris,
-        "wine": load_wine,
-        "breast_cancer": load_breast_cancer,
-        "diabetes": load_diabetes,
-        "california_housing": fetch_california_housing,
-    }
-    
-    if dataset_name == "digits":
-        data = load_digits(as_frame=True)
-        df = data.frame
-        df['target'] = data.target
-        return df, None
-    
-    if dataset_name in loaders:
-        data = loaders[dataset_name](as_frame=True)
-        df = data.frame
-        # Retornar target_names se existir (para mapear inteiros para labels)
-        target_names = getattr(data, 'target_names', None)
-        return df, target_names
-    
-    return None, None
-
-
-def _carregar_uci(dataset_name: str, ds: DatasetConfig = None):
-    """Carrega um dataset do UCI via ucimlrepo, com cache em disco."""
-    uci_id = UCI_IDS.get(dataset_name)
-    if uci_id is None:
-        raise HTTPException(status_code=400, detail=f"Dataset UCI '{dataset_name}' nao configurado")
-
-    cache_path = CACHE_DIR / f"{dataset_name}.pkl"
-    if cache_path.exists():
-        try:
-            return pd.read_pickle(cache_path)
-        except Exception:
-            # Cache corrompido: ignora e rebaixa abaixo.
-            pass
-
-    from ucimlrepo import fetch_ucirepo
-    dataset = fetch_ucirepo(id=uci_id)
-    df = dataset.data.original
-
-    try:
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        df.to_pickle(cache_path)
-    except Exception:
-        # Falha ao gravar cache nao deve quebrar o request.
-        pass
-
-    return df
-
-
-def prewarm_uci_cache():
-    """Pre-baixa todos os datasets UCI para o cache em disco.
-
-    Pensado para rodar no startup do servidor: na primeira execucao baixa tudo;
-    nos restarts seguintes vira no-op rapido (cache ja em disco). Failsafe: uma
-    falha de rede em um dataset apenas registra log e segue para o proximo.
-    """
-    for nome in UCI_IDS:
-        cache_path = CACHE_DIR / f"{nome}.pkl"
-        if cache_path.exists():
-            continue
-        try:
-            _carregar_uci(nome)
-            logger.info("[cache UCI] dataset baixado para o cache: %s", nome)
-        except Exception as exc:
-            logger.warning("[cache UCI] falha ao pre-baixar '%s': %s", nome, exc)

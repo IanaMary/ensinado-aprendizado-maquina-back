@@ -8,6 +8,43 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-26j (desafio de montagem nasce de um dataset de exemplo)
+
+> Backend `master` **`<pendente>`** / Frontend `mestrado-iana` `<pendente>`. Sem migração
+> (campos novos do gabarito são opcionais; desafios antigos seguem valendo).
+
+### Adicionado
+- **A criação do desafio começa pela base.** `app/desafios/base_dados.py` monta o perfil de um
+  dataset de exemplo: **tarefa** derivada de `DatasetType` (mesmo vocabulário do gabarito),
+  **enunciado sugerido** (pergunta-guia + descrição + alvo) e as três características da base
+  (`faltantes`/`texto`/`escalas_diferentes`) **lidas do dataframe real** — antes eram caixas
+  marcadas à mão que podiam desmentir a base e tornar uma regra impossível de satisfazer.
+  Servido por `GET /toy_datasets/{id}/perfil-desafio` (professor/admin; carrega dataframe, com
+  cache e fallback conservador).
+- `gabarito.dataset` e `gabarito.sortear_pecas` (`app/schemas/turmas.py`). Com `dataset`
+  preenchido, o **servidor** deriva a `tarefa` (`_gabarito_com_dataset`) e recusa id
+  inexistente com `400`. Com `sortear_pecas: false`, valem as peças escolhidas pelo professor.
+- **`_garantir_minimo`** em `app/desafios/sorteio.py`: o tabuleiro sempre permite uma solução.
+  Completa lane exigida sem peça — ou sem peça compatível com a tarefa —, as famílias de
+  pré-processamento que a base exige, e a etapa de pré-proc quando exigida sem que a base peça
+  família nenhuma. Ignora `vetar` se o veto é o que impede a solução (em silêncio).
+- `GET .../tabuleiro` devolve `dataset_nome`: o aluno vê a base como chip no tabuleiro.
+
+### Corrigido
+- Marcar "Exigir a etapa de pré-processamento" numa base sem faltantes/texto produzia um
+  tabuleiro **sem nenhuma peça de pré-processamento** — `estrutura-minima` (peso 3) ficava
+  insatisfazível.
+
+### Refatorado
+- Carregadores de dataset (sklearn/UCI/geradores) saíram do router para
+  `app/models/dataset_loaders.py`, sem mudança de comportamento (o `400` do UCI não configurado
+  é preservado via `DatasetNaoConfigurado`). É o que permite inspecionar a base fora da coleta.
+
+### Notas
+- Testes: 473 passed, 1 skipped (novo `tests/test_desafio_dataset.py`, 24 casos).
+
+---
+
 ## 2026-07-26h (boas-vindas do tutor + entrada dos desafios + contas da banca)
 
 > Backend `master` **`<pendente>`** / Frontend `mestrado-iana` `<pendente>`.

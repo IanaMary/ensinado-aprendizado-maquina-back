@@ -21,6 +21,7 @@ from app.database import (
 )
 from app.desafios import avaliar_montagem, carregar_pecas, montar_tabuleiro
 from app.desafios.avaliacao import normalizar_montagem
+from app.desafios.base_dados import nome_do_dataset, tarefa_do_dataset
 from app.desafios.sorteio import papeis
 from app.metricas.resultado import chaves_metrica, valor_metrica
 from app.schemas.turmas import (
@@ -111,6 +112,26 @@ def _atividade_doc(a: dict, incluir_gabarito: bool = False) -> dict:
     }
     if incluir_gabarito:
         doc["gabarito"] = a.get("gabarito") or {}
+    return doc
+
+
+def _gabarito_com_dataset(gabarito) -> dict:
+    """Gabarito pronto para gravar, com a `tarefa` derivada do dataset de exemplo.
+
+    Quando o desafio nasce de um dataset, quem manda é o dataset: a tarefa vem de
+    `dataset_config` (mesmo vocabulário), não do que o cliente enviou — assim o enunciado, as
+    peças compatíveis e a rubrica não podem discordar entre si.
+    """
+    doc = (gabarito.model_dump() if gabarito else GabaritoMontagem().model_dump())
+    dataset = (doc.get("dataset") or "").strip()
+    if not dataset:
+        doc["dataset"] = None
+        return doc
+    tarefa = tarefa_do_dataset(dataset)
+    if tarefa is None:
+        raise HTTPException(status_code=400, detail=f"Dataset '{dataset}' não existe.")
+    doc["dataset"] = dataset
+    doc["tarefa"] = tarefa
     return doc
 
 
@@ -316,8 +337,7 @@ async def criar_atividade(turma_id: str, body: AtividadeCreate, usuario: dict = 
         "criado_em": datetime.now(timezone.utc),
     }
     if tipo == TIPO_MONTAGEM:
-        doc["gabarito"] = (body.gabarito.model_dump() if body.gabarito
-                           else GabaritoMontagem().model_dump())
+        doc["gabarito"] = _gabarito_com_dataset(body.gabarito)
     r = await atividades.insert_one(doc)
     doc["_id"] = r.inserted_id
     return _atividade_doc(doc, incluir_gabarito=True)
@@ -337,6 +357,8 @@ async def atualizar_atividade(turma_id: str, atividade_id: str, body: AtividadeU
     await _turma_do_professor(turma_id, usuario)
     aoid = validar_object_id(atividade_id, "atividade_id")
     campos = body.model_dump(exclude_none=True)  # CriterioRanking já vira dict aqui
+    if body.gabarito is not None:
+        campos["gabarito"] = _gabarito_com_dataset(body.gabarito)
     if campos:
         await atividades.update_one({"_id": aoid, "turma_id": turma_id}, {"$set": campos})
     a = await atividades.find_one({"_id": aoid})
@@ -406,9 +428,13 @@ async def obter_tabuleiro(turma_id: str, atividade_id: str, usuario: dict = Depe
     user_id = str(usuario["_id"])
     hist = await _historico_montagem(atividade_id, user_id)
     tabuleiro = await montar_tabuleiro(a, user_id, hist["tentativas"] + 1)
+    gabarito = a.get("gabarito") if isinstance(a.get("gabarito"), dict) else {}
     return {
         "atividade": {"id": str(a["_id"]), "titulo": a.get("titulo"),
                       "descricao": a.get("descricao"), "tipo": TIPO_MONTAGEM},
+        # Nome da base do enunciado (nunca o gabarito): o aluno precisa saber sobre quais
+        # dados está pensando. Resolvido do catálogo, sem carregar dataframe.
+        "dataset_nome": nome_do_dataset(gabarito.get("dataset") or ""),
         "tentativa": tabuleiro["tentativa"],
         "lanes": tabuleiro["lanes"],
         "pecas": [{"valor": p["valor"], "nome": p["nome"], "lane": p["lane"]}
