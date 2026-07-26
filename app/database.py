@@ -66,6 +66,9 @@ pipelines = db["pipelines"]
 # =========================
 turmas = db["turmas"]
 atividades = db["atividades"]
+# Submissões dos desafios de montagem (nota + regras). Coleção própria, SEM TTL: é
+# registro de avaliação, diferente da telemetria em `atividade_usuario` (expira em 90d).
+submissoes_montagem = db["submissoes_montagem"]
 
 # =========================
 # HISTÓRICO DE CHAT
