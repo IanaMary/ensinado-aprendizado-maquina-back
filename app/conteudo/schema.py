@@ -88,7 +88,8 @@ class Conteudo(BaseModel):
     resumo_basico: Optional[str] = None
     intuicao: Optional[str] = None
     exemplo: Optional[str] = None
-    # Avançado: código Python (renderizado colorido no front)
+    # Exibido nos DOIS níveis (o card mostra o código colorido também no Básico); o código
+    # mais longo, com validação cruzada e busca de hiperparâmetro, fica em `pratica.codigo`.
     exemplo_codigo: Optional[str] = None
     # Avançado: fórmula matemática
     formula: Optional[str] = None
