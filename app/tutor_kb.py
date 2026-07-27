@@ -1,6 +1,7 @@
 """Base de conhecimento do tutor (chatbot LLM).
 
-Monta, a partir do catálogo no banco (``db.modelos`` e ``db.metricas``), um resumo
+Monta, a partir do catálogo no banco (``db.modelos``, ``db.metricas`` e
+``db.pre_processamento``), um resumo
 compacto por item — título, explicação simples, quando usar/evitar, hiperparâmetros
 com seus padrões, fórmula e link da documentação. Esse material é injetado no
 contexto enviado ao modelo de linguagem, para que as respostas fiquem ancoradas no
@@ -21,8 +22,11 @@ _MAX_ITENS_DETALHADOS = 8
 # A ficha avançada é bem maior (descrição técnica inteira + efeito dos hiperparâmetros +
 # fundamentos/prática), então o teto do bloco acompanha: com 6000 o corte caía no meio da
 # primeira ficha e o aluno avançado recebia menos contexto que o básico.
-_MAX_BLOCO_CHARS = 6000
-_MAX_BLOCO_CHARS_AVANCADO = 9000
+# O índice sozinho (61 itens do catálogo, dos quais 46 entram aqui) já ocupa ~4,5 mil
+# caracteres: com o teto antigo sobrava espaço para uma ficha e meia. Ampliado — mesmo o teto
+# avançado equivale a ~4 mil tokens, folgado para a janela do modelo em uso.
+_MAX_BLOCO_CHARS = 8000
+_MAX_BLOCO_CHARS_AVANCADO = 14000
 # O texto básico é curto por natureza (mediana ~310 chars); o técnico chega a 936, então
 # cortá-lo em 500 mutilava justamente o que o aluno avançado veio buscar.
 _MAX_TEXTO_BASICO = 500
@@ -145,6 +149,15 @@ async def _carregar() -> dict:
                     grupo = f"métrica/{x.get('grupo')}" if x.get("grupo") else "métrica"
                     itens[valor] = {"conteudo": c, "grupo": grupo}
                     indice.append(f"- {c.get('titulo') or valor} (`{valor}`, {grupo})")
+            # Pré-processamento entrou depois: o aluno pergunta "por que escalar?" tanto quanto
+            # pergunta sobre o modelo, e agora esses itens também têm Fundamentos/Na prática.
+            # Gráficos e fontes de coleta seguem fora para não inchar o índice, que vai inteiro.
+            async for x in database.opcoes_pre_processamento.find({}, {"valor": 1, "conteudo": 1}):
+                c = x.get("conteudo")
+                valor = x.get("valor")
+                if c and valor:
+                    itens[valor] = {"conteudo": c, "grupo": "pré-processamento"}
+                    indice.append(f"- {c.get('titulo') or valor} (`{valor}`, pré-processamento)")
         except Exception:
             # Falha de banco: devolve o que tiver (possivelmente vazio).
             pass
@@ -184,20 +197,32 @@ async def bloco_kb(contexto) -> str:
         return ""
 
     nivel = _nivel_do_contexto(contexto)
+    teto = _MAX_BLOCO_CHARS_AVANCADO if nivel == NIVEL_AVANCADO else _MAX_BLOCO_CHARS
     partes = [
-        "Catálogo de modelos e métricas disponíveis na plataforma "
+        "Catálogo de modelos, métricas e pré-processadores disponíveis na plataforma "
         "(use estes nomes e padrões; não invente hiperparâmetros):",
         kb["indice"],
     ]
     detalhados = _valores_no_contexto(contexto, kb["valores"])
     if detalhados:
         partes.append("\nDetalhes dos itens em uso agora:")
+        # Corta por FICHA INTEIRA, não por caractere: meia ficha entrega ao modelo uma frase
+        # pela metade — e a ficha avançada é justamente a mais longa.
+        omitidos = 0
+        tamanho = sum(len(p) + 1 for p in partes)
         for v in detalhados:
             item = kb["itens"][v]
-            partes.append(_resumo_compacto(v, item["conteudo"], item["grupo"], nivel))
+            ficha = _resumo_compacto(v, item["conteudo"], item["grupo"], nivel)
+            if tamanho + len(ficha) + 1 > teto:
+                omitidos += 1
+                continue
+            partes.append(ficha)
+            tamanho += len(ficha) + 1
+        if omitidos:
+            partes.append(f"(+{omitidos} item(ns) do contexto omitidos por espaço)")
 
     bloco = "\n".join(partes)
-    teto = _MAX_BLOCO_CHARS_AVANCADO if nivel == NIVEL_AVANCADO else _MAX_BLOCO_CHARS
     if len(bloco) > teto:
+        # Só chega aqui se o índice sozinho estourar o teto.
         bloco = bloco[:teto] + "\n... (base de conhecimento truncada)"
     return bloco

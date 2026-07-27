@@ -8,6 +8,32 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-27b (conteúdo avançado nas 61 fichas + pré-processamento no chat)
+
+> Backend `master` **`<pendente>`**. Frontend inalterado. Exige rodar `seed_conteudo`.
+
+### Adicionado
+- **Fundamentos e Na prática nas 4 categorias que faltavam**: métricas (12), pré-processadores
+  (10), gráficos (10) e fontes de coleta (5) — com a leitura adaptada a cada uma (num gráfico,
+  `otimiza` é a pergunta que a figura responde; coleta não tem fórmula). Cobertura: **61/61**.
+- `formula` nos três encoders e nos gráficos que não tinham; a do card passou a ser
+  exatamente a do bloco (7 pré-processadores e 5 gráficos sincronizados).
+- **Pré-processamento entrou na base de conhecimento do chat** (`app/tutor_kb.py`): o aluno
+  pergunta "por que escalar?" tanto quanto pergunta sobre o modelo.
+
+### Corrigido
+- O corte por espaço da base de conhecimento descartava **meia ficha** (corte por caractere).
+  Agora descarta fichas inteiras e avisa quantas ficaram de fora. Tetos ampliados (8000 básico
+  / 14000 avançado) porque só o índice ocupa ~4,5 mil caracteres — com o teto antigo cabia
+  pouco mais de uma ficha.
+
+### Notas
+- CI passou a cobrar os blocos **por categoria** (`EXIGENCIAS_AVANCADO`), incluindo `import` no
+  código do bloco prático e espelho da fórmula.
+- Testes: 511 passed, 1 skipped.
+
+---
+
 ## 2026-07-27 (modo Avançado de verdade: nível no perfil, no chat e conteúdo à altura)
 
 > Backend `master` **`<pendente>`** / Frontend `mestrado-iana` `<pendente>`. Sem migração

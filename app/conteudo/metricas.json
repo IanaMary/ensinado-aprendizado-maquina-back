@@ -23,6 +23,18 @@
     "exemplo": "Verdadeiro = [gato, cão, gato, pássaro]; Previsto = [gato, gato, gato, pássaro]. Acertou 3 de 4 → acurácia = 3/4 = 0,75 (75%).",
     "exemplo_codigo": "from sklearn.metrics import accuracy_score\n\ny_true = [\"gato\", \"cao\", \"gato\", \"passaro\"]\ny_pred = [\"gato\", \"gato\", \"gato\", \"passaro\"]\n\nacc = accuracy_score(y_true, y_pred)\nprint(acc)  # 0.75 (acertou 3 de 4)",
     "formula": "Acurácia = (número de acertos) / (total de amostras)",
+    "fundamentos": {
+      "complexidade": "O(n): uma passada comparando y_real e y_previsto.",
+      "formula": "Acurácia = (número de acertos) / (total de amostras)",
+      "leitura": [
+        "Japkowicz & Shah (2011), Evaluating Learning Algorithms, cap. 3"
+      ],
+      "otimiza": "Premia acerto bruto: cada exemplo vale o mesmo, independentemente da classe.",
+      "pressupostos": [
+        "Classes com frequências parecidas — com 95% de uma classe, chutar sempre ela já dá 95%.",
+        "Errar uma classe custa o mesmo que errar outra."
+      ]
+    },
     "intuicao": "Imagine corrigir uma prova: você conta quantas questões a pessoa acertou e divide pelo total de questões. É simples e intuitivo, mas tem um perigo: se 95% das amostras são de uma única classe, um robô que sempre 'chuta' essa classe tem 95% de acurácia sem ter aprendido nada. Por isso a acurácia engana em dados desbalanceados.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.accuracy_score.html",
     "naoUsarQuando": [
@@ -30,6 +42,21 @@
       "Quando errar uma classe rara é muito mais grave que errar a comum (ex.: detectar doença).",
       "Quando você precisa saber QUE tipo de erro o modelo comete (use precisão, recall ou matriz de confusão)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Acurácia alta com classe rara é o erro clássico: compare com o chute na classe majoritária.",
+        "Não diz QUAL classe está errando — para isso, matriz de confusão."
+      ],
+      "codigo": "from sklearn.metrics import accuracy_score, balanced_accuracy_score\n\nprint(accuracy_score(y_teste, y_pred))\n# Com classes desbalanceadas, compare com a versão balanceada:\nprint(balanced_accuracy_score(y_teste, y_pred))",
+      "diagnostico": [
+        "Acurácia próxima da proporção da classe majoritária: o modelo não aprendeu nada.",
+        "Acurácia boa e recall da classe rara baixo: métrica escolhida esconde o problema."
+      ],
+      "tuning": [
+        "Em base desbalanceada, troque por balanced_accuracy ou F1 macro — não é ajuste, é escolha de métrica.",
+        "sample_weight quando alguns exemplos importam mais."
+      ]
+    },
     "quandoUsar": [
       "Quando as classes estão mais ou menos equilibradas (parecida quantidade de exemplos de cada uma).",
       "Para ter uma visão geral rápida e fácil de explicar do desempenho.",
@@ -78,6 +105,18 @@
     "exemplo": "No exemplo da documentação, agrupando dados gerados com make_blobs em 3 grupos com K-Means, calinski_harabasz_score(X, kmeans.labels_) deu cerca de 114,8 — um valor alto que indica grupos bem definidos.",
     "exemplo_codigo": "from sklearn.cluster import KMeans\nfrom sklearn.metrics import calinski_harabasz_score\nfrom sklearn.datasets import make_blobs\n\nX, _ = make_blobs(n_samples=100, centers=3, random_state=0)\nlabels = KMeans(n_clusters=3, n_init=\"auto\").fit_predict(X)\n\nch = calinski_harabasz_score(X, labels)\nprint(ch)  # >= 0; quanto maior, melhor",
     "formula": "Score = (dispersão ENTRE grupos / dispersão DENTRO dos grupos) x ((n_amostras - n_grupos) / (n_grupos - 1)). Ideia: quanto mais separados e compactos os grupos, maior o valor. Faixa: 0 ou mais; quanto maior, melhor.",
+    "fundamentos": {
+      "complexidade": "O(n·d + k·d): bem mais barato que a silhueta, por isso é útil em bases grandes.",
+      "formula": "Score = (dispersão ENTRE grupos / dispersão DENTRO dos grupos) x ((n_amostras - n_grupos) / (n_grupos - 1)). Ideia: quanto mais separados e compactos os grupos, maior o valor. Faixa: 0 ou mais; quanto maior, melhor.",
+      "leitura": [
+        "Caliński & Harabasz (1974), A dendrite method for cluster analysis"
+      ],
+      "otimiza": "Razão entre dispersão ENTRE grupos e dispersão DENTRO dos grupos, corrigida pelos graus de liberdade — maior é melhor.",
+      "pressupostos": [
+        "Grupos convexos e de dispersão parecida (baseia-se em variância).",
+        "Atributos na mesma escala."
+      ]
+    },
     "intuicao": "Pense em uma fração: em cima fica 'o quanto os grupos estão longe uns dos outros' e embaixo 'o quanto cada grupo está bagunçado por dentro'. Quanto mais separados e mais juntinhos, maior essa fração — logo, maior a nota.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.calinski_harabasz_score.html",
     "naoUsarQuando": [
@@ -85,6 +124,20 @@
       "Para comparar bases de tamanhos muito diferentes, pois a escala do valor muda e não há máximo fixo.",
       "Quando os grupos têm formatos muito irregulares ou alongados (a medida favorece grupos convexos e arredondados)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Tende a crescer com k em algumas bases: olhe a curva, não só o máximo.",
+        "Sensível à escala das colunas."
+      ],
+      "codigo": "from sklearn.metrics import calinski_harabasz_score\n\nfor k in range(2, 8):\n    rotulos = KMeans(n_clusters=k, n_init=\"auto\", random_state=42).fit_predict(X_escalado)\n    print(k, round(calinski_harabasz_score(X_escalado, rotulos)))",
+      "diagnostico": [
+        "Curva sempre subindo: use o cotovelo ou a silhueta como desempate.",
+        "Valores muito diferentes entre execuções: aumente n_init do k-means."
+      ],
+      "tuning": [
+        "Serve para comparar k na MESMA base — o valor absoluto não significa nada isolado."
+      ]
+    },
     "quandoUsar": [
       "Para comparar agrupamentos sem ter rótulos verdadeiros.",
       "Para ajudar a escolher o número de grupos: testa vários k e fica com o de maior índice.",
@@ -137,6 +190,18 @@
     "exemplo": "Verdadeiro = [2,0,2,2,0,1]; Previsto = [0,0,2,2,0,2]. A matriz fica [[2,0,0],[0,0,1],[1,0,2]]: a classe 0 foi sempre acertada (2 na diagonal), a classe 1 foi confundida com a 2, e a classe 2 teve 2 acertos e 1 confusão com a classe 0.",
     "exemplo_codigo": "from sklearn.metrics import confusion_matrix\n\ny_true = [2, 0, 2, 2, 0, 1]\ny_pred = [0, 0, 2, 2, 0, 2]\n\ncm = confusion_matrix(y_true, y_pred)\nprint(cm)  # linhas = verdadeiro, colunas = previsto",
     "formula": "C[i, j] = número de amostras com classe verdadeira i e classe prevista j  (linhas = verdadeiro, colunas = previsto; diagonal = acertos)",
+    "fundamentos": {
+      "complexidade": "O(n) para contar + O(classes²) de memória.",
+      "formula": "C[i, j] = número de amostras com classe verdadeira i e classe prevista j  (linhas = verdadeiro, colunas = previsto; diagonal = acertos)",
+      "leitura": [
+        "Stehman (1997), Selecting and Interpreting Measures of Thematic Classification Accuracy"
+      ],
+      "otimiza": "Não resume nada: mostra a distribuição completa dos acertos e das confusões, classe a classe.",
+      "pressupostos": [
+        "Predições e rótulos usam o mesmo conjunto de classes e a mesma ordem (labels=).",
+        "A leitura é por LINHA: cada linha é uma classe verdadeira."
+      ]
+    },
     "intuicao": "Em vez de um único número, ela mostra o PADRÃO dos erros. Você consegue ver, por exemplo, que o robô quase nunca erra 'pássaro', mas vive trocando 'gato' por 'cão'. É dela que saem a precisão, o recall e o F1 — todas essas métricas podem ser calculadas a partir das contagens da matriz.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.confusion_matrix.html",
     "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/classifier/confusion_matrix.html",
@@ -145,6 +210,21 @@
       "Com muitíssimas classes sem normalizar, pois a tabela fica difícil de ler.",
       "Para problemas de regressão (ela é só para classificação)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Trocar linha por coluna inverte falso positivo e falso negativo — erro de leitura mais comum.",
+        "Sem normalizar, a classe grande domina visualmente e esconde a pequena."
+      ],
+      "codigo": "from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay\n\ncm = confusion_matrix(y_teste, y_pred, labels=modelo.classes_)\nConfusionMatrixDisplay(cm, display_labels=modelo.classes_).plot()\n# normalizada por linha: proporção de acerto dentro de cada classe verdadeira\ncm_norm = confusion_matrix(y_teste, y_pred, labels=modelo.classes_, normalize=\"true\")",
+      "diagnostico": [
+        "Coluna inteira quase vazia: o modelo nunca prevê aquela classe.",
+        "Duas classes trocando entre si fora da diagonal: elas não são separáveis com os atributos atuais."
+      ],
+      "tuning": [
+        "normalize='true' quando as classes têm tamanhos muito diferentes.",
+        "labels= fixa a ordem das classes — sem isso a matriz pode sair reordenada."
+      ]
+    },
     "quandoUsar": [
       "Quando você quer enxergar QUAIS classes o modelo confunde, não só quantos erros ele comete.",
       "Para diagnosticar problemas em dados desbalanceados (ver onde os erros se concentram).",
@@ -193,6 +273,18 @@
     "exemplo": "No exemplo da documentação, com X = [[0, 1], [1, 1], [3, 4]] e labels = [0, 0, 1], davies_bouldin_score(X, labels) deu cerca de 0,12 — um valor baixo, indicando grupos bem separados.",
     "exemplo_codigo": "from sklearn.metrics import davies_bouldin_score\n\nX = [[0, 1], [1, 1], [3, 4]]\nlabels = [0, 0, 1]\n\ndb = davies_bouldin_score(X, labels)\nprint(db)  # >= 0; quanto MENOR, melhor (0 = ideal)",
     "formula": "Para cada grupo, calcula a maior similaridade com algum outro grupo (similaridade = (espalhamento do grupo A + espalhamento do grupo B) / distância entre os centros de A e B). O score é a média dessas piores similaridades. Faixa: 0 ou mais; MENOR é melhor (0 = ideal).",
+    "fundamentos": {
+      "complexidade": "O(n·d + k²·d).",
+      "formula": "Para cada grupo, calcula a maior similaridade com algum outro grupo (similaridade = (espalhamento do grupo A + espalhamento do grupo B) / distância entre os centros de A e B). O score é a média dessas piores similaridades. Faixa: 0 ou mais; MENOR é melhor (0 = ideal).",
+      "leitura": [
+        "Davies & Bouldin (1979), A Cluster Separation Measure, IEEE TPAMI"
+      ],
+      "otimiza": "Mede a pior semelhança entre pares de grupos (dispersão interna ÷ distância entre centros) — MENOR é melhor.",
+      "pressupostos": [
+        "Grupos representáveis por seus centróides.",
+        "Atributos na mesma escala."
+      ]
+    },
     "intuicao": "Para cada grupo, encontramos seu 'pior vizinho' — o grupo mais parecido/confundível com ele. Se até o pior vizinho está bem longe e os grupos são compactos, a confusão é pequena e a nota fica baixinha (perto de 0).",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.davies_bouldin_score.html",
     "naoUsarQuando": [
@@ -200,6 +292,20 @@
       "Quando os grupos têm formatos muito irregulares ou alongados (a medida favorece grupos convexos).",
       "Como única medida; vale cruzar com silhueta e Calinski-Harabasz, pois cada uma enxerga um aspecto diferente."
     ],
+    "pratica": {
+      "armadilhas": [
+        "É a única das três em que MENOR é melhor — inverter a leitura é o erro clássico.",
+        "Baseada em centróides: grupos alongados saem penalizados injustamente."
+      ],
+      "codigo": "from sklearn.metrics import davies_bouldin_score\n\nfor k in range(2, 8):\n    rotulos = KMeans(n_clusters=k, n_init=\"auto\", random_state=42).fit_predict(X_escalado)\n    print(k, round(davies_bouldin_score(X_escalado, rotulos), 3))  # menor é melhor",
+      "diagnostico": [
+        "Índice ótimo em k grande com silhueta ruim: os grupos estão sendo fatiados.",
+        "Valor muito alto: há grupos sobrepostos."
+      ],
+      "tuning": [
+        "Comparação entre k na mesma base; combine com silhueta antes de decidir."
+      ]
+    },
     "quandoUsar": [
       "Para avaliar agrupamentos sem rótulos verdadeiros.",
       "Para ajudar a escolher o número de grupos: testa vários k e fica com o de MENOR índice.",
@@ -252,6 +358,18 @@
     "exemplo": "Precisão = 0,8 e Recall = 0,5. F1 = 2 × (0,8 × 0,5) / (0,8 + 0,5) = 0,8 / 1,3 ≈ 0,62.",
     "exemplo_codigo": "from sklearn.metrics import f1_score\n\ny_true = [1, 0, 1, 1, 0, 1]\ny_pred = [1, 0, 0, 1, 0, 1]\n\nf1 = f1_score(y_true, y_pred, pos_label=1)\nprint(f1)  # equilibra precisao e recall (0 a 1)",
     "formula": "F1 = 2 × (Precisão × Recall) / (Precisão + Recall)  =  2·TP / (2·TP + FP + FN)",
+    "fundamentos": {
+      "complexidade": "O(n).",
+      "formula": "F1 = 2 × (Precisão × Recall) / (Precisão + Recall)  =  2·TP / (2·TP + FP + FN)",
+      "leitura": [
+        "Van Rijsbergen (1979), Information Retrieval, cap. 7"
+      ],
+      "otimiza": "Equilibra precisão e recall pela média harmônica — pune o desequilíbrio entre as duas.",
+      "pressupostos": [
+        "Falso positivo e falso negativo têm custos comparáveis (se não têm, use F-beta).",
+        "Interessa o desempenho na classe positiva, não nos verdadeiros negativos."
+      ]
+    },
     "intuicao": "A média harmônica é mais 'exigente' que a média comum: ela puxa o resultado para baixo quando precisão e recall são muito diferentes. Exemplo: precisão 1,0 e recall 0,0 dariam média comum 0,5, mas o F1 é 0. Ou seja, o F1 só é alto quando os DOIS são bons ao mesmo tempo — por isso é útil quando você quer um único número que equilibre os dois erros.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.f1_score.html",
     "naoUsarQuando": [
@@ -259,6 +377,21 @@
       "Quando você precisa explicar o resultado de forma muito simples (a acurácia é mais intuitiva).",
       "Como única métrica sem olhar a matriz de confusão para entender os erros por classe."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Média harmônica: uma das duas parcelas perto de zero derruba o F1 inteiro.",
+        "F1 ignora os verdadeiros negativos — em base muito desbalanceada isso é intencional, mas precisa ser dito."
+      ],
+      "codigo": "from sklearn.metrics import f1_score, fbeta_score\n\nprint(f1_score(y_teste, y_pred, average=\"macro\", zero_division=0))\n# quando perder positivo é pior que dar alarme falso (recall pesa mais):\nprint(fbeta_score(y_teste, y_pred, beta=2, average=\"macro\", zero_division=0))",
+      "diagnostico": [
+        "F1 macro bem abaixo do weighted: uma classe pequena está sendo ignorada.",
+        "F1 estável e acurácia oscilando: o problema está na distribuição, não no modelo."
+      ],
+      "tuning": [
+        "average ('macro' / 'weighted' / 'micro') muda a leitura em multiclasse — declare a escolha.",
+        "beta ≠ 1 (F-beta) quando os custos dos dois erros são diferentes."
+      ]
+    },
     "quandoUsar": [
       "Quando você quer UM número que equilibre precisão e recall.",
       "Em dados desbalanceados, onde a acurácia engana (use F1 com average='macro').",
@@ -311,6 +444,18 @@
     "exemplo": "y_real = [3, -0.5, 2, 7] e y_previsto = [2.5, 0.0, 2, 8] dão mean_absolute_error = 0.5. Os erros em tamanho são (0.5, 0.5, 0, 1), cuja média é 0.5.",
     "exemplo_codigo": "from sklearn.metrics import mean_absolute_error\n\ny_true = [3, -0.5, 2, 7]\ny_pred = [2.5, 0.0, 2, 8]\n\nmae = mean_absolute_error(y_true, y_pred)\nprint(mae)  # 0.5 (erro medio; menor e melhor)",
     "formula": "MAE = (1/n) × soma de |y_real − y_previsto|",
+    "fundamentos": {
+      "complexidade": "O(n).",
+      "formula": "MAE = (1/n) × soma de |y_real − y_previsto|",
+      "leitura": [
+        "Willmott & Matsuura (2005), Advantages of the MAE over the RMSE, Climate Research 30"
+      ],
+      "otimiza": "Erro médio em unidade do alvo, com todos os desvios pesando igual (é o erro da mediana).",
+      "pressupostos": [
+        "Erro de 10 é duas vezes pior que erro de 5 (relação linear de custo).",
+        "Outliers não devem dominar a avaliação."
+      ]
+    },
     "intuicao": "O MAE é o erro 'honesto e simples': pega cada erro, ignora o sinal e tira a média. Por tratar todos os erros de forma proporcional (errar por 10 conta 10, não 100), ele não é dominado por poucos pontos malucos.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_absolute_error.html",
     "naoUsarQuando": [
@@ -318,6 +463,21 @@
       "Para comparar problemas de unidades diferentes (use o R², adimensional).",
       "Como única métrica de otimização: não é derivável no zero (questão mais técnica)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Menor é melhor — inverter a ordem no ranking é engano comum.",
+        "Não é comparável entre bases de escalas diferentes; para isso, MAPE ou erro relativo."
+      ],
+      "codigo": "from sklearn.metrics import mean_absolute_error, median_absolute_error\n\nprint(mean_absolute_error(y_teste, y_pred))   # na unidade do alvo\nprint(median_absolute_error(y_teste, y_pred)) # ainda mais robusto a outliers",
+      "diagnostico": [
+        "MAE pequeno e RMSE grande: há poucos erros muito grandes (outliers).",
+        "MAE parecido com o desvio-padrão do alvo: o modelo não está ajudando."
+      ],
+      "tuning": [
+        "Escolher MAE em vez de MSE já é a decisão: muda o que o modelo (e você) considera erro grave.",
+        "scoring='neg_mean_absolute_error' na validação cruzada (o sklearn maximiza)."
+      ]
+    },
     "quandoUsar": [
       "Quando há outliers e você não quer que poucos pontos dominem a métrica.",
       "Quando quer explicar o erro de forma simples, na unidade real do alvo.",
@@ -366,6 +526,18 @@
     "exemplo": "y_real = [3, -0.5, 2, 7] e y_previsto = [2.5, 0.0, 2, 8] dão mean_squared_error = 0.375. Os erros (0.5, 0.5, 0, 1) ao quadrado são (0.25, 0.25, 0, 1), cuja média é 0.375.",
     "exemplo_codigo": "from sklearn.metrics import mean_squared_error\n\ny_true = [3, -0.5, 2, 7]\ny_pred = [2.5, 0.0, 2, 8]\n\nmse = mean_squared_error(y_true, y_pred)\nprint(mse)  # 0.375 (erros ao quadrado; menor e melhor)",
     "formula": "MSE = (1/n) × soma de (y_real − y_previsto)²",
+    "fundamentos": {
+      "complexidade": "O(n).",
+      "formula": "MSE = (1/n) × soma de (y_real − y_previsto)²",
+      "leitura": [
+        "Hastie, Tibshirani & Friedman (2009), The Elements of Statistical Learning, cap. 2"
+      ],
+      "otimiza": "Penaliza o erro ao quadrado: um desvio grande pesa desproporcionalmente mais que vários pequenos.",
+      "pressupostos": [
+        "Erros grandes são desproporcionalmente piores (se não são, use MAE).",
+        "É a perda que a regressão linear minimiza — coerente com ela por construção."
+      ]
+    },
     "intuicao": "O MSE é severo com erros grandes: como cada erro é elevado ao quadrado, errar por 10 conta 100, enquanto errar por 1 conta apenas 1. Use quando errar muito em um único ponto for realmente grave.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_squared_error.html",
     "naoUsarQuando": [
@@ -373,6 +545,20 @@
       "Quando você precisa de um número na mesma unidade do alvo (use RMSE).",
       "Para explicar o erro a leigos: 'reais ao quadrado' confunde."
     ],
+    "pratica": {
+      "armadilhas": [
+        "A unidade é o quadrado do alvo: 'MSE 400' não é 'erro de 400'.",
+        "Um único outlier pode dominar a métrica inteira."
+      ],
+      "codigo": "from sklearn.metrics import mean_squared_error\n\nmse = mean_squared_error(y_teste, y_pred)\nprint(mse, \"unidade do alvo AO QUADRADO\")",
+      "diagnostico": [
+        "MSE dominado por poucos pontos: veja o gráfico de resíduos antes de mexer no modelo.",
+        "MSE cai e MAE não: o modelo melhorou só nos casos extremos."
+      ],
+      "tuning": [
+        "Para reportar em unidade do alvo, use RMSE (a raiz) — o MSE serve para otimizar, não para comunicar."
+      ]
+    },
     "quandoUsar": [
       "Quando errar muito em poucos pontos é especialmente ruim e deve ser punido.",
       "Como função de perda durante o treino de muitos modelos (é fácil de derivar).",
@@ -425,6 +611,18 @@
     "exemplo": "O robô marcou 5 e-mails como spam; 4 eram spam de verdade e 1 era normal. Precisão = 4 / (4 + 1) = 0,8 (80%).",
     "exemplo_codigo": "from sklearn.metrics import precision_score\n\n# 1 = spam, 0 = normal\ny_true = [1, 0, 1, 1, 0, 0]\ny_pred = [1, 1, 1, 0, 0, 0]\n\np = precision_score(y_true, y_pred, pos_label=1)\nprint(p)  # dos previstos como spam, quantos eram spam",
     "formula": "Precisão = TP / (TP + FP)  (acertos da classe ÷ tudo que foi previsto como a classe)",
+    "fundamentos": {
+      "complexidade": "O(n).",
+      "formula": "Precisão = TP / (TP + FP)  (acertos da classe ÷ tudo que foi previsto como a classe)",
+      "leitura": [
+        "Powers (2011), Evaluation: From Precision, Recall and F-Measure to ROC"
+      ],
+      "otimiza": "Premia não dar alarme falso: das vezes que o modelo disse 'é da classe', quantas acertou.",
+      "pressupostos": [
+        "Existe um custo real em errar para mais (falso positivo).",
+        "A classe positiva está definida sem ambiguidade (pos_label)."
+      ]
+    },
     "intuicao": "Precisão foca nos FALSOS ALARMES. Se o modelo diz 'spam' para muitos e-mails que na verdade são normais, a precisão cai. Ter precisão alta significa: quando ele dá o alarme, geralmente é verdade. Existe um equilíbrio com o recall: para ter precisão muito alta, o modelo tende a só dizer 'sim' quando tem muita certeza, e aí pode deixar passar casos verdadeiros (recall menor).",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_score.html",
     "naoUsarQuando": [
@@ -432,6 +630,21 @@
       "Sozinha em dados desbalanceados sem olhar também o recall e a matriz de confusão.",
       "Sem definir average em problemas multiclasse (o padrão 'binary' não serve para mais de 2 classes)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Prever a classe positiva pouquíssimas vezes infla a precisão sem valor prático.",
+        "zero_division: sem nenhuma predição positiva, a métrica é indefinida (0 por convenção)."
+      ],
+      "codigo": "from sklearn.metrics import precision_score\n\n# binário\nprint(precision_score(y_teste, y_pred, pos_label=1))\n# multiclasse: escolha explícita da agregação\nprint(precision_score(y_teste, y_pred, average=\"macro\", zero_division=0))",
+      "diagnostico": [
+        "Precisão alta e recall baixíssimo: o modelo virou conservador demais — baixe o limiar.",
+        "Precisão muda muito entre 'macro' e 'weighted': há classe rara indo mal."
+      ],
+      "tuning": [
+        "average muda o número: 'macro' trata classes igualmente, 'weighted' pondera por frequência.",
+        "O limiar de decisão (predict_proba > t) troca precisão por recall."
+      ]
+    },
     "quandoUsar": [
       "Quando o custo de um FALSO ALARME (falso positivo) é alto, como marcar um e-mail importante como spam.",
       "Quando você quer que cada 'sim' do modelo seja muito confiável.",
@@ -484,6 +697,18 @@
     "exemplo": "y_real = [3, -0.5, 2, 7] e y_previsto = [2.5, 0.0, 2, 8] dão r2_score ≈ 0.949 (quase perfeito). Já y_real = [1, 2, 3] com y_previsto = [3, 2, 1] dá R² = -3.0 (muito pior que chutar a média).",
     "exemplo_codigo": "from sklearn.metrics import r2_score\n\ny_true = [3, -0.5, 2, 7]\ny_pred = [2.5, 0.0, 2, 8]\n\nr2 = r2_score(y_true, y_pred)\nprint(r2)  # ~0.949 (1.0 e perfeito; pode ser negativo)",
     "formula": "R² = 1 − (SQ_res / SQ_tot), onde SQ_res = soma de (y_real − y_previsto)² e SQ_tot = soma de (y_real − média_de_y)²",
+    "fundamentos": {
+      "complexidade": "O(n).",
+      "formula": "R² = 1 − (SQ_res / SQ_tot), onde SQ_res = soma de (y_real − y_previsto)² e SQ_tot = soma de (y_real − média_de_y)²",
+      "leitura": [
+        "Draper & Smith (1998), Applied Regression Analysis, cap. 1"
+      ],
+      "otimiza": "Compara o modelo com o 'chute da média': quanto da variação do alvo ele explica.",
+      "pressupostos": [
+        "A média do treino é uma referência sensata — R² = 0 significa empatar com ela.",
+        "Comparações de R² só valem dentro da MESMA base (não é escala absoluta de qualidade)."
+      ]
+    },
     "intuicao": "Pense numa competição: o adversário base é o 'chute da média'. O R² responde 'quanto da bagunça dos dados o meu modelo conseguiu organizar?'. Perto de 1, organizou quase tudo. Perto de 0, não fez melhor que o chute. Negativo, atrapalhou.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.r2_score.html",
     "naoUsarQuando": [
@@ -491,6 +716,22 @@
       "Quando o alvo é quase constante (a fórmula fica instável; veja force_finite).",
       "Como única métrica: um R² alto pode esconder erros grandes em poucos pontos."
     ],
+    "pratica": {
+      "armadilhas": [
+        "R² negativo é possível e significa pior que prever a média.",
+        "R² sempre sobe ao acrescentar atributos, mesmo inúteis — por isso valide fora do treino.",
+        "R² alto não garante que a relação seja linear: olhe os resíduos."
+      ],
+      "codigo": "from sklearn.metrics import r2_score\nfrom sklearn.model_selection import cross_val_score\n\nprint(r2_score(y_teste, y_pred))\n# R² por validação cruzada é mais honesto que o de uma única divisão\nprint(cross_val_score(modelo, X, y, cv=5, scoring=\"r2\").mean())",
+      "diagnostico": [
+        "R² ótimo no treino e ruim no teste: sobreajuste.",
+        "R² perto de 0: o modelo não está achando sinal — reveja os atributos."
+      ],
+      "tuning": [
+        "Não se ajusta: o que muda o R² é o modelo e os atributos.",
+        "Para comparar modelos com números diferentes de atributos, olhe também o R² ajustado."
+      ]
+    },
     "quandoUsar": [
       "Para ter uma nota geral e fácil de comparar entre modelos de regressão.",
       "Quando você quer uma medida sem unidade, que vai (idealmente) de 0 a 1.",
@@ -543,6 +784,18 @@
     "exemplo": "Havia 10 fotos de gato. O robô encontrou 8 delas (e perdeu 2). Recall = 8 / (8 + 2) = 0,8 (80%).",
     "exemplo_codigo": "from sklearn.metrics import recall_score\n\n# 1 = gato, 0 = nao-gato\ny_true = [1, 1, 1, 1, 0, 0]\ny_pred = [1, 1, 0, 1, 0, 0]\n\nr = recall_score(y_true, y_pred, pos_label=1)\nprint(r)  # dos gatos reais, quantos foram encontrados",
     "formula": "Recall = TP / (TP + FN)  (acertos da classe ÷ tudo que era de verdade da classe)",
+    "fundamentos": {
+      "complexidade": "O(n).",
+      "formula": "Recall = TP / (TP + FN)  (acertos da classe ÷ tudo que era de verdade da classe)",
+      "leitura": [
+        "Powers (2011), Evaluation: From Precision, Recall and F-Measure to ROC"
+      ],
+      "otimiza": "Premia não deixar passar: dos que eram da classe, quantos o modelo encontrou.",
+      "pressupostos": [
+        "Perder um caso positivo é o erro caro (diagnóstico, fraude, falha).",
+        "Rótulos verdadeiros confiáveis — recall mede cobertura sobre eles."
+      ]
+    },
     "intuicao": "Recall foca nos CASOS PERDIDOS (falsos negativos). Se há 10 doentes e o exame só detecta 7, o recall é 0,7 — três doentes passaram despercebidos. Ter recall alto significa: o modelo dificilmente deixa um caso verdadeiro escapar. O preço é o equilíbrio com a precisão: para 'pegar todo mundo', o modelo tende a dizer 'sim' com mais facilidade, e aí pode dar mais falsos alarmes (precisão menor).",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.recall_score.html",
     "naoUsarQuando": [
@@ -550,6 +803,21 @@
       "Sozinho, pois um modelo que diz 'sim' para tudo tem recall 1 mas precisão péssima.",
       "Sem definir average em problemas com mais de duas classes."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Recall 100% é trivial: basta prever tudo como positivo — olhe sempre junto com a precisão.",
+        "Em multiclasse, 'micro' esconde a classe rara; prefira 'macro' quando ela importa."
+      ],
+      "codigo": "from sklearn.metrics import recall_score, precision_recall_curve\nimport numpy as np\n\nprob = modelo.predict_proba(X_teste)[:, 1]\nprec, rec, limiares = precision_recall_curve(y_teste, prob)\n# menor limiar que garante recall >= 0.9\nalvo = limiares[np.argmax(rec[:-1] >= 0.9)]\nprint(\"limiar:\", alvo, \"recall:\", recall_score(y_teste, prob >= alvo))",
+      "diagnostico": [
+        "Recall alto e precisão no chão: limiar baixo demais.",
+        "Recall bom no treino e ruim no teste: a classe rara tem poucos exemplos para generalizar."
+      ],
+      "tuning": [
+        "O limiar é o controle direto: baixá-lo aumenta recall e derruba precisão.",
+        "class_weight='balanced' no modelo costuma subir recall da classe rara."
+      ]
+    },
     "quandoUsar": [
       "Quando deixar passar um caso verdadeiro (falso negativo) é grave, como não detectar uma doença ou uma fraude.",
       "Quando o objetivo é 'não perder nenhum' caso da classe importante.",
@@ -598,6 +866,18 @@
     "exemplo": "y_real = [3, -0.5, 2, 7] e y_previsto = [2.5, 0.0, 2, 8] dão root_mean_squared_error ≈ 0.612. É exatamente a raiz quadrada do MSE 0.375 (√0.375 ≈ 0.612).",
     "exemplo_codigo": "from sklearn.metrics import root_mean_squared_error\n\ny_true = [3, -0.5, 2, 7]\ny_pred = [2.5, 0.0, 2, 8]\n\nrmse = root_mean_squared_error(y_true, y_pred)\nprint(rmse)  # ~0.612, na mesma unidade do alvo",
     "formula": "RMSE = raiz quadrada do MSE = √[ (1/n) × soma de (y_real − y_previsto)² ]",
+    "fundamentos": {
+      "complexidade": "O(n).",
+      "formula": "RMSE = raiz quadrada do MSE = √[ (1/n) × soma de (y_real − y_previsto)² ]",
+      "leitura": [
+        "Chai & Draxler (2014), Root mean square error (RMSE) or mean absolute error (MAE)?"
+      ],
+      "otimiza": "Mesma penalização quadrática do MSE, trazida de volta à unidade do alvo pela raiz.",
+      "pressupostos": [
+        "Erros grandes pesam mais que pequenos.",
+        "Interessa reportar o erro na unidade original (reais, graus, quilos)."
+      ]
+    },
     "intuicao": "O RMSE responde 'em média, por quanto o robô erra, na unidade real?'. Por vir do MSE, ele ainda pune mais os erros grandes que o MAE, mas o resultado já está pronto para ler em reais, metros, graus etc.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.root_mean_squared_error.html",
     "naoUsarQuando": [
@@ -605,6 +885,20 @@
       "Para comparar problemas de unidades diferentes (use o R², que é adimensional).",
       "Quando você precisa de uma perda derivável para otimização (aí o MSE é mais comum)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "RMSE ≥ MAE sempre; a distância entre os dois mede a presença de erros extremos.",
+        "Não é comparável entre bases de escalas diferentes."
+      ],
+      "codigo": "from sklearn.metrics import root_mean_squared_error  # sklearn >= 1.4\n\nprint(root_mean_squared_error(y_teste, y_pred))\n# em versões antigas: mean_squared_error(y_teste, y_pred, squared=False)",
+      "diagnostico": [
+        "RMSE bem maior que o MAE: investigue outliers antes de trocar de modelo.",
+        "RMSE ≈ desvio-padrão do alvo: o modelo não está explicando nada."
+      ],
+      "tuning": [
+        "Compare sempre com o desvio-padrão do alvo: RMSE acima dele é pior que prever a média."
+      ]
+    },
     "quandoUsar": [
       "Quando você quer o erro na mesma unidade do alvo, fácil de explicar para alunos.",
       "Quando erros grandes ainda devem pesar mais que os pequenos.",
@@ -658,6 +952,18 @@
     "exemplo": "Você usa K-Means para separar flores em 3 grupos e roda silhouette_score(X, labels). Se der 0,7, os grupinhos estão bem definidos e separados. Se der 0,1, os grupos estão quase em cima uns dos outros.",
     "exemplo_codigo": "from sklearn.cluster import KMeans\nfrom sklearn.metrics import silhouette_score\nfrom sklearn.datasets import make_blobs\n\nX, _ = make_blobs(n_samples=100, centers=3, random_state=0)\nlabels = KMeans(n_clusters=3, n_init=\"auto\").fit_predict(X)\n\ns = silhouette_score(X, labels)\nprint(s)  # -1 a 1; perto de 1 e melhor",
     "formula": "Para cada ponto: s = (b - a) / max(a, b), onde a = distância média dentro do próprio grupo e b = distância média até o grupo vizinho mais próximo. O silhouette_score é a média de s para todas as amostras. Faixa: de -1 a 1.",
+    "fundamentos": {
+      "complexidade": "O(n²·d) na versão exata (matriz de distâncias); use silhouette_score(..., sample_size=…) em bases grandes.",
+      "formula": "Para cada ponto: s = (b - a) / max(a, b), onde a = distância média dentro do próprio grupo e b = distância média até o grupo vizinho mais próximo. O silhouette_score é a média de s para todas as amostras. Faixa: de -1 a 1.",
+      "leitura": [
+        "Rousseeuw (1987), Silhouettes: a graphical aid to the interpretation of cluster analysis"
+      ],
+      "otimiza": "Premia grupos compactos e bem separados: compara a distância interna com a do grupo vizinho mais próximo.",
+      "pressupostos": [
+        "A distância usada faz sentido para os dados (e as colunas estão na mesma escala).",
+        "Grupos aproximadamente convexos — favorece o formato que o k-means produz."
+      ]
+    },
     "intuicao": "Um ponto está 'bem agrupado' quando seus vizinhos de grupo estão pertinho dele e o grupo vizinho mais próximo está bem longe. A silhueta de cada ponto compara essas duas distâncias; a média de todos diz se o agrupamento inteiro ficou bom.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.silhouette_score.html",
     "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/cluster/silhouette.html",
@@ -666,6 +972,22 @@
       "Em bases muito grandes sem usar sample_size, pois calcular as distâncias entre todos os pares fica lento e pesado.",
       "Quando os grupos têm formatos muito alongados ou densidades muito diferentes (a medida favorece grupos arredondados e convexos)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Sem padronizar, a silhueta mede a escala das colunas, não a estrutura.",
+        "Valores negativos indicam pontos atribuídos ao grupo errado.",
+        "Favorece grupos esféricos: para DBSCAN, complemente com inspeção visual."
+      ],
+      "codigo": "from sklearn.metrics import silhouette_score, silhouette_samples\n\nfor k in range(2, 8):\n    rotulos = KMeans(n_clusters=k, n_init=\"auto\", random_state=42).fit_predict(X_escalado)\n    print(k, silhouette_score(X_escalado, rotulos))\n# por ponto, para achar quem está no grupo errado:\ns = silhouette_samples(X_escalado, rotulos)",
+      "diagnostico": [
+        "Silhueta perto de 0 para todo k: provavelmente não há estrutura de grupos.",
+        "Um grupo com silhueta média negativa: ele está sobreposto a outro."
+      ],
+      "tuning": [
+        "Comparar k é o uso principal — a métrica existe para escolher o número de grupos.",
+        "metric= deve ser a mesma distância usada no agrupamento."
+      ]
+    },
     "quandoUsar": [
       "Para avaliar a qualidade de um agrupamento sem ter rótulos verdadeiros.",
       "Para ajudar a escolher o número de grupos (k): testa vários k e fica com o de maior silhueta.",

@@ -101,3 +101,13 @@ class TestNivelDaFicha:
         assert tutor_kb._nivel_do_contexto({}) == "basico"
         assert tutor_kb._nivel_do_contexto(None) == "basico"
         assert tutor_kb._nivel_do_contexto("texto solto") == "basico"
+
+
+class TestEscopoDoCatalogo:
+    def test_pre_processamento_entra_na_base(self):
+        """O aluno pergunta 'por que escalar?' tanto quanto pergunta sobre o modelo — e agora
+        esses itens também têm Fundamentos/Na prática para responder."""
+        import inspect
+        fonte = inspect.getsource(tutor_kb._carregar)
+        assert "opcoes_pre_processamento" in fonte
+        assert "opcoes_modelos" in fonte and "opcoes_metricas" in fonte

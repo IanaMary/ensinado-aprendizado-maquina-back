@@ -32,12 +32,39 @@
     "exemplo": "nome,idade,nota,passou\nAna,15,8.5,sim\nBruno,16,4.0,nao\nClara,15,7.2,sim",
     "exemplo_codigo": "import pandas as pd\n\ndf = pd.read_csv(\"alunos.csv\", sep=\",\", encoding=\"utf-8\")\nprint(df.head())\nprint(df.columns.tolist())  # nomes dos atributos\nprint(df.shape)             # (amostras, atributos)",
     "formula": "",
+    "fundamentos": {
+      "complexidade": "Leitura O(bytes do arquivo); memória proporcional à base já convertida em tipos.",
+      "leitura": [
+        "RFC 4180 — Common Format and MIME Type for CSV Files"
+      ],
+      "otimiza": "Lê texto separado por delimitador, inferindo tipos por coluna — o formato mais portátil que existe.",
+      "pressupostos": [
+        "Um delimitador consistente (vírgula ou ponto e vírgula) e uma codificação declarada (UTF-8).",
+        "Números usam o mesmo separador decimal em todas as linhas."
+      ]
+    },
     "intuicao": "CSV é o jeito mais simples e universal de guardar uma tabela. Como é só texto com separadores, abre em qualquer ferramenta e é rápido de ler, mesmo com muitas linhas.",
     "link_sklearn": "https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html",
     "naoUsarQuando": [
       "Quando os dados têm estrutura aninhada/hierárquica (listas dentro de campos) — prefira JSON.",
       "Quando você precisa guardar tipos de dados e formatação juntos."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Separador errado carrega tudo numa coluna só.",
+        "Encoding errado transforma acentos em caracteres estranhos (tente latin-1).",
+        "Coluna numérica lida como texto por causa de vírgula decimal ou espaço."
+      ],
+      "codigo": "import pandas as pd\n\ndf = pd.read_csv(\"dados.csv\", sep=\";\", decimal=\",\", encoding=\"utf-8\",\n                 na_values=[\"\", \"NA\", \"-\"])\nprint(df.dtypes)\nprint(df.isna().sum())",
+      "diagnostico": [
+        "df.dtypes com 'object' onde deveria haver número: separador decimal.",
+        "Uma coluna só no dataframe: separador incorreto."
+      ],
+      "tuning": [
+        "sep e decimal são o par que resolve 90% dos problemas de CSV brasileiro (';' e ',').",
+        "na_values declara o que conta como vazio; dtype força o tipo de colunas problemáticas."
+      ]
+    },
     "quandoUsar": [
       "Quando você quer um formato leve, rápido e que abre em qualquer programa.",
       "Quando os dados vêm de exportações de bancos de dados, planilhas ou sites.",
@@ -91,12 +118,40 @@
     "exemplo": "Uma tabela de flores com colunas 'comprimento_petala', 'largura_petala' e 'especie' (o alvo). Cada linha é uma flor medida.",
     "exemplo_codigo": "import pandas as pd\nfrom sklearn.datasets import load_iris\n\n# Dataset pronto: vira uma tabela (DataFrame)\ndados = load_iris(as_frame=True)\ndf = dados.frame\nprint(df.head())        # 5 primeiras amostras\nprint(df.shape)         # (linhas, colunas)",
     "formula": "",
+    "fundamentos": {
+      "complexidade": "Custo de leitura O(linhas × colunas); a base inteira é mantida em memória.",
+      "leitura": [
+        "Géron (2022), Hands-On Machine Learning, cap. 2 (end-to-end project)"
+      ],
+      "otimiza": "Traz os dados para dentro do pipeline definindo três coisas: o que prever (alvo), com o quê (atributos) e como avaliar (divisão treino/teste).",
+      "pressupostos": [
+        "Uma linha = um exemplo; uma coluna = uma característica; a primeira linha traz os nomes.",
+        "O conjunto de teste representa os dados futuros — por isso ele não participa de nenhum ajuste."
+      ]
+    },
     "intuicao": "Sem dados não há aprendizado de máquina: o modelo só sabe o que os exemplos mostram. Quanto mais representativos e limpos os dados, melhor a IA generaliza para casos novos.",
     "link_sklearn": "https://scikit-learn.org/stable/datasets.html",
     "naoUsarQuando": [
       "Evite dados com muitas colunas vazias ou inconsistentes sem antes limpar.",
       "Evite planilhas com cabeçalhos extras ou células mescladas."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Qualquer ajuste (escala, imputação, seleção) feito antes da divisão é vazamento.",
+        "Dados temporais não podem ser embaralhados — a divisão tem de respeitar o tempo.",
+        "Identificadores (id, nome) como atributo fazem o modelo 'acertar' decorando."
+      ],
+      "codigo": "from sklearn.model_selection import train_test_split\n\nX = df.drop(columns=[alvo])\ny = df[alvo]\nX_treino, X_teste, y_treino, y_teste = train_test_split(\n    X, y, test_size=0.3, random_state=42, stratify=y)  # stratify em classificação",
+      "diagnostico": [
+        "Acurácia perto de 100% já na primeira tentativa: procure vazamento antes de comemorar.",
+        "Classe ausente no teste: a divisão não foi estratificada."
+      ],
+      "tuning": [
+        "test_size: 20–30% é o usual; bases pequenas pedem validação cruzada em vez de divisão única.",
+        "stratify=y em classificação preserva a proporção das classes.",
+        "random_state fixo para o resultado ser reproduzível."
+      ]
+    },
     "quandoUsar": [
       "Sempre — é o ponto de partida de qualquer pipeline de ML.",
       "Use um arquivo quando tiver seus próprios dados; um dataset pronto para praticar."
@@ -149,12 +204,38 @@
     "exemplo": "Iris: 150 amostras de flores, 4 atributos (comprimento e largura de sépala e pétala) e o rótulo 'espécie' (setosa, versicolor, virginica). Cada linha = uma flor; cada coluna = uma medida.",
     "exemplo_codigo": "from sklearn.datasets import load_iris\nimport pandas as pd\n\ndados = load_iris()\ndf = pd.DataFrame(dados.data, columns=dados.feature_names)\ndf[\"especie\"] = dados.target  # rótulo a prever\nprint(df.head())\nprint(df.shape)  # (amostras, atributos)",
     "formula": "",
+    "fundamentos": {
+      "complexidade": "Carga imediata (sklearn/geradores) ou leitura de cache local (UCI).",
+      "leitura": [
+        "Dua & Graff (2019), UCI Machine Learning Repository; documentação do scikit-learn, Toy datasets"
+      ],
+      "otimiza": "Entrega uma base já curada e documentada, para o foco ficar no pipeline e não na limpeza.",
+      "pressupostos": [
+        "São bases didáticas: pequenas, limpas e com relação conhecida — o mundo real não é assim.",
+        "Resultados nelas não se transferem automaticamente para dados próprios."
+      ]
+    },
     "intuicao": "Datasets prontos tiram o trabalho de coletar e limpar: os dados já estão em formato de tabela, com atributos e rótulos definidos. Ótimos para focar no aprendizado do modelo, não na preparação dos dados.",
     "link_sklearn": "https://scikit-learn.org/stable/datasets.html",
     "naoUsarQuando": [
       "Quando o objetivo é resolver um problema real com os seus próprios dados.",
       "Quando você quer praticar a coleta e a limpeza de dados bagunçados."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Iris e Wine são fáceis demais: quase todo modelo acerta e a comparação perde graça.",
+        "Acurácia altíssima numa base didática não diz nada sobre o modelo em dados reais."
+      ],
+      "codigo": "from sklearn.datasets import load_iris\n\ndados = load_iris(as_frame=True)\ndf = dados.frame\nprint(df.groupby(\"target\").size())   # veja o balanceamento antes de treinar",
+      "diagnostico": [
+        "Todos os modelos empatando perto de 100%: troque para uma base mais difícil.",
+        "Silhueta ótima em qualquer k: a base gerada tem grupos separados demais."
+      ],
+      "tuning": [
+        "Escolher a base é a decisão pedagógica: classificação, regressão ou agrupamento mudam todo o pipeline.",
+        "Nos datasets gerados, n_amostras/ruído controlam a dificuldade do exercício."
+      ]
+    },
     "quandoUsar": [
       "Quando você quer aprender ou testar um modelo rapidamente, sem buscar dados.",
       "Quando precisa de um exemplo limpo e confiável para comparar algoritmos.",
@@ -215,12 +296,38 @@
     "exemplo": "[\n  {\"nome\": \"Ana\",   \"idade\": 15, \"nota\": 8.5, \"passou\": \"sim\"},\n  {\"nome\": \"Bruno\", \"idade\": 16, \"nota\": 4.0, \"passou\": \"nao\"}\n]",
     "exemplo_codigo": "import pandas as pd\n\n# lista de objetos -> orient='records'\ndf = pd.read_json(\"alunos.json\", orient=\"records\")\nprint(df.head())\nprint(df.shape)  # (amostras, atributos)",
     "formula": "",
+    "fundamentos": {
+      "complexidade": "Leitura O(bytes); o achatamento pode multiplicar as colunas.",
+      "leitura": [
+        "ECMA-404, The JSON Data Interchange Standard"
+      ],
+      "otimiza": "Lê estruturas aninhadas (listas de objetos) e as achata numa tabela.",
+      "pressupostos": [
+        "Os registros têm as mesmas chaves (ou a ausência tem significado).",
+        "O aninhamento pode ser normalizado em colunas."
+      ]
+    },
     "intuicao": "JSON descreve dados como fichas com etiquetas (chaves) e seus valores. Quando é uma lista de fichas iguais, cada ficha vira uma linha e cada etiqueta vira uma coluna.",
     "link_sklearn": "https://pandas.pydata.org/docs/reference/api/pandas.read_json.html",
     "naoUsarQuando": [
       "Quando a estrutura é muito aninhada e complexa de achatar em tabela.",
       "Quando uma tabela simples bastaria — um CSV seria mais direto."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Registros com chaves diferentes geram colunas cheias de NaN.",
+        "Listas dentro de campos viram objetos Python, não colunas — o modelo não lida com isso."
+      ],
+      "codigo": "import pandas as pd, json\n\nwith open(\"dados.json\", encoding=\"utf-8\") as f:\n    bruto = json.load(f)\ndf = pd.json_normalize(bruto, sep=\"_\")   # achata objetos aninhados\nprint(df.columns.tolist()[:10])",
+      "diagnostico": [
+        "Colunas com nome tipo 'a_b_c': o achatamento funcionou (e a profundidade era alta).",
+        "Muitos NaN logo após carregar: esquema heterogêneo entre registros."
+      ],
+      "tuning": [
+        "json_normalize com record_path/meta quando há listas dentro dos registros.",
+        "lines=True em arquivos JSON Lines (um objeto por linha)."
+      ]
+    },
     "quandoUsar": [
       "Quando os dados vêm de uma API web ou aplicativo, formato nativo da internet.",
       "Quando há estrutura aninhada/hierárquica que o CSV não representa bem.",
@@ -275,12 +382,39 @@
     "exemplo": "Aba 'alunos':\n| nome  | idade | nota | passou |\n| Ana   | 15    | 8.5  | sim    |\n| Bruno | 16    | 4.0  | nao    |",
     "exemplo_codigo": "import pandas as pd\n\n# precisa do openpyxl instalado: pip install openpyxl\ndf = pd.read_excel(\"alunos.xlsx\", sheet_name=\"alunos\", header=0)\nprint(df.head())\nprint(df.shape)  # (linhas/amostras, colunas/atributos)",
     "formula": "",
+    "fundamentos": {
+      "complexidade": "Mais lento que CSV (o arquivo é um zip com XML); memória semelhante depois de carregado.",
+      "leitura": [
+        "Documentação do pandas, IO tools — Excel files"
+      ],
+      "otimiza": "Lê planilhas preservando tipos que o Excel já resolveu (datas, números), aba por aba.",
+      "pressupostos": [
+        "Os dados formam uma tabela retangular, sem títulos, células mescladas ou totais no meio.",
+        "A aba certa é conhecida (ou é a primeira)."
+      ]
+    },
     "intuicao": "Uma planilha já está quase no formato de tabela que o ML adora: linhas viram exemplos e colunas viram características. O trabalho é só apontar a aba e a linha do cabeçalho certos.",
     "link_sklearn": "https://pandas.pydata.org/docs/reference/api/pandas.read_excel.html",
     "naoUsarQuando": [
       "Quando o arquivo é gigante (milhões de linhas), pois .xlsx fica lento — prefira CSV.",
       "Quando a planilha tem células mescladas, fórmulas e formatação que bagunçam a tabela."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Células mescladas viram NaN espalhados.",
+        "Linha de totais no fim entra como se fosse um exemplo.",
+        "Fórmulas são lidas pelo VALOR salvo — se a planilha não foi recalculada, o valor está velho."
+      ],
+      "codigo": "import pandas as pd\n\ndf = pd.read_excel(\"dados.xlsx\", sheet_name=0, header=0)\n# planilha com título nas primeiras linhas:\n# df = pd.read_excel(\"dados.xlsx\", skiprows=3)\nprint(df.head())",
+      "diagnostico": [
+        "Primeiras linhas com 'Unnamed: 0': o cabeçalho está na linha errada.",
+        "Última linha com valores muito acima dos demais: é o total da planilha."
+      ],
+      "tuning": [
+        "sheet_name para escolher a aba; skiprows quando há cabeçalho decorativo.",
+        "usecols para trazer só o intervalo de colunas que interessa."
+      ]
+    },
     "quandoUsar": [
       "Quando os dados já estão organizados numa planilha do Excel ou Google Sheets.",
       "Quando há várias abas e você quer carregar uma delas de forma controlada.",

@@ -25,10 +25,16 @@ Regras de honestidade: `formula` do card espelha a de `fundamentos`; onde a comp
 da implementação, o texto diz **de quê** depende em vez de cravar um número; defaults saem do
 `hiperparametros_doc` já verificado contra o scikit-learn.
 
-`tests/test_conteudo_loader.py` cobra esses campos nas categorias já convertidas
-(`CATEGORIAS_COM_AVANCADO`) — a lista cresce conforme as demais forem escritas. Estado atual:
-**modelos (24/24)**; métricas, pré-processamento, gráficos e coleta ainda só com a descrição
-técnica.
+`tests/test_conteudo_loader.py` cobra esses campos por categoria (`EXIGENCIAS_AVANCADO`), porque
+as exigências diferem: um gráfico não "otimiza" nada no sentido de um modelo e uma fonte de
+coleta não tem fórmula. **Cobertura: 61/61 itens** — modelos 24, métricas 12, pré-processamento
+10, gráficos 10 e coleta 5. O teste também exige que o código do bloco "Na prática" tenha
+`import` (é para ser executável, não decorativo) e que a `formula` do card seja exatamente a de
+`fundamentos`.
+
+O que chega ao chat: `app/tutor_kb.py` monta o índice e as fichas de **modelos, métricas e
+pré-processadores** (gráficos e coleta ficam fora para o índice não inchar). O corte por espaço
+descarta **fichas inteiras**, nunca meia ficha.
 
 ## Fonte da verdade: versionada no repositório
 

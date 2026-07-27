@@ -79,36 +79,59 @@ def test_tem_basico_e_avancado(categoria):
 
 
 # ------------------------------------------------------------------ modo Avançado
-# Categorias já convertidas para os dois blocos do Avançado. A lista cresce conforme as
-# demais forem escritas — deixar o teste genérico esconderia o que ainda falta.
-CATEGORIAS_COM_AVANCADO = ["modelos"]
+# O que cada categoria precisa entregar no modo Avançado. Fica explícito por categoria porque
+# as exigências diferem: um gráfico não "otimiza" nada no sentido de um modelo, e uma fonte de
+# coleta não tem fórmula. Deixar genérico esconderia buraco.
+EXIGENCIAS_AVANCADO = {
+    "modelos": {
+        "fundamentos": ["formula", "otimiza", "pressupostos", "complexidade"],
+        "pratica": ["codigo", "tuning", "armadilhas", "diagnostico"],
+    },
+    "metricas": {
+        "fundamentos": ["formula", "otimiza", "pressupostos", "complexidade", "leitura"],
+        "pratica": ["codigo", "armadilhas", "diagnostico"],
+    },
+    "pre_processamento": {
+        "fundamentos": ["formula", "otimiza", "pressupostos", "complexidade"],
+        "pratica": ["codigo", "armadilhas", "diagnostico"],
+    },
+    "graficos": {
+        "fundamentos": ["otimiza", "pressupostos", "complexidade", "leitura"],
+        "pratica": ["codigo", "armadilhas", "diagnostico"],
+    },
+    "coleta_dados": {
+        "fundamentos": ["otimiza", "pressupostos", "complexidade", "leitura"],
+        "pratica": ["codigo", "armadilhas", "diagnostico"],
+    },
+}
 
 
-@pytest.mark.parametrize("categoria", CATEGORIAS_COM_AVANCADO)
-def test_bloco_fundamentos_completo(categoria):
-    """O Avançado tinha de fato pouco: 0/24 modelos com fórmula, embora a documentação
-    prometesse 'descrição técnica, fórmula, código e link'. O teste agora cobra."""
+@pytest.mark.parametrize("categoria", list(EXIGENCIAS_AVANCADO))
+def test_blocos_do_avancado_completos(categoria):
+    """O Avançado prometia mais do que entregava: 0/24 modelos tinham fórmula, embora a
+    documentação dissesse 'descrição técnica, fórmula, código e link'. Agora é cobrado."""
+    exigido = EXIGENCIAS_AVANCADO[categoria]
     for valor, c in carregar_conteudo(categoria).items():
-        f = c.get("fundamentos") or {}
-        assert f.get("formula"), f"{categoria}/{valor}: sem fórmula"
-        assert f.get("complexidade"), f"{categoria}/{valor}: sem complexidade"
-        assert f.get("pressupostos"), f"{categoria}/{valor}: sem pressupostos"
-        assert f.get("otimiza"), f"{categoria}/{valor}: sem 'o que otimiza'"
+        for bloco, campos in exigido.items():
+            dados = c.get(bloco) or {}
+            assert dados, f"{categoria}/{valor}: bloco '{bloco}' ausente"
+            for campo in campos:
+                assert dados.get(campo), f"{categoria}/{valor}: {bloco}.{campo} vazio"
 
 
-@pytest.mark.parametrize("categoria", CATEGORIAS_COM_AVANCADO)
-def test_bloco_pratica_completo(categoria):
+@pytest.mark.parametrize("categoria", list(EXIGENCIAS_AVANCADO))
+def test_codigo_do_avancado_e_executavel_de_verdade(categoria):
+    """O bloco 'Na prática' existe para mostrar o caminho real, não um trecho decorativo."""
     for valor, c in carregar_conteudo(categoria).items():
-        p = c.get("pratica") or {}
-        assert p.get("codigo"), f"{categoria}/{valor}: sem código de referência"
-        assert "sklearn" in p["codigo"], f"{categoria}/{valor}: o código não usa sklearn"
-        assert p.get("armadilhas"), f"{categoria}/{valor}: sem armadilhas"
-        assert p.get("tuning"), f"{categoria}/{valor}: sem ordem de ajuste"
+        codigo = (c.get("pratica") or {}).get("codigo", "")
+        assert "import" in codigo, f"{categoria}/{valor}: código sem import"
 
 
-@pytest.mark.parametrize("categoria", CATEGORIAS_COM_AVANCADO)
+@pytest.mark.parametrize("categoria", list(EXIGENCIAS_AVANCADO))
 def test_formula_do_card_espelha_fundamentos(categoria):
-    """O card lê `formula`; o bloco Fundamentos também a tem. Se divergirem, o aluno vê
-    uma fórmula no topo e outra embaixo."""
+    """O card lê `formula`; o bloco Fundamentos também a tem. Se divergirem, o aluno vê uma
+    fórmula no topo e outra embaixo."""
     for valor, c in carregar_conteudo(categoria).items():
-        assert c.get("formula") == c["fundamentos"]["formula"], valor
+        do_bloco = (c.get("fundamentos") or {}).get("formula")
+        if c.get("formula") or do_bloco:
+            assert c.get("formula") == do_bloco, f"{categoria}/{valor}: fórmulas divergentes"

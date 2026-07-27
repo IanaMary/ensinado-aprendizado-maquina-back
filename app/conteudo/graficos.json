@@ -23,6 +23,18 @@
     "exemplo": "Se a barra 'normal' tem 950 e a barra 'fraude' tem 50, há forte desbalanceamento: um modelo que sempre diz 'normal' acerta 95% mas nunca pega fraude.",
     "exemplo_codigo": "from yellowbrick.target import ClassBalance\n\nviz = ClassBalance(labels=['normal', 'fraude'])\nviz.fit(y_train, y_test)\nviz.show()",
     "formula": "frequência(classe c) = nº de exemplos da classe c; proporção = frequência(c) / total",
+    "fundamentos": {
+      "complexidade": "O(n).",
+      "formula": "frequência(classe c) = nº de exemplos da classe c; proporção = frequência(c) / total",
+      "leitura": [
+        "He & Garcia (2009), Learning from Imbalanced Data, IEEE TKDE"
+      ],
+      "otimiza": "Responde se o problema é desbalanceado, contando exemplos por classe antes de treinar.",
+      "pressupostos": [
+        "A distribuição do treino se repete no teste (é o que a estratificação garante).",
+        "A contagem é de exemplos, não de importância — a classe rara pode ser a que interessa."
+      ]
+    },
     "intuicao": "No básico você compara a altura das barras; no avançado entende que o desbalanceamento enviesa o treino e por isso a acurácia pode mentir — daí a necessidade de olhar recall por classe ou reamostrar os dados.",
     "link_sklearn": "",
     "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/target/class_balance.html",
@@ -30,6 +42,20 @@
       "Em regressão, onde o alvo é numérico contínuo.",
       "Em agrupamento, onde não existem classes rotuladas."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Desbalanceamento não é problema em si: vira problema quando a métrica escolhida ignora a classe rara.",
+        "Reamostrar antes de dividir treino/teste vaza informação."
+      ],
+      "codigo": "from yellowbrick.target import ClassBalance\n\nviz = ClassBalance(labels=list(sorted(set(y))))\nviz.fit(y_treino, y_teste)   # compara as duas divisões\nviz.show()",
+      "diagnostico": [
+        "Proporções diferentes entre treino e teste: a divisão não foi estratificada.",
+        "Classe com um punhado de exemplos: nenhuma métrica dela será estável."
+      ],
+      "tuning": [
+        "Comparar treino e teste na mesma figura mostra se a divisão preservou as proporções."
+      ]
+    },
     "quandoUsar": [
       "Antes de treinar um classificador, para inspecionar a distribuição das classes.",
       "Quando a acurácia parece alta demais e você suspeita de classe majoritária dominante."
@@ -69,6 +95,18 @@
     "exemplo": "Se duas bolhas estão quase encostadas e são pequenas, esses dois clusters são parecidos e pouco populosos — talvez devessem ser um só; uma bolha grande e isolada é um grupo forte e bem definido.",
     "exemplo_codigo": "from yellowbrick.cluster import InterclusterDistance\nfrom sklearn.cluster import KMeans\n\nmodelo = KMeans(n_clusters=6, random_state=42)\nviz = InterclusterDistance(modelo)\nviz.fit(X)\nviz.show()",
     "formula": "distância entre centróides projetada por embedding 2D (MDS/t-SNE) preservando as distâncias originais",
+    "fundamentos": {
+      "complexidade": "Custo da projeção sobre k centros (pequeno), mais o agrupamento em si.",
+      "formula": "distância entre centróides projetada por embedding 2D (MDS/t-SNE) preservando as distâncias originais",
+      "leitura": [
+        "Documentação do Yellowbrick, InterclusterDistance"
+      ],
+      "otimiza": "Responde quão separados estão os centros dos grupos e qual o peso (nº de exemplos) de cada um.",
+      "pressupostos": [
+        "A projeção 2D (MDS por padrão) preserva aproximadamente as distâncias reais — é uma aproximação.",
+        "Grupos representáveis pelos centróides."
+      ]
+    },
     "intuicao": "No básico você lê o mapa de bolhas; no avançado entende que é uma redução de dimensionalidade dos centróides, então proximidade no desenho aproxima a similaridade real entre clusters e o tamanho conta a população.",
     "link_sklearn": "",
     "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/cluster/icdm.html",
@@ -76,6 +114,20 @@
       "Em classificação ou regressão supervisionadas.",
       "Quando você precisa de distâncias exatas, pois a projeção 2D é aproximada."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Distância na figura é projetada: dois círculos próximos podem estar longe no espaço original.",
+        "O tamanho do círculo é a quantidade de pontos, não a dispersão do grupo."
+      ],
+      "codigo": "from yellowbrick.cluster import InterclusterDistance\nfrom sklearn.cluster import KMeans\n\nviz = InterclusterDistance(KMeans(n_clusters=4, n_init=\"auto\", random_state=42))\nviz.fit(X_escalado)\nviz.show()",
+      "diagnostico": [
+        "Círculos muito sobrepostos: grupos redundantes — reduza k.",
+        "Um círculo minúsculo isolado: possível grupo de outliers."
+      ],
+      "tuning": [
+        "embedding='tsne' quando o MDS não separar visualmente os centros."
+      ]
+    },
     "quandoUsar": [
       "Em agrupamento para ver quais clusters são parecidos e quais são bem distintos.",
       "Para decidir se dois clusters próximos poderiam ser unidos."
@@ -114,7 +166,19 @@
     ],
     "exemplo": "Se uma única barra dispara muito acima da linha tracejada de alerta enquanto as outras são baixinhas, aquele exemplo está dominando o modelo e deve ser checado (pode ser erro de digitação ou outlier real).",
     "exemplo_codigo": "from yellowbrick.regressor import CooksDistance\n\nviz = CooksDistance()\nviz.fit(X, y)\nviz.show()",
-    "formula": "D_i = (e_i² / (p · s²)) · (h_ii / (1 - h_ii)²)   (e_i: resíduo; h_ii: alavancagem; p: nº de parâmetros)",
+    "formula": "D_i = (e_i² / (p·s²)) · (h_ii / (1 − h_ii)²), com h_ii a alavancagem do ponto i",
+    "fundamentos": {
+      "complexidade": "Exige a matriz chapéu: O(n·p²) além do ajuste.",
+      "formula": "D_i = (e_i² / (p·s²)) · (h_ii / (1 − h_ii)²), com h_ii a alavancagem do ponto i",
+      "leitura": [
+        "Cook (1977), Detection of Influential Observation in Linear Regression, Technometrics"
+      ],
+      "otimiza": "Responde quais pontos, sozinhos, mudariam o modelo se fossem removidos.",
+      "pressupostos": [
+        "Modelo linear ajustado por mínimos quadrados (a fórmula vem desse contexto).",
+        "Limiar usual de atenção: D_i > 4/n — é convenção, não regra."
+      ]
+    },
     "intuicao": "No básico você caça as barras mais altas; no avançado entende que a distância de Cook junta resíduo e alavancagem para medir o impacto real de remover um ponto sobre todos os coeficientes do modelo.",
     "link_sklearn": "",
     "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/regressor/influence.html",
@@ -122,6 +186,20 @@
       "Em classificação ou agrupamento.",
       "Em modelos não-lineares complexos, onde a distância de Cook (baseada em OLS) não se aplica diretamente."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Ponto influente não é necessariamente erro de dados — investigue antes de remover.",
+        "Remover pontos até o modelo ficar bonito é maquiagem, não análise."
+      ],
+      "codigo": "from yellowbrick.regressor import CooksDistance\n\nviz = CooksDistance()\nviz.fit(X, y)\nviz.show()\ninfluentes = (viz.distance_ > 4 / len(y)).nonzero()[0]",
+      "diagnostico": [
+        "Poucos pontos com D muito acima dos demais: verifique digitação/unidade nesses registros.",
+        "Muitos pontos acima do limiar: o modelo linear provavelmente é inadequado."
+      ],
+      "tuning": [
+        "draw_threshold=True desenha a linha 4/n para leitura rápida."
+      ]
+    },
     "quandoUsar": [
       "Em regressão linear para detectar pontos influentes e outliers que distorcem o ajuste.",
       "Na fase de limpeza de dados, antes de confiar nos coeficientes do modelo."
@@ -161,6 +239,18 @@
     "exemplo": "Se a barra 'onça' tem 50 de altura e uma fatia grande na cor 'gato', muitas onças estão sendo previstas como gato — confusão clara naquela classe.",
     "exemplo_codigo": "from yellowbrick.classifier import ClassPredictionError\nfrom sklearn.ensemble import RandomForestClassifier\n\nmodelo = RandomForestClassifier()\nviz = ClassPredictionError(modelo, classes=['gato', 'cachorro', 'onça'])\nviz.fit(X_train, y_train)\nviz.score(X_test, y_test)\nviz.show()",
     "formula": "altura da barra (classe c) = nº de exemplos reais da classe c; fatia = nº previsto como classe k dentro de c",
+    "fundamentos": {
+      "complexidade": "O(n).",
+      "formula": "altura da barra (classe c) = nº de exemplos reais da classe c; fatia = nº previsto como classe k dentro de c",
+      "leitura": [
+        "Documentação do Yellowbrick, ClassPredictionError"
+      ],
+      "otimiza": "Responde, para cada classe verdadeira, em que classes os erros se espalharam — a matriz de confusão em barras empilhadas.",
+      "pressupostos": [
+        "Cada barra é uma classe verdadeira; as fatias são as predições recebidas.",
+        "Alturas comparam quantidades absolutas, não taxas."
+      ]
+    },
     "intuicao": "No básico você vê se cada barra é 'da cor certa'; no avançado percebe que é a mesma informação da matriz de confusão, mas empilhada por classe verdadeira, o que torna óbvia a proporção de erro de cada uma.",
     "link_sklearn": "",
     "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/classifier/class_prediction_error.html",
@@ -168,6 +258,20 @@
       "Em regressão ou agrupamento sem rótulos.",
       "Quando há muitíssimas classes, pois as barras ficam difíceis de ler."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Classe grande domina a altura e faz a pequena sumir.",
+        "A figura mostra contagem: uma classe com poucos exemplos parece 'boa' só por ser baixa."
+      ],
+      "codigo": "from sklearn.metrics import confusion_matrix\nimport matplotlib.pyplot as plt\nimport numpy as np\n\ncm = confusion_matrix(y_teste, y_pred, labels=modelo.classes_)\nbase = np.zeros(len(modelo.classes_))\nfor j, classe in enumerate(modelo.classes_):\n    plt.bar(modelo.classes_, cm[:, j], bottom=base, label=f\"previsto {classe}\")\n    base += cm[:, j]\nplt.legend(); plt.show()",
+      "diagnostico": [
+        "Fatia grande de outra cor numa barra: confusão sistemática com aquela classe.",
+        "Barra quase toda da cor certa e desempenho geral ruim: o problema está em outra classe."
+      ],
+      "tuning": [
+        "Normalizar por linha quando as classes têm tamanhos muito diferentes."
+      ]
+    },
     "quandoUsar": [
       "Em classificação quando você quer ver os erros distribuídos por classe e o tamanho de cada classe ao mesmo tempo.",
       "Como complemento mais visual da matriz de confusão."
@@ -207,6 +311,18 @@
     "exemplo": "Se a célula (gato, gato) tem 48 e (gato, cachorro) tem 2, o modelo viu 50 gatos e confundiu só 2 com cachorro: ótimo. Se a diagonal toda estiver bem escura e o resto quase branco, o modelo acertou quase tudo.",
     "exemplo_codigo": "from yellowbrick.classifier import ConfusionMatrix\nfrom sklearn.linear_model import LogisticRegression\n\nmodelo = LogisticRegression()\nviz = ConfusionMatrix(modelo, classes=['gato', 'cachorro', 'onça'])\nviz.fit(X_train, y_train)\nviz.score(X_test, y_test)\nviz.show()",
     "formula": "acerto_diagonal = soma das células onde linha = coluna; acurácia = diagonal / total",
+    "fundamentos": {
+      "complexidade": "O(n) para contar; a figura cresce com classes².",
+      "formula": "acerto_diagonal = soma das células onde linha = coluna; acurácia = diagonal / total",
+      "leitura": [
+        "Stehman (1997), Selecting and Interpreting Measures of Thematic Classification Accuracy"
+      ],
+      "otimiza": "Responde ONDE o modelo erra: qual classe verdadeira virou qual predição.",
+      "pressupostos": [
+        "Leitura por linha: cada linha é uma classe verdadeira e soma o total daquela classe.",
+        "As classes do eixo seguem a ordem de `modelo.classes_`."
+      ]
+    },
     "intuicao": "No básico você só olha se a diagonal está escura; no avançado cada célula fora da diagonal te diz exatamente qual par de classes o modelo troca. Ler linha por linha mostra o erro de cada classe verdadeira.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.confusion_matrix.html",
     "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/classifier/confusion_matrix.html",
@@ -214,6 +330,21 @@
       "Em regressão (saída numérica contínua), pois não há classes para contar.",
       "Em agrupamento, onde não existem rótulos verdadeiros para comparar."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Ler coluna como se fosse linha inverte falso positivo e falso negativo.",
+        "Sem normalizar, a classe grande domina a cor e esconde as demais."
+      ],
+      "codigo": "from yellowbrick.classifier import ConfusionMatrix\n\nviz = ConfusionMatrix(modelo, classes=list(modelo.classes_), percent=True)\nviz.fit(X_treino, y_treino)\nviz.score(X_teste, y_teste)\nviz.show()",
+      "diagnostico": [
+        "Bloco fora da diagonal entre duas classes: elas não se separam com os atributos atuais.",
+        "Coluna vazia: o modelo nunca prevê aquela classe."
+      ],
+      "tuning": [
+        "percent=True (ou normalize='true') quando as classes têm tamanhos muito diferentes.",
+        "Ordenar as classes por frequência ajuda a enxergar a cauda."
+      ]
+    },
     "quandoUsar": [
       "Em qualquer problema de classificação (2 ou mais classes) para ver os acertos e as confusões.",
       "Quando você quer saber exatamente quais classes o modelo troca entre si."
@@ -252,7 +383,19 @@
     ],
     "exemplo": "Se a curva cai forte de k=1 a k=3 e depois fica quase reta, o cotovelo está em k=3: três grupos é a melhor escolha.",
     "exemplo_codigo": "from yellowbrick.cluster import KElbowVisualizer\nfrom sklearn.cluster import KMeans\n\nmodelo = KMeans(random_state=42)\nviz = KElbowVisualizer(modelo, k=(2, 10))\nviz.fit(X)\nviz.show()",
-    "formula": "distorção = Σ (distância de cada ponto ao seu centróide)²  (soma para todos os pontos)",
+    "formula": "distorção(k) = Σ ‖x − centróide(x)‖² — a inércia do k-means para cada k testado",
+    "fundamentos": {
+      "complexidade": "Roda o k-means uma vez por k testado.",
+      "formula": "distorção(k) = Σ ‖x − centróide(x)‖² — a inércia do k-means para cada k testado",
+      "leitura": [
+        "Thorndike (1953), Who belongs in the family?, Psychometrika"
+      ],
+      "otimiza": "Responde qual k dá o melhor custo-benefício: o ponto onde aumentar grupos para de compensar.",
+      "pressupostos": [
+        "A inércia sempre cai com k — o que interessa é a MUDANÇA de inclinação, não o mínimo.",
+        "Atributos na mesma escala."
+      ]
+    },
     "intuicao": "No básico você procura a 'dobra' da curva; no avançado entende que está balanceando ganho de ajuste contra complexidade — mais clusters sempre reduzem a distorção, mas o cotovelo marca onde o ganho extra fica pequeno.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html",
     "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/cluster/elbow.html",
@@ -260,6 +403,21 @@
       "Em classificação ou regressão supervisionadas.",
       "Quando a curva não tem cotovelo claro — aí use a métrica de silhueta para decidir."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Escolher o menor valor da curva leva a k máximo, que é sempre o menor erro.",
+        "Curva sem cotovelo é resposta: talvez não exista estrutura de grupos."
+      ],
+      "codigo": "from yellowbrick.cluster import KElbowVisualizer\nfrom sklearn.cluster import KMeans\n\nviz = KElbowVisualizer(KMeans(n_init=\"auto\", random_state=42), k=(2, 10), timings=False)\nviz.fit(X_escalado)\nviz.show()\nprint(\"k sugerido:\", viz.elbow_value_)",
+      "diagnostico": [
+        "Curva suave, sem quebra: use silhueta para decidir.",
+        "Cotovelo em k=2 sempre: pode ser efeito de escala não padronizada."
+      ],
+      "tuning": [
+        "metric='silhouette' ou 'calinski_harabasz' quando o cotovelo não é claro.",
+        "Faixa de k coerente com o problema — testar até 50 raramente faz sentido em sala."
+      ]
+    },
     "quandoUsar": [
       "Em agrupamento para escolher o número de clusters k.",
       "Quando você não sabe de antemão quantos grupos existem nos dados."
@@ -298,7 +456,19 @@
     ],
     "exemplo": "Se os pontos formam uma faixa estreita grudada na diagonal, o modelo prevê muito bem; se a nuvem se inclina e fica achatada longe dos extremos, o modelo subestima valores altos.",
     "exemplo_codigo": "from yellowbrick.regressor import PredictionError\nfrom sklearn.linear_model import LinearRegression\n\nmodelo = LinearRegression()\nviz = PredictionError(modelo)\nviz.fit(X_train, y_train)\nviz.score(X_test, y_test)\nviz.show()",
-    "formula": "previsão perfeita: ŷ = y (linha identidade de 45°); qualidade resumida por R²",
+    "formula": "Eixo x = y real, eixo y = ŷ; a previsão perfeita é a identidade ŷ = y (45°), e a reta ajustada mostra o viés sistemático",
+    "fundamentos": {
+      "complexidade": "O(n) para plotar.",
+      "formula": "Eixo x = y real, eixo y = ŷ; a previsão perfeita é a identidade ŷ = y (45°), e a reta ajustada mostra o viés sistemático",
+      "leitura": [
+        "Documentação do Yellowbrick, PredictionError"
+      ],
+      "otimiza": "Responde se o modelo acerta ao longo de toda a faixa do alvo ou só numa parte dela.",
+      "pressupostos": [
+        "Os dois eixos estão na mesma escala (senão a linha de 45° engana).",
+        "Pontos suficientes em toda a faixa do alvo."
+      ]
+    },
     "intuicao": "No básico você vê se os pontos seguem a diagonal; no avançado compara a linha de best fit com a linha identidade — a diferença entre elas mede o viés do modelo, e a dispersão em torno mede a variância.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.r2_score.html",
     "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/regressor/peplot.html",
@@ -306,6 +476,20 @@
       "Em classificação, onde a saída é categórica.",
       "Em agrupamento, que não tem alvo numérico para comparar."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Nuvem achatada em relação à identidade é regressão à média, não acaso.",
+        "R² na figura é do conjunto passado ao score — não confunda com o do treino."
+      ],
+      "codigo": "from yellowbrick.regressor import PredictionError\n\nviz = PredictionError(modelo)\nviz.fit(X_treino, y_treino)\nviz.score(X_teste, y_teste)   # mostra R² na figura\nviz.show()",
+      "diagnostico": [
+        "Pontos acima da linha na faixa baixa e abaixo na faixa alta: o modelo comprime as previsões.",
+        "Leque abrindo com o valor do alvo: variância não constante."
+      ],
+      "tuning": [
+        "identity=True/bestfit=True para comparar a reta ideal com a ajustada."
+      ]
+    },
     "quandoUsar": [
       "Em regressão para comparar visualmente valores previstos com valores reais.",
       "Quando você quer detectar viés sistemático (super ou subestimação)."
@@ -349,6 +533,18 @@
     "exemplo": "Se a classe 'onça' tem precisão 0,95 e recall 0,60, sempre que o modelo diz 'onça' ele quase sempre acerta, mas deixa escapar 40% das onças de verdade — a célula do recall vai estar mais fria que a da precisão.",
     "exemplo_codigo": "from yellowbrick.classifier import ClassificationReport\nfrom sklearn.ensemble import RandomForestClassifier\n\nmodelo = RandomForestClassifier()\nviz = ClassificationReport(modelo, classes=['gato', 'cachorro', 'onça'], support=True)\nviz.fit(X_train, y_train)\nviz.score(X_test, y_test)\nviz.show()",
     "formula": "precisão = VP / (VP + FP); recall = VP / (VP + FN); F1 = 2·(precisão·recall) / (precisão + recall)",
+    "fundamentos": {
+      "complexidade": "O(n + classes).",
+      "formula": "precisão = VP / (VP + FP); recall = VP / (VP + FN); F1 = 2·(precisão·recall) / (precisão + recall)",
+      "leitura": [
+        "Powers (2011), Evaluation: From Precision, Recall and F-Measure to ROC"
+      ],
+      "otimiza": "Responde como o desempenho se distribui entre as classes — precisão, recall e F1 de cada uma.",
+      "pressupostos": [
+        "Cada classe tem exemplos suficientes no teste para que as taxas signifiquem algo.",
+        "O suporte (nº de exemplos) precisa ser lido junto: 100% em 3 exemplos não é resultado."
+      ]
+    },
     "intuicao": "No básico você lê as notas por classe; no avançado entende que precisão e recall medem dois tipos de erro diferentes, e o F1 é a média harmônica que pune quando um dos dois está baixo.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.classification_report.html",
     "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/classifier/classification_report.html",
@@ -356,6 +552,21 @@
       "Em regressão, onde não há precisão/recall.",
       "Em agrupamento sem rótulos verdadeiros."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Comparar F1 de classes com suportes muito diferentes sem olhar a coluna de suporte.",
+        "A média 'weighted' pode parecer boa mesmo com a classe rara em zero."
+      ],
+      "codigo": "from sklearn.metrics import classification_report, precision_recall_fscore_support\n\nprint(classification_report(y_teste, y_pred, zero_division=0))\np, r, f1, sup = precision_recall_fscore_support(y_teste, y_pred, labels=modelo.classes_)",
+      "diagnostico": [
+        "Linha com recall 0 e suporte baixo: falta de exemplos, não necessariamente modelo ruim.",
+        "Precisão alta e recall baixo na mesma classe: o modelo é conservador nela."
+      ],
+      "tuning": [
+        "zero_division=0 evita aviso quando uma classe nunca é prevista.",
+        "labels= fixa a ordem e garante que classes ausentes apareçam."
+      ]
+    },
     "quandoUsar": [
       "Em classificação quando você quer notas detalhadas por classe, não só a acurácia geral.",
       "Quando as classes são desbalanceadas e a acurácia sozinha engana."
@@ -394,7 +605,19 @@
     ],
     "exemplo": "Se os pontos estão espalhados aleatoriamente acima e abaixo da linha zero sem forma, o modelo está saudável; se formam um 'U', falta um termo não-linear no modelo.",
     "exemplo_codigo": "from yellowbrick.regressor import ResidualsPlot\nfrom sklearn.linear_model import Ridge\n\nmodelo = Ridge()\nviz = ResidualsPlot(modelo)\nviz.fit(X_train, y_train)\nviz.score(X_test, y_test)\nviz.show()",
-    "formula": "e = y - ŷ  (resíduo = valor real menos valor previsto)",
+    "formula": "e = y − ŷ, plotado contra ŷ; o ideal é uma faixa horizontal sem padrão, centrada em zero",
+    "fundamentos": {
+      "complexidade": "O(n).",
+      "formula": "e = y − ŷ, plotado contra ŷ; o ideal é uma faixa horizontal sem padrão, centrada em zero",
+      "leitura": [
+        "Draper & Smith (1998), Applied Regression Analysis, cap. 3"
+      ],
+      "otimiza": "Responde se sobrou estrutura que o modelo não capturou.",
+      "pressupostos": [
+        "Resíduos independentes, com média zero e variância constante — é justamente isso que a figura testa.",
+        "Treino e teste plotados juntos permitem comparar sobreajuste."
+      ]
+    },
     "intuicao": "No básico você quer 'bagunça sem padrão' em torno do zero; no avançado, qualquer estrutura (curva, funil) significa que o modelo violou suas premissas e há sinal nos erros que ele não aprendeu.",
     "link_sklearn": "",
     "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/regressor/residuals.html",
@@ -402,6 +625,20 @@
       "Em classificação ou agrupamento.",
       "Quando há pouquíssimos pontos, pois padrões ficam difíceis de julgar."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Padrão em U significa termo não linear faltando — não é ruído.",
+        "Resíduos de treino bem menores que os de teste: sobreajuste."
+      ],
+      "codigo": "from yellowbrick.regressor import ResidualsPlot\n\nviz = ResidualsPlot(modelo, hist=True)\nviz.fit(X_treino, y_treino)\nviz.score(X_teste, y_teste)\nviz.show()",
+      "diagnostico": [
+        "Faixa em leque: heterocedasticidade — considere transformar o alvo.",
+        "Pontos muito afastados na vertical: candidatos a outlier, confirme com Cook."
+      ],
+      "tuning": [
+        "hist=True (ou qqplot=True) para ver a distribuição dos resíduos junto."
+      ]
+    },
     "quandoUsar": [
       "Em regressão para verificar se o modelo está bem ajustado e sem viés.",
       "Para diagnosticar não-linearidade ou erro que cresce com o valor previsto."
@@ -440,7 +677,19 @@
     ],
     "exemplo": "Se um cluster tem uma lâmina larga toda acima de 0,6 e nenhum valor negativo, seus pontos estão muito bem agrupados; se outra lâmina mergulha para -0,2, vários pontos dela estão mais perto de outro cluster.",
     "exemplo_codigo": "from yellowbrick.cluster import SilhouetteVisualizer\nfrom sklearn.cluster import KMeans\n\nmodelo = KMeans(n_clusters=4, random_state=42)\nviz = SilhouetteVisualizer(modelo, colors='yellowbrick')\nviz.fit(X)\nviz.show()",
-    "formula": "s = (b - a) / max(a, b)",
+    "formula": "s = (b − a) / max(a, b), com a = distância média dentro do grupo e b = distância média ao grupo vizinho mais próximo",
+    "fundamentos": {
+      "complexidade": "O(n²·d) na versão exata — em bases grandes, amostre.",
+      "formula": "s = (b − a) / max(a, b), com a = distância média dentro do grupo e b = distância média ao grupo vizinho mais próximo",
+      "leitura": [
+        "Rousseeuw (1987), Silhouettes: a graphical aid to the interpretation of cluster analysis"
+      ],
+      "otimiza": "Responde se cada ponto está no grupo certo e quão bem separados eles estão.",
+      "pressupostos": [
+        "A distância usada é a mesma do agrupamento e os atributos estão na mesma escala.",
+        "Grupos aproximadamente convexos."
+      ]
+    },
     "intuicao": "No básico você vê se as 'facas' são gordas e vão para a direita; no avançado cada valor s combina coesão (distância dentro do grupo) e separação (distância ao grupo vizinho mais próximo) num número entre -1 e 1.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.silhouette_score.html",
     "link_yellowbrick": "https://www.scikit-yb.org/en/latest/api/cluster/silhouette.html",
@@ -448,6 +697,20 @@
       "Em classificação ou regressão supervisionadas, onde há rótulo ou número de saída.",
       "Com clusters de formato muito irregular, onde a distância média engana."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Sem padronizar, a silhueta mede escala de coluna, não estrutura.",
+        "Lâminas com valores negativos indicam pontos no grupo errado."
+      ],
+      "codigo": "from yellowbrick.cluster import SilhouetteVisualizer\nfrom sklearn.cluster import KMeans\n\nviz = SilhouetteVisualizer(KMeans(n_clusters=3, n_init=\"auto\", random_state=42))\nviz.fit(X_escalado)\nviz.show()",
+      "diagnostico": [
+        "Um grupo bem mais largo que os outros: k provavelmente pequeno demais.",
+        "Muitas barras curtas e perto de zero: os grupos se sobrepõem."
+      ],
+      "tuning": [
+        "Rodar para vários k é o uso: a figura serve para comparar, não para um k só."
+      ]
+    },
     "quandoUsar": [
       "Em agrupamento (clustering) para avaliar a qualidade dos clusters formados.",
       "Para comparar diferentes números de clusters e escolher o melhor."

@@ -27,7 +27,19 @@
     ],
     "exemplo": "Classes alvo ['gato', 'cachorro', 'passaro', 'gato'] viram [1, 0, 2, 1] (ordem alfabética: cachorro=0, gato=1, passaro=2).",
     "exemplo_codigo": "from sklearn.preprocessing import LabelEncoder\n\ny = ['gato', 'cachorro', 'passaro', 'gato']\nle = LabelEncoder()\ny_cod = le.fit_transform(y)\nprint(y_cod)            # [1 0 2 1]\nprint(le.classes_)     # ['cachorro' 'gato' 'passaro']\nprint(le.inverse_transform([0, 2]))  # ['cachorro' 'passaro']",
-    "formula": "",
+    "formula": "classe → inteiro por ordem alfabética das categorias (['cão','gato'] → [0, 1]); inverse_transform desfaz",
+    "fundamentos": {
+      "complexidade": "O(n log n) para descobrir as classes + O(n) para mapear.",
+      "formula": "classe → inteiro por ordem alfabética das categorias (['cão','gato'] → [0, 1]); inverse_transform desfaz",
+      "leitura": [
+        "Documentação do scikit-learn, Preprocessing data — encoding categorical features"
+      ],
+      "otimiza": "Converte o ALVO categórico em inteiros, que é o formato que os estimadores esperam.",
+      "pressupostos": [
+        "É aplicado ao alvo (y), não às entradas — para X, o correto é One-Hot ou Ordinal.",
+        "Todas as categorias do teste apareceram no treino."
+      ]
+    },
     "hiperparametros_doc": [],
     "intuicao": "É basicamente um dicionário que troca cada nome de classe por um número e sabe desfazer a troca depois. Como é feito para o alvo, a ordem dos inteiros não importa para o modelo de classificação, que apenas distingue as classes.",
     "link_sklearn": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.LabelEncoder.html",
@@ -36,6 +48,21 @@
       "Dentro de Pipelines/ColumnTransformer de features (ele espera dados 1D).",
       "Quando a variável é nominal e entra como entrada de um modelo linear."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Usar em atributos de entrada cria uma ordem falsa ('azul' < 'verde') que o modelo leva a sério.",
+        "Categoria nova no teste levanta erro — trate antes.",
+        "Perder o encoder significa perder a tradução de volta para o nome da classe."
+      ],
+      "codigo": "from sklearn.preprocessing import LabelEncoder\n\nle = LabelEncoder().fit(y_treino)\ny_treino_cod = le.transform(y_treino)\ny_pred_texto = le.inverse_transform(modelo.predict(X_teste))  # volta ao rótulo original\nprint(dict(enumerate(le.classes_)))",
+      "diagnostico": [
+        "Predições saindo como números sem sentido para o aluno: faltou inverse_transform.",
+        "Modelo linear atribuindo peso crescente a uma categórica: ela foi codificada como ordinal."
+      ],
+      "tuning": [
+        "Não tem parâmetro: o que existe é guardar o encoder para desfazer a codificação depois."
+      ]
+    },
     "quandoUsar": [
       "Para codificar o vetor alvo (y) em problemas de classificação.",
       "Quando precisa reverter previsões numéricas para os nomes das classes.",
@@ -85,7 +112,19 @@
     ],
     "exemplo": "Temperaturas entre 10°C (mínimo) e 30°C (máximo): 20°C vira (20 - 10) / (30 - 10) = 0,5; 10°C vira 0 e 30°C vira 1.",
     "exemplo_codigo": "from sklearn.preprocessing import MinMaxScaler\nimport numpy as np\n\nX = np.array([[10.0], [20.0], [30.0]])\nscaler = MinMaxScaler(feature_range=(0, 1))\nX_escalado = scaler.fit_transform(X)\nprint(X_escalado.ravel())  # [0.  0.5 1. ]",
-    "formula": "x' = (x - min) / (max - min)",
+    "formula": "x' = (x − min) / (max − min), levando ao intervalo [0, 1] (ou ao feature_range escolhido)",
+    "fundamentos": {
+      "complexidade": "O(n·d) numa passada.",
+      "formula": "x' = (x − min) / (max − min), levando ao intervalo [0, 1] (ou ao feature_range escolhido)",
+      "leitura": [
+        "Géron (2022), Hands-On Machine Learning, cap. 2"
+      ],
+      "otimiza": "Comprime cada coluna num intervalo fixo, preservando as proporções internas.",
+      "pressupostos": [
+        "Mínimo e máximo do treino representam a faixa esperada dos dados.",
+        "Não há outliers extremos — eles definem a faixa e achatam todo o resto."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "(0, 1)",
@@ -119,6 +158,21 @@
       "Modelos baseados em árvores, que não se importam com escala.",
       "Novos dados podem ultrapassar a faixa de treino sem o uso de clip."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Valor de teste fora da faixa do treino sai fora de [0,1] — normal, mas surpreende.",
+        "Um outlier no treino esmaga todos os outros valores perto de zero."
+      ],
+      "codigo": "from sklearn.preprocessing import MinMaxScaler\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.neural_network import MLPClassifier\n\npipe = Pipeline([(\"escala\", MinMaxScaler()), (\"modelo\", MLPClassifier(max_iter=500))])\npipe.fit(X_treino, y_treino)",
+      "diagnostico": [
+        "Quase todos os valores transformados perto de 0 ou 1: outlier definindo a faixa.",
+        "Desempenho pior que com StandardScaler em modelo de distância: reveja a escolha."
+      ],
+      "tuning": [
+        "feature_range quando a camada seguinte espera outro intervalo (ex.: (-1, 1)).",
+        "clip=True para não deixar valores do teste saírem do intervalo."
+      ]
+    },
     "quandoUsar": [
       "Quando o algoritmo exige entradas numa faixa fixa, como pixels de imagem (0-1).",
       "Redes neurais e modelos que se beneficiam de entradas limitadas.",
@@ -168,7 +222,19 @@
     ],
     "exemplo": "Vetor [3, 4]: a norma L2 é sqrt(9 + 16) = 5, então o vetor normalizado vira [3/5, 4/5] = [0,6, 0,8], com comprimento 1.",
     "exemplo_codigo": "from sklearn.preprocessing import Normalizer\nimport numpy as np\n\nX = np.array([[3.0, 4.0], [1.0, 0.0], [2.0, 2.0]])\nnorm = Normalizer(norm='l2')\nX_norm = norm.fit_transform(X)\nprint(X_norm)  # cada linha tem comprimento 1",
-    "formula": "x' = x / ||x||,  ||x||_2 = sqrt(x1² + x2² + ... + xn²)",
+    "formula": "x' = x / ‖x‖, com ‖x‖₂ = √(x₁² + … + x_d²) — normaliza a LINHA, não a coluna",
+    "fundamentos": {
+      "complexidade": "O(n·d).",
+      "formula": "x' = x / ‖x‖, com ‖x‖₂ = √(x₁² + … + x_d²) — normaliza a LINHA, não a coluna",
+      "leitura": [
+        "Manning, Raghavan & Schütze (2008), Introduction to Information Retrieval, cap. 6"
+      ],
+      "otimiza": "Deixa cada exemplo com norma 1, de modo que só a direção do vetor importe.",
+      "pressupostos": [
+        "A magnitude total do exemplo é ruído (ex.: tamanho do documento) e a proporção entre atributos é o sinal.",
+        "Nenhuma linha é o vetor nulo."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "'l2'",
@@ -194,6 +260,21 @@
       "A magnitude total de cada amostra carrega informação importante.",
       "Os dados têm features em unidades muito diferentes que precisam de escala por coluna."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Confundir com padronização por coluna — é a troca mais comum e piora o modelo.",
+        "Perde a informação de magnitude, que às vezes é justamente o sinal."
+      ],
+      "codigo": "from sklearn.preprocessing import Normalizer\nfrom sklearn.pipeline import Pipeline\n\n# típico em texto/contagens: a direção importa, o tamanho do documento não\npipe = Pipeline([(\"norma\", Normalizer(norm=\"l2\")), (\"modelo\", modelo)])\npipe.fit(X_treino, y_treino)",
+      "diagnostico": [
+        "Desempenho cai muito após normalizar em dados tabulares: era escala de coluna que faltava.",
+        "Linhas idênticas após a transformação: os exemplos só diferiam em magnitude."
+      ],
+      "tuning": [
+        "norm='l1' quando o vetor representa proporções que devem somar 1.",
+        "Não substitui escala por coluna: em dados tabulares comuns, o que você quer é StandardScaler."
+      ]
+    },
     "quandoUsar": [
       "Dados de texto representados por TF-IDF ou contagem de palavras.",
       "Quando importa a direção/proporção do vetor e não sua magnitude total.",
@@ -243,7 +324,19 @@
     ],
     "exemplo": "A coluna cor com valores [vermelho, verde, azul] vira três colunas: vermelho [1,0,0], verde [0,1,0] e azul [0,0,1].",
     "exemplo_codigo": "from sklearn.preprocessing import OneHotEncoder\nimport numpy as np\n\nX = np.array([['vermelho'], ['verde'], ['azul'], ['verde']])\nenc = OneHotEncoder(sparse_output=False, handle_unknown='ignore')\nX_oh = enc.fit_transform(X)\nprint(enc.categories_)\nprint(X_oh)",
-    "formula": "",
+    "formula": "categoria → vetor binário com uma coluna por categoria ('gato' → [0,1,0]); k categorias viram k colunas (ou k−1 com drop='first')",
+    "fundamentos": {
+      "complexidade": "O(n·d) em tempo; memória cresce com o número total de categorias (use sparse_output).",
+      "formula": "categoria → vetor binário com uma coluna por categoria ('gato' → [0,1,0]); k categorias viram k colunas (ou k−1 com drop='first')",
+      "leitura": [
+        "Documentação do scikit-learn, OneHotEncoder"
+      ],
+      "otimiza": "Representa categorias sem inventar ordem, ao custo de aumentar a dimensionalidade.",
+      "pressupostos": [
+        "A cardinalidade é administrável (dezenas, não milhares).",
+        "As categorias relevantes aparecem no treino."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "None",
@@ -293,6 +386,23 @@
       "Há centenas/milhares de categorias (explode o número de colunas).",
       "O modelo é baseado em árvores que já lida bem com inteiros categóricos."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Alta cardinalidade explode o número de colunas (CEP, id de produto).",
+        "Sem handle_unknown, uma categoria inédita derruba a predição em produção.",
+        "Fit no conjunto inteiro vaza quais categorias existem no teste."
+      ],
+      "codigo": "from sklearn.compose import ColumnTransformer\nfrom sklearn.preprocessing import OneHotEncoder\n\nprep = ColumnTransformer([\n    (\"cat\", OneHotEncoder(handle_unknown=\"ignore\", min_frequency=0.01), colunas_cat),\n], remainder=\"passthrough\")\nX_treino_t = prep.fit_transform(X_treino)\nprint(prep.get_feature_names_out()[:10])",
+      "diagnostico": [
+        "Matriz com milhares de colunas quase vazias: cardinalidade alta demais.",
+        "Erro 'Found unknown categories' no teste: faltou handle_unknown."
+      ],
+      "tuning": [
+        "handle_unknown='ignore' evita quebrar com categoria nova no teste.",
+        "min_frequency / max_categories agrupam a cauda longa em 'infrequent'.",
+        "drop='first' em modelos lineares, para evitar colinearidade perfeita."
+      ]
+    },
     "quandoUsar": [
       "Variáveis categóricas nominais (sem ordem) como cor, bairro ou marca.",
       "Antes de modelos lineares, SVM, KNN ou redes neurais.",
@@ -342,7 +452,19 @@
     ],
     "exemplo": "Tamanho [pequeno, médio, grande] com ordem definida vira [0, 1, 2]; assim grande (2) é maior que pequeno (0), refletindo a realidade.",
     "exemplo_codigo": "from sklearn.preprocessing import OrdinalEncoder\nimport numpy as np\n\nX = np.array([['pequeno'], ['grande'], ['medio'], ['pequeno']])\nenc = OrdinalEncoder(categories=[['pequeno', 'medio', 'grande']])\nX_ord = enc.fit_transform(X)\nprint(X_ord.ravel())  # [0. 2. 1. 0.]",
-    "formula": "",
+    "formula": "categoria → inteiro segundo uma ORDEM declarada (['baixo','médio','alto'] → [0, 1, 2])",
+    "fundamentos": {
+      "complexidade": "O(n·d).",
+      "formula": "categoria → inteiro segundo uma ORDEM declarada (['baixo','médio','alto'] → [0, 1, 2])",
+      "leitura": [
+        "Documentação do scikit-learn, OrdinalEncoder"
+      ],
+      "otimiza": "Preserva uma ordem que existe de verdade, com uma coluna só.",
+      "pressupostos": [
+        "A variável é realmente ordinal e a ordem informada é a correta.",
+        "As distâncias entre níveis podem ser tratadas como iguais (0→1 e 1→2 valem o mesmo para o modelo)."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "'auto'",
@@ -384,6 +506,21 @@
       "Modelos lineares ou de distância, que interpretariam os números como grandezas.",
       "A ordem natural não é conhecida e seria imposta arbitrariamente."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Aplicar em categórica sem ordem (cidade, cor) inventa uma hierarquia.",
+        "Árvores toleram bem; modelos lineares e de distância levam a ordem ao pé da letra."
+      ],
+      "codigo": "from sklearn.preprocessing import OrdinalEncoder\n\nordem = [[\"baixo\", \"médio\", \"alto\"]]\nenc = OrdinalEncoder(categories=ordem, handle_unknown=\"use_encoded_value\",\n                     unknown_value=-1)\nX_treino[[\"nivel\"]] = enc.fit_transform(X_treino[[\"nivel\"]])",
+      "diagnostico": [
+        "Coeficiente linear grande numa coluna 'categoria': verifique se ela é mesmo ordinal.",
+        "-1 aparecendo nas predições: categoria desconhecida chegando no teste."
+      ],
+      "tuning": [
+        "categories= explícito é obrigatório na prática: sem isso a ordem vira alfabética.",
+        "handle_unknown/unknown_value para não quebrar com categoria nova."
+      ]
+    },
     "quandoUsar": [
       "Variáveis com ordem natural (escolaridade, tamanho, nível de satisfação).",
       "Como entrada para modelos baseados em árvores (Random Forest, Gradient Boosting).",
@@ -433,7 +570,19 @@
     ],
     "exemplo": "Com uma única feature x e grau 2 (include_bias=True), x=3 gera as colunas [1, 3, 9], ou seja, [1, x, x²].",
     "exemplo_codigo": "from sklearn.preprocessing import PolynomialFeatures\nimport numpy as np\n\nX = np.array([[2.0, 3.0]])\npoly = PolynomialFeatures(degree=2, include_bias=True)\nX_poly = poly.fit_transform(X)\nprint(poly.get_feature_names_out())\nprint(X_poly)  # [[1. 2. 3. 4. 6. 9.]]",
-    "formula": "para [a, b], grau 2: [1, a, b, a², a·b, b²]",
+    "formula": "[a, b] com grau 2 → [1, a, b, a², a·b, b²]; o número de termos cresce como C(d+k, k)",
+    "fundamentos": {
+      "complexidade": "Explosivo em d: com 10 atributos e grau 3, passam de 280 termos.",
+      "formula": "[a, b] com grau 2 → [1, a, b, a², a·b, b²]; o número de termos cresce como C(d+k, k)",
+      "leitura": [
+        "Hastie, Tibshirani & Friedman (2009), The Elements of Statistical Learning, cap. 5"
+      ],
+      "otimiza": "Deixa um modelo linear representar curvas e interações, expandindo o espaço de atributos.",
+      "pressupostos": [
+        "A relação é suave e capturável por potências/produtos de grau baixo.",
+        "Há exemplos suficientes para o número de termos gerados."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "2",
@@ -467,6 +616,23 @@
       "O modelo já captura não linearidades (árvores, redes neurais).",
       "Risco alto de overfitting com poucos dados e grau elevado."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Grau alto sobreajusta e dispara fora da faixa de treino.",
+        "Sem padronizar depois da expansão, x³ domina numericamente.",
+        "include_bias=True duplica o intercepto quando o modelo já tem um."
+      ],
+      "codigo": "from sklearn.preprocessing import PolynomialFeatures, StandardScaler\nfrom sklearn.linear_model import Ridge\nfrom sklearn.pipeline import Pipeline\n\npipe = Pipeline([(\"poly\", PolynomialFeatures(degree=2, include_bias=False)),\n                 (\"escala\", StandardScaler()),\n                 (\"modelo\", Ridge(alpha=1.0))]).fit(X_treino, y_treino)\nprint(pipe[0].get_feature_names_out())",
+      "diagnostico": [
+        "Erro de treino ínfimo e de teste alto logo após a expansão: reduza o grau.",
+        "Coeficientes gigantescos: falta regularização."
+      ],
+      "tuning": [
+        "degree é a decisão principal — 2 resolve a maioria dos casos.",
+        "interaction_only=True quando só interessam produtos entre variáveis, não potências.",
+        "Combine com Ridge/Lasso: a expansão quase sempre pede regularização."
+      ]
+    },
     "quandoUsar": [
       "Quando a relação entre features e alvo parece curva (não linear).",
       "Para permitir que modelos lineares capturem interações entre variáveis.",
@@ -516,7 +682,19 @@
     ],
     "exemplo": "Dados muito assimétricos como [1, 2, 3, 100] (com cauda longa) ficam mais simétricos e centrados após a transformação, facilitando modelos que esperam distribuição normal.",
     "exemplo_codigo": "from sklearn.preprocessing import PowerTransformer\nimport numpy as np\n\nX = np.array([[1.0], [2.0], [3.0], [100.0]])\npt = PowerTransformer(method='yeo-johnson', standardize=True)\nX_trans = pt.fit_transform(X)\nprint(X_trans.ravel())\nprint('lambdas:', pt.lambdas_)",
-    "formula": "Box-Cox: x^(λ) = (x^λ - 1) / λ  (λ ≠ 0);  Yeo-Johnson generaliza para x ≤ 0",
+    "formula": "Box-Cox: x^(λ) = (x^λ − 1)/λ para λ ≠ 0, log(x) para λ = 0 (exige x > 0); Yeo-Johnson estende para valores ≤ 0",
+    "fundamentos": {
+      "complexidade": "O(n·d) por iteração da busca de λ, por coluna.",
+      "formula": "Box-Cox: x^(λ) = (x^λ − 1)/λ para λ ≠ 0, log(x) para λ = 0 (exige x > 0); Yeo-Johnson estende para valores ≤ 0",
+      "leitura": [
+        "Box & Cox (1964), An Analysis of Transformations, JRSS-B; Yeo & Johnson (2000), Biometrika 87"
+      ],
+      "otimiza": "Escolhe λ por máxima verossimilhança para deixar a distribuição o mais próxima possível da normal.",
+      "pressupostos": [
+        "A assimetria é o problema (modelos que assumem normalidade, ou caudas longas atrapalhando).",
+        "Box-Cox exige valores estritamente positivos; caso contrário, Yeo-Johnson."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "'yeo-johnson'",
@@ -550,6 +728,22 @@
       "Modelos baseados em árvores, que não exigem normalidade.",
       "Box-Cox com dados que contêm zeros ou negativos (use Yeo-Johnson)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Interpretação sai prejudicada: os valores deixam de estar na unidade original.",
+        "Box-Cox com zero ou negativo levanta erro.",
+        "Transformar sem necessidade só adiciona complexidade — teste com e sem."
+      ],
+      "codigo": "from sklearn.preprocessing import PowerTransformer\nfrom sklearn.pipeline import Pipeline\n\npipe = Pipeline([(\"potencia\", PowerTransformer(method=\"yeo-johnson\", standardize=True)),\n                 (\"modelo\", modelo)]).fit(X_treino, y_treino)\nprint(\"lambdas:\", pipe[0].lambdas_)",
+      "diagnostico": [
+        "lambdas_ próximos de 1: praticamente não houve transformação (a coluna já era simétrica).",
+        "Histograma ainda torto depois da transformação: a assimetria vem de mistura de subgrupos."
+      ],
+      "tuning": [
+        "method: 'yeo-johnson' é o padrão seguro; 'box-cox' só com dados positivos.",
+        "standardize=True (padrão) já devolve média 0 e desvio 1 — não empilhe outro scaler."
+      ]
+    },
     "quandoUsar": [
       "Quando as features são muito assimétricas e o modelo assume normalidade.",
       "Para estabilizar a variância antes de modelos lineares ou gaussianos.",
@@ -599,7 +793,19 @@
     ],
     "exemplo": "Salários [2000, 2500, 3000, 3500, 100000]: a mediana é 3000 e o IQR é cerca de 1000. O salário de 100000 vira (100000 - 3000) / 1000 = 97, claramente um outlier, sem distorcer a escala dos demais.",
     "exemplo_codigo": "from sklearn.preprocessing import RobustScaler\nimport numpy as np\n\nX = np.array([[2000.0], [2500.0], [3000.0], [3500.0], [100000.0]])\nscaler = RobustScaler()\nX_escalado = scaler.fit_transform(X)\nprint(X_escalado.ravel())\nprint('mediana:', scaler.center_, 'IQR:', scaler.scale_)",
-    "formula": "x' = (x - mediana) / IQR,  onde IQR = Q3 - Q1",
+    "formula": "x' = (x − mediana) / IQR, com IQR = Q3 − Q1",
+    "fundamentos": {
+      "complexidade": "O(n log n) por coluna (precisa ordenar para os quantis).",
+      "formula": "x' = (x − mediana) / IQR, com IQR = Q3 − Q1",
+      "leitura": [
+        "Rousseeuw & Croux (1993), Alternatives to the Median Absolute Deviation, JASA"
+      ],
+      "otimiza": "Centra e escala usando estatísticas resistentes, de modo que outliers não definam a transformação.",
+      "pressupostos": [
+        "Os outliers são contaminação, não o fenômeno de interesse.",
+        "A coluna tem dispersão (IQR > 0) — colunas quase constantes viram divisão por quase zero."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "True",
@@ -641,6 +847,21 @@
       "Modelos baseados em árvores, que não dependem de escala.",
       "Você precisa garantir uma faixa fixa de saída (use MinMaxScaler)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Não limita a faixa: os outliers continuam lá, apenas não distorcem a escala.",
+        "Coluna com IQR zero (muitos valores repetidos) gera valores enormes."
+      ],
+      "codigo": "from sklearn.preprocessing import RobustScaler\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.svm import SVC\n\npipe = Pipeline([(\"escala\", RobustScaler(quantile_range=(25.0, 75.0))),\n                 (\"modelo\", SVC())])\npipe.fit(X_treino, y_treino)",
+      "diagnostico": [
+        "Valores transformados na casa das centenas: IQR quase nulo naquela coluna.",
+        "Sem diferença para o StandardScaler: provavelmente não havia outliers."
+      ],
+      "tuning": [
+        "quantile_range mais largo (ex.: 5–95) quando a cauda é informativa.",
+        "with_centering=False em matrizes esparsas."
+      ]
+    },
     "quandoUsar": [
       "Quando os dados contêm outliers que distorceriam média e desvio-padrão.",
       "Features com distribuições assimétricas ou com caudas longas.",
@@ -690,7 +911,19 @@
     ],
     "exemplo": "Idades [15, 16, NaN, 17] com strategy='mean': o NaN é preenchido com a média (15+16+17)/3 = 16, resultando em [15, 16, 16, 17].",
     "exemplo_codigo": "from sklearn.impute import SimpleImputer\nimport numpy as np\n\nX = np.array([[15.0], [16.0], [np.nan], [17.0]])\nimp = SimpleImputer(strategy='mean')\nX_cheio = imp.fit_transform(X)\nprint(X_cheio.ravel())  # [15. 16. 16. 17.]",
-    "formula": "x_faltante = média (ou mediana, ou moda) da coluna no treino",
+    "formula": "x_faltante ← estatística da coluna no TREINO (média, mediana, mais frequente ou constante)",
+    "fundamentos": {
+      "complexidade": "O(n·d) (mediana: O(n log n) por coluna).",
+      "formula": "x_faltante ← estatística da coluna no TREINO (média, mediana, mais frequente ou constante)",
+      "leitura": [
+        "Little & Rubin (2019), Statistical Analysis with Missing Data"
+      ],
+      "otimiza": "Completa buracos para que o modelo possa treinar, mantendo o resto da linha aproveitável.",
+      "pressupostos": [
+        "Os valores faltam de forma aproximadamente aleatória (MCAR/MAR); se faltar por um motivo, isso é informação.",
+        "A estatística do treino descreve bem a coluna."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "'mean'",
@@ -732,6 +965,22 @@
       "A ausência em si é informativa e precisa ser modelada (considere add_indicator).",
       "É preciso uma imputação sofisticada que considere outras colunas (use IterativeImputer/KNNImputer)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Calcular a média com o conjunto inteiro (antes de dividir) é vazamento.",
+        "Imputar a média reduz artificialmente a variância da coluna.",
+        "Coluna com 60% de buracos: imputar inventa dados — considere descartá-la."
+      ],
+      "codigo": "from sklearn.compose import ColumnTransformer\nfrom sklearn.impute import SimpleImputer\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import OneHotEncoder, StandardScaler\n\nprep = ColumnTransformer([\n    (\"num\", Pipeline([(\"imp\", SimpleImputer(strategy=\"median\")),\n                      (\"esc\", StandardScaler())]), colunas_num),\n    (\"cat\", Pipeline([(\"imp\", SimpleImputer(strategy=\"most_frequent\")),\n                      (\"oh\", OneHotEncoder(handle_unknown=\"ignore\"))]), colunas_cat),\n])\npipe = Pipeline([(\"prep\", prep), (\"modelo\", modelo)]).fit(X_treino, y_treino)",
+      "diagnostico": [
+        "Pico artificial no histograma exatamente na média: efeito da imputação.",
+        "Modelo melhora muito com add_indicator: a ausência era informativa."
+      ],
+      "tuning": [
+        "strategy: mediana resiste a outliers; 'most_frequent' para categóricas; 'constant' quando faltar tem significado.",
+        "add_indicator=True para o modelo saber ONDE faltava — muitas vezes é o melhor ganho."
+      ]
+    },
     "quandoUsar": [
       "Quando o conjunto tem valores ausentes e o modelo não os aceita.",
       "Antes de scalers/encoders, no início do Pipeline.",
@@ -781,7 +1030,19 @@
     ],
     "exemplo": "Notas de uma turma com média 6 e desvio-padrão 2: uma nota 8 vira z = (8 - 6) / 2 = 1, ou seja, está 1 desvio-padrão acima da média. Uma nota 4 vira z = -1.",
     "exemplo_codigo": "from sklearn.preprocessing import StandardScaler\nimport numpy as np\n\nX = np.array([[10.0], [20.0], [30.0], [40.0]])\nscaler = StandardScaler()\nX_escalado = scaler.fit_transform(X)\nprint(X_escalado.ravel())\nprint('media:', scaler.mean_, 'desvio:', scaler.scale_)",
-    "formula": "z = (x - μ) / σ",
+    "formula": "z = (x − μ) / σ, com μ e σ estimados NO TREINO",
+    "fundamentos": {
+      "complexidade": "O(n·d) numa passada; memória O(d).",
+      "formula": "z = (x − μ) / σ, com μ e σ estimados NO TREINO",
+      "leitura": [
+        "Géron (2022), Hands-On Machine Learning, cap. 2 (feature scaling)"
+      ],
+      "otimiza": "Coloca cada coluna com média 0 e desvio 1, para que nenhuma domine distâncias ou gradientes.",
+      "pressupostos": [
+        "A distribuição não precisa ser normal, mas média e desvio precisam ser resumos sensatos (outliers os distorcem).",
+        "A escala do teste é a do treino — nunca se reestima nada fora dele."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "True",
@@ -815,6 +1076,22 @@
       "O modelo é baseado em árvores (Random Forest, árvore de decisão), que ignoram escala.",
       "Você precisa preservar zeros em dados esparsos (centralizar destrói a esparsidade)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Ajustar o scaler no conjunto inteiro antes de dividir treino/teste é vazamento clássico.",
+        "Aplicar em colunas categóricas já codificadas raramente ajuda e atrapalha a leitura.",
+        "Padroniza, mas não normaliza a forma da distribuição — assimetria continua lá."
+      ],
+      "codigo": "from sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.neighbors import KNeighborsClassifier\n\npipe = Pipeline([(\"escala\", StandardScaler()), (\"modelo\", KNeighborsClassifier())])\npipe.fit(X_treino, y_treino)   # fit do scaler acontece SÓ no treino\nprint(pipe.score(X_teste, y_teste))",
+      "diagnostico": [
+        "Média do treino transformado ≠ 0: o fit foi feito no lugar errado.",
+        "Resultado muda muito ao trocar StandardScaler por RobustScaler: há outliers."
+      ],
+      "tuning": [
+        "with_mean=False quando a matriz é esparsa (centralizar destruiria a esparsidade).",
+        "Se houver outliers pesados, troque por RobustScaler em vez de ajustar parâmetros."
+      ]
+    },
     "quandoUsar": [
       "Modelos sensíveis à escala como SVM, KNN, regressão logística e redes neurais.",
       "Quando as features têm unidades ou faixas muito diferentes (ex.: idade e salário).",
