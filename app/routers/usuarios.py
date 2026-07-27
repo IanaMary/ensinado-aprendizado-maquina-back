@@ -14,7 +14,9 @@ from dotenv import load_dotenv
 if os.getenv("RENDER") is None:
     load_dotenv()
 
-from app.schemas.usuarios import UserCreate, UserOut, UserInvite, UserInviteResponse
+from app.schemas.usuarios import (
+    PreferenciasUsuario, UserCreate, UserInvite, UserInviteResponse, UserOut,
+)
 from app.security import get_senha_hash, get_usuario_atual
 from app.database import colecao_usuario, verificadores_professor
 from app.funcoes_genericas.validacao import validar_object_id
@@ -215,6 +217,27 @@ async def criar_convite(convite_data: UserInvite, current_user=Depends(get_usuar
         email_enviado=email_enviado,
         link_convite=link_convite if not email_enviado else None
     )
+
+
+@router.get("/preferencias")
+async def obter_preferencias(usuario: dict = Depends(get_usuario_atual)):
+    """Preferências do próprio usuário. Documento sem o campo = nível básico."""
+    return {"nivel_tutor": usuario.get("nivel_tutor") or "basico"}
+
+
+@router.put("/preferencias")
+async def salvar_preferencias(body: PreferenciasUsuario,
+                              usuario: dict = Depends(get_usuario_atual)):
+    """Salva a preferência de nível do tutor.
+
+    Só mexe no PRÓPRIO documento (o id vem do JWT, nunca do corpo) e grava apenas este campo —
+    é área do aluno, não de administração.
+    """
+    await colecao_usuario.update_one(
+        {"_id": usuario["_id"]},
+        {"$set": {"nivel_tutor": body.nivel_tutor}},
+    )
+    return {"nivel_tutor": body.nivel_tutor}
 
 
 @router.get("/", response_model=List[UserInviteResponse])

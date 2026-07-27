@@ -34,6 +34,8 @@ class UsuarioResponse(BaseModel):
     email: str
     nome_usuario: str  
     role: str
+    # Preferência de profundidade do tutor (cards e chat). Ausente = 'basico'.
+    nivel_tutor: str = "basico"
 
     class Config:
         populate_by_name = True
@@ -72,4 +74,15 @@ class UserActivate(BaseModel):
     def senhas_devem_iguais(cls, v, values):
         if "senha" in values and v != values["senha"]:
             raise ValueError("As senhas não coincidem")
+        return v
+
+
+class PreferenciasUsuario(BaseModel):
+    """Preferências que o próprio usuário altera (não é área de admin)."""
+    nivel_tutor: str
+
+    @validator("nivel_tutor")
+    def validar_nivel(cls, v):
+        if v not in ("basico", "avancado"):
+            raise ValueError("nivel_tutor deve ser 'basico' ou 'avancado'")
         return v

@@ -3,9 +3,32 @@
 Cada elemento utilizável no pipeline (modelos, métricas, pré-processadores, fontes de
 coleta e gráficos de avaliação) tem um **card educacional** com dois modos:
 
-- **Básico** — linguagem simples/lúdica (público-alvo: adolescentes da olimpíada de IA);
-- **Avançado** — descrição técnica, fórmula, **exemplo de código Python colorido** e link
-  para a documentação oficial (scikit-learn ou Yellowbrick).
+- **Básico** — linguagem simples/lúdica (analogia, vocabulário de sala de aula);
+- **Avançado** — descrição técnica, **Fundamentos** (fórmula, o que otimiza, pressupostos,
+  complexidade, leitura de referência) e **Na prática** (pipeline sklearn completo, ordem de
+  ajuste, armadilhas, diagnóstico), além do link para a documentação oficial.
+
+O público vai do 8º ano do Fundamental ao primeiro ano do Superior (ONIA), e é o par
+Básico/Avançado que atende os dois extremos. O nível é **preferência do perfil do aluno**
+(`db.usuarios.nivel_tutor`), não estado de tela: vale nos três painéis do tutor, sobrevive ao
+recarregar e **vai no contexto do chat**, então a ficha que o LLM recebe muda junto
+(`app/tutor_kb.py`).
+
+### Padrão editorial do Avançado
+
+| Bloco | Exigido |
+|---|---|
+| `fundamentos` | `formula`, `otimiza`, `pressupostos[]`, `complexidade` (e `leitura[]` quando houver referência canônica) |
+| `pratica` | `codigo` (com `sklearn`, mostrando o pipeline de verdade: divisão, CV ou busca), `tuning[]` na ordem em que se ajusta, `armadilhas[]` e `diagnostico[]` |
+
+Regras de honestidade: `formula` do card espelha a de `fundamentos`; onde a complexidade depende
+da implementação, o texto diz **de quê** depende em vez de cravar um número; defaults saem do
+`hiperparametros_doc` já verificado contra o scikit-learn.
+
+`tests/test_conteudo_loader.py` cobra esses campos nas categorias já convertidas
+(`CATEGORIAS_COM_AVANCADO`) — a lista cresce conforme as demais forem escritas. Estado atual:
+**modelos (24/24)**; métricas, pré-processamento, gráficos e coleta ainda só com a descrição
+técnica.
 
 ## Fonte da verdade: versionada no repositório
 

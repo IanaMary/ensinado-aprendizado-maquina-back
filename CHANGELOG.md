@@ -8,6 +8,39 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-27 (modo Avançado de verdade: nível no perfil, no chat e conteúdo à altura)
+
+> Backend `master` **`<pendente>`** / Frontend `mestrado-iana` `<pendente>`. Sem migração
+> (`nivel_tutor` ausente = básico); exige rodar `seed_conteudo` para o conteúdo novo.
+
+### Alterado
+- **O nível virou preferência do perfil.** `db.usuarios.nivel_tutor` + `GET/PUT
+  /usuario/preferencias` (o id vem do JWT: ninguém muda o de outro) e o campo volta no login.
+  Antes o toggle Básico/Avançado era estado de tela: cada painel nascia em Básico e a escolha
+  se perdia no F5.
+- **O conteúdo avançado passou a chegar ao LLM.** `_resumo_compacto` recebe o nível: no básico
+  segue a explicação simples (500 chars); no avançado vai a **descrição técnica inteira**
+  (1200), o **efeito** e o **quando ajustar** de cada hiperparâmetro, fundamentos, armadilhas e
+  a leitura de referência. Antes o texto técnico era inalcançável — `resumo_basico` vencia
+  sempre. O teto do bloco sobe para 9000 chars no avançado (com 6000, o corte caía no meio da
+  primeira ficha).
+- A instrução de sistema ganhou a regra de profundidade por `nivel`.
+
+### Adicionado
+- **Blocos `fundamentos` e `pratica`** no schema do conteúdo, no card (só em Avançado), no
+  editor do admin e na base de conhecimento do chat.
+- **24/24 modelos** com Fundamentos (fórmula, o que otimiza, pressupostos, complexidade,
+  leitura) e Na prática (pipeline sklearn com CV/busca, ordem de ajuste, armadilhas,
+  diagnóstico). **`formula` saiu de 0/24 para 24/24** — a documentação prometia fórmula no modo
+  Avançado desde sempre.
+- CI cobra os dois blocos nas categorias já convertidas (`tests/test_conteudo_loader.py`).
+
+### Notas
+- Faltam métricas (12), pré-processamento (10), gráficos (10) e coleta (5) — mesma receita.
+- Testes: 498 passed, 1 skipped.
+
+---
+
 ## 2026-07-26k (instrução do tutor: público da ONIA e edição sem deploy)
 
 > Backend `master` **`<pendente>`** / Frontend `mestrado-iana` `<pendente>`. Sem migração

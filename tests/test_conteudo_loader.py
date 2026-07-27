@@ -76,3 +76,39 @@ def test_tem_basico_e_avancado(categoria):
     for valor, c in docs.items():
         assert c.get("resumo_basico"), f"{categoria}/{valor} sem resumo_basico (Básico)"
         assert c.get("descricao"), f"{categoria}/{valor} sem descricao (Avançado)"
+
+
+# ------------------------------------------------------------------ modo Avançado
+# Categorias já convertidas para os dois blocos do Avançado. A lista cresce conforme as
+# demais forem escritas — deixar o teste genérico esconderia o que ainda falta.
+CATEGORIAS_COM_AVANCADO = ["modelos"]
+
+
+@pytest.mark.parametrize("categoria", CATEGORIAS_COM_AVANCADO)
+def test_bloco_fundamentos_completo(categoria):
+    """O Avançado tinha de fato pouco: 0/24 modelos com fórmula, embora a documentação
+    prometesse 'descrição técnica, fórmula, código e link'. O teste agora cobra."""
+    for valor, c in carregar_conteudo(categoria).items():
+        f = c.get("fundamentos") or {}
+        assert f.get("formula"), f"{categoria}/{valor}: sem fórmula"
+        assert f.get("complexidade"), f"{categoria}/{valor}: sem complexidade"
+        assert f.get("pressupostos"), f"{categoria}/{valor}: sem pressupostos"
+        assert f.get("otimiza"), f"{categoria}/{valor}: sem 'o que otimiza'"
+
+
+@pytest.mark.parametrize("categoria", CATEGORIAS_COM_AVANCADO)
+def test_bloco_pratica_completo(categoria):
+    for valor, c in carregar_conteudo(categoria).items():
+        p = c.get("pratica") or {}
+        assert p.get("codigo"), f"{categoria}/{valor}: sem código de referência"
+        assert "sklearn" in p["codigo"], f"{categoria}/{valor}: o código não usa sklearn"
+        assert p.get("armadilhas"), f"{categoria}/{valor}: sem armadilhas"
+        assert p.get("tuning"), f"{categoria}/{valor}: sem ordem de ajuste"
+
+
+@pytest.mark.parametrize("categoria", CATEGORIAS_COM_AVANCADO)
+def test_formula_do_card_espelha_fundamentos(categoria):
+    """O card lê `formula`; o bloco Fundamentos também a tem. Se divergirem, o aluno vê
+    uma fórmula no topo e outra embaixo."""
+    for valor, c in carregar_conteudo(categoria).items():
+        assert c.get("formula") == c["fundamentos"]["formula"], valor

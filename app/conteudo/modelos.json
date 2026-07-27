@@ -32,6 +32,19 @@
     ],
     "exemplo": "from sklearn.ensemble import AdaBoostClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)\n\nmodelo = AdaBoostClassifier(n_estimators=50, learning_rate=1.0, random_state=42)\nmodelo.fit(X_train, y_train)\nprint(modelo.score(X_test, y_test))",
     "exemplo_codigo": "from sklearn.ensemble import AdaBoostClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = AdaBoostClassifier(n_estimators=50, random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "F(x) = Σ_m α_m·h_m(x), com α_m = ½ ln((1−err_m)/err_m) e pesos dos exemplos atualizados por w_i ← w_i·e^{α_m·1[erro]}",
+    "fundamentos": {
+      "complexidade": "Treino = n_estimators × custo do aprendiz base (sequencial, não paraleliza como a floresta).",
+      "formula": "F(x) = Σ_m α_m·h_m(x), com α_m = ½ ln((1−err_m)/err_m) e pesos dos exemplos atualizados por w_i ← w_i·e^{α_m·1[erro]}",
+      "leitura": [
+        "Freund & Schapire (1997), A Decision-Theoretic Generalization of On-Line Learning, JCSS 55(1)"
+      ],
+      "otimiza": "Minimiza a perda exponencial por etapas (forward stagewise additive modeling).",
+      "pressupostos": [
+        "Cada aprendiz fraco é um pouco melhor que o acaso (>50% em problema binário).",
+        "Rótulos com pouco ruído — o algoritmo insiste nos exemplos difíceis."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "50",
@@ -72,6 +85,21 @@
       "Quando você precisa de treino muito rápido (é sequencial, não paraleliza fácil).",
       "Quando precisa de interpretabilidade simples."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Rótulos errados viram o foco do algoritmo — ruído destrói o desempenho.",
+        "Treino sequencial: não acelera com n_jobs como a floresta."
+      ],
+      "codigo": "from sklearn.ensemble import AdaBoostClassifier\nfrom sklearn.tree import DecisionTreeClassifier\nfrom sklearn.model_selection import GridSearchCV\n\nbase = DecisionTreeClassifier(max_depth=1)   # toco de decisão\nmodelo = AdaBoostClassifier(estimator=base, random_state=42)\nbusca = GridSearchCV(modelo, {\"n_estimators\": [50, 200, 500],\n                              \"learning_rate\": [0.1, 0.5, 1.0]}, cv=5).fit(X, y)",
+      "diagnostico": [
+        "Erro de treino caindo e o de teste subindo: reduza learning_rate ou n_estimators.",
+        "Desempenho pior que uma árvore só: provavelmente há rótulos ruidosos."
+      ],
+      "tuning": [
+        "learning_rate e n_estimators são acoplados: taxa menor pede mais estimadores.",
+        "Profundidade do aprendiz base: 1 (toco) é o clássico; 2–3 quando há interações."
+      ]
+    },
     "quandoUsar": [
       "Quando você quer transformar um modelo simples em um classificador mais forte.",
       "Quando os dados são relativamente limpos (pouco ruído).",
@@ -135,6 +163,19 @@
     ],
     "exemplo": "from sklearn.tree import DecisionTreeClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)\n\nmodelo = DecisionTreeClassifier(max_depth=3, random_state=42)\nmodelo.fit(X_train, y_train)\nprint(modelo.score(X_test, y_test))",
     "exemplo_codigo": "from sklearn.tree import DecisionTreeClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = DecisionTreeClassifier(max_depth=3, random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "Escolhe (atributo j, corte t) que maximiza a redução de impureza: ΔI = I(pai) − (n_esq/n)·I(esq) − (n_dir/n)·I(dir), com I = Gini 1−Σ p_c² ou entropia −Σ p_c log p_c",
+    "fundamentos": {
+      "complexidade": "Treino ~O(d·n log n) com dados ordenados por atributo; predição O(profundidade), tipicamente O(log n) numa árvore balanceada.",
+      "formula": "Escolhe (atributo j, corte t) que maximiza a redução de impureza: ΔI = I(pai) − (n_esq/n)·I(esq) − (n_dir/n)·I(dir), com I = Gini 1−Σ p_c² ou entropia −Σ p_c log p_c",
+      "leitura": [
+        "Breiman, Friedman, Olshen & Stone (1984), Classification and Regression Trees"
+      ],
+      "otimiza": "Reduz a impureza dos nós de forma gulosa, um corte de cada vez (não há otimização global da árvore).",
+      "pressupostos": [
+        "As fronteiras de decisão úteis são paralelas aos eixos (cortes em um atributo por vez).",
+        "Não assume distribuição dos dados nem exige escala comum entre atributos."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "gini",
@@ -198,6 +239,23 @@
       "Quando os dados têm muito ruído (a árvore tende a decorar).",
       "Quando relações são suaves/contínuas e curvas (a árvore faz cortes em degraus)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Sem limitar a profundidade, a árvore cresce até folhas puras e decora o treino.",
+        "A importância de atributos favorece variáveis com muitos valores distintos.",
+        "Pequenas mudanças nos dados podem mudar a árvore inteira (alta variância)."
+      ],
+      "codigo": "from sklearn.model_selection import GridSearchCV, cross_val_score\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.tree import DecisionTreeClassifier\n\npipe = Pipeline([(\"modelo\", DecisionTreeClassifier(random_state=42))])\ngrade = {\"modelo__max_depth\": [3, 5, 10, None],\n         \"modelo__min_samples_leaf\": [1, 5, 20]}\nbusca = GridSearchCV(pipe, grade, cv=5, scoring=\"accuracy\")\nbusca.fit(X_treino, y_treino)\nprint(busca.best_params_, busca.best_score_)",
+      "diagnostico": [
+        "Acurácia quase perfeita no treino e bem menor no teste: reduza max_depth.",
+        "Árvore com uma folha por exemplo: min_samples_leaf está baixo demais."
+      ],
+      "tuning": [
+        "max_depth primeiro: é o controle mais direto de sobreajuste.",
+        "min_samples_leaf depois, para impedir folhas com um punhado de exemplos.",
+        "class_weight='balanced' quando uma classe é rara."
+      ]
+    },
     "quandoUsar": [
       "Quando você precisa explicar a decisão para alguém (regras legíveis).",
       "Quando os dados misturam números e categorias e têm relações de \"se/então\".",
@@ -263,6 +321,19 @@
     ],
     "exemplo": "Estimar a nota de uma prova a partir das horas de estudo: a maioria dos alunos segue um padrão, mas um aluno estudou 10 horas e tirou nota baixa porque passou mal no dia. Com Huber, esse caso fora da curva não entorta a linha; ele recebe peso reduzido, e o modelo continua descrevendo bem o comportamento típico da turma.",
     "exemplo_codigo": "from sklearn.linear_model import HuberRegressor\nfrom sklearn.datasets import load_diabetes\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_diabetes(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = HuberRegressor(epsilon=1.35)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "min Σ_i H_ε((y_i − ⟨w,x_i⟩)/σ)·σ + α‖w‖², com H_ε(z) = z² se |z| ≤ ε e 2ε|z| − ε² caso contrário",
+    "fundamentos": {
+      "complexidade": "Otimização convexa iterativa, custo por iteração ~O(n·d).",
+      "formula": "min Σ_i H_ε((y_i − ⟨w,x_i⟩)/σ)·σ + α‖w‖², com H_ε(z) = z² se |z| ≤ ε e 2ε|z| − ε² caso contrário",
+      "leitura": [
+        "Huber (1964), Robust Estimation of a Location Parameter, Annals of Mathematical Statistics"
+      ],
+      "otimiza": "Erro quadrático perto do centro e linear nas caudas — o outlier pesa menos que em mínimos quadrados.",
+      "pressupostos": [
+        "A maior parte dos dados segue uma relação linear; os desvios grandes são contaminação.",
+        "Atributos padronizados (epsilon é medido em desvios)."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "1.35",
@@ -333,6 +404,21 @@
       "Quando não há outliers e a regressão linear simples já basta.",
       "Quando a escala das variáveis é muito desigual e você não padronizou os dados."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Sem padronizar, epsilon perde sentido e a robustez some.",
+        "Com muitos outliers (>30%), prefira RANSAC ou Theil-Sen."
+      ],
+      "codigo": "from sklearn.linear_model import HuberRegressor\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\n\npipe = Pipeline([(\"escala\", StandardScaler()),\n                 (\"modelo\", HuberRegressor(epsilon=1.35))])\npipe.fit(X_treino, y_treino)\nprint(\"outliers detectados:\", pipe[-1].outliers_.sum())",
+      "diagnostico": [
+        "outliers_ marcando quase tudo: epsilon baixo demais ou dados não padronizados.",
+        "Resultado idêntico à regressão linear: provavelmente não há outliers relevantes."
+      ],
+      "tuning": [
+        "epsilon: 1.35 é o valor clássico (95% de eficiência sob normalidade); menor = mais robusto.",
+        "alpha regulariza como no Ridge."
+      ]
+    },
     "quandoUsar": [
       "Quando há outliers moderados e você quer um modelo linear robusto sem descartá-los.",
       "Quando precisa de algo mais estável que a regressão linear comum, mas mais rápido que abordagens que reamostram.",
@@ -402,6 +488,20 @@
     ],
     "exemplo": "Uma escola quer organizar os alunos em grupos de estudo por estilo de aprendizado, mas não sabe quais grupos existem. Usando notas, tempo de estudo e participação, o K-Means com k=3 separa a turma em três grupinhos parecidos, ajudando o professor a montar atividades sob medida para cada grupo.",
     "exemplo_codigo": "from sklearn.cluster import KMeans\nfrom sklearn.datasets import make_blobs\n\nX, _ = make_blobs(n_samples=300, centers=3, random_state=42)\n\nmodelo = KMeans(n_clusters=3, n_init='auto', random_state=42)\nmodelo.fit(X)\nprint(modelo.cluster_centers_)\nprint(modelo.predict(X[:5]))",
+    "formula": "min Σ_k Σ_{x∈C_k} ‖x − μ_k‖² (inércia); alterna atribuição ao centro mais próximo e recálculo dos centros (algoritmo de Lloyd)",
+    "fundamentos": {
+      "complexidade": "O(iterações·n·k·d) por inicialização; n_init repete o processo e fica com a melhor inércia.",
+      "formula": "min Σ_k Σ_{x∈C_k} ‖x − μ_k‖² (inércia); alterna atribuição ao centro mais próximo e recálculo dos centros (algoritmo de Lloyd)",
+      "leitura": [
+        "Lloyd (1982), Least Squares Quantization in PCM, IEEE Trans. IT; Arthur & Vassilvitskii (2007), k-means++"
+      ],
+      "otimiza": "Inércia — soma das distâncias quadráticas aos centros. Converge para mínimo local; k-means++ melhora a inicialização.",
+      "pressupostos": [
+        "Grupos aproximadamente esféricos, de tamanhos e densidades parecidos.",
+        "Número de grupos k conhecido de antemão.",
+        "Atributos na mesma escala (a distância é euclidiana)."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "8",
@@ -482,6 +582,22 @@
       "Quando há muitos valores muito fora do padrão (outliers), que puxam os centroides.",
       "Quando as características estão em escalas muito diferentes e não foram normalizadas."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Sem escalar, a coluna de maior amplitude define os grupos.",
+        "Grupos alongados ou de densidades diferentes quebram o método — considere DBSCAN.",
+        "O algoritmo sempre devolve k grupos, mesmo que não exista estrutura."
+      ],
+      "codigo": "from sklearn.cluster import KMeans\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.metrics import silhouette_score\n\nfor k in range(2, 8):\n    pipe = Pipeline([(\"escala\", StandardScaler()),\n                     (\"modelo\", KMeans(n_clusters=k, n_init=\"auto\", random_state=42))])\n    rotulos = pipe.fit_predict(X)\n    print(k, pipe[-1].inertia_, silhouette_score(X, rotulos))",
+      "diagnostico": [
+        "Silhueta perto de zero: os grupos se sobrepõem — talvez não haja agrupamento.",
+        "Rótulos mudando a cada execução: aumente n_init e fixe random_state."
+      ],
+      "tuning": [
+        "n_clusters é a decisão principal: compare inércia (cotovelo) e silhueta.",
+        "n_init='auto' (ou ≥10) para não ficar preso num mínimo local ruim."
+      ]
+    },
     "quandoUsar": [
       "Quando você quer descobrir grupos naturais nos dados sem ter rótulos prontos.",
       "Quando os grupos têm formato mais ou menos redondo e tamanho parecido.",
@@ -552,6 +668,19 @@
     ],
     "exemplo": "Você tem uma cestinha de frutas e quer ensinar o computador a separar maçãs de laranjas usando dois números: peso e tamanho. Pegando uma fruta nova, o KNN (com k=5) olha as 5 frutas conhecidas mais parecidas em peso e tamanho. Se 4 delas forem laranjas e 1 for maçã, ele diz: 'essa é uma laranja!'.",
     "exemplo_codigo": "from sklearn.neighbors import KNeighborsClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_iris(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = KNeighborsClassifier(n_neighbors=5)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "ŷ(x) = moda{ y_i : x_i ∈ N_k(x) }, com N_k dados por uma distância (padrão: Minkowski p=2, isto é, euclidiana)",
+    "fundamentos": {
+      "complexidade": "Treino O(1) (só armazena); predição O(n·d) por consulta na busca exaustiva, menor com árvores kd/ball em poucas dimensões. Memória O(n·d).",
+      "formula": "ŷ(x) = moda{ y_i : x_i ∈ N_k(x) }, com N_k dados por uma distância (padrão: Minkowski p=2, isto é, euclidiana)",
+      "leitura": [
+        "Cover & Hart (1967), Nearest Neighbor Pattern Classification, IEEE Trans. IT"
+      ],
+      "otimiza": "Nada durante o treino: memoriza os exemplos e decide na hora da predição.",
+      "pressupostos": [
+        "Proximidade no espaço de atributos implica mesma classe.",
+        "Atributos estão em escalas comparáveis — a distância é dominada pela coluna de maior amplitude."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": 5,
@@ -636,6 +765,23 @@
       "Quando os atributos têm escalas muito diferentes e não foram normalizados.",
       "Quando há muitos atributos irrelevantes que atrapalham o cálculo de distância."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Escalar é obrigatório: sem StandardScaler, a coluna de maior amplitude decide sozinha.",
+        "Em muitas dimensões as distâncias ficam parecidas entre si (maldição da dimensionalidade).",
+        "Predição é lenta em bases grandes — o custo está na consulta, não no treino."
+      ],
+      "codigo": "from sklearn.neighbors import KNeighborsClassifier\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.model_selection import GridSearchCV\n\npipe = Pipeline([(\"escala\", StandardScaler()),\n                 (\"modelo\", KNeighborsClassifier())])\ngrade = {\"modelo__n_neighbors\": [3, 5, 11, 21],\n         \"modelo__weights\": [\"uniform\", \"distance\"]}\nbusca = GridSearchCV(pipe, grade, cv=5).fit(X_treino, y_treino)",
+      "diagnostico": [
+        "Acurácia altíssima no treino e baixa no teste com k=1: aumente k.",
+        "Resultado muda muito ao trocar a escala: o pré-processamento está faltando."
+      ],
+      "tuning": [
+        "n_neighbors é o principal: k pequeno decora, k grande suaviza demais.",
+        "weights='distance' quando as classes têm densidades diferentes.",
+        "metric só depois — mudar a distância muda o significado da vizinhança."
+      ]
+    },
     "quandoUsar": [
       "Quando os dados têm poucas características e exemplos parecidos tendem a ter a mesma classe.",
       "Como um modelo simples de referência (baseline) para comparar com modelos mais complexos.",
@@ -706,6 +852,19 @@
     ],
     "exemplo": "Você quer adivinhar quantos sorvetes uma loja vai vender amanhã, sabendo só a temperatura prevista. O KNN (com k=3) procura os 3 dias do passado com temperatura mais parecida com a de amanhã e faz a média de sorvetes vendidos naqueles dias. Essa média é o palpite dele!",
     "exemplo_codigo": "from sklearn.neighbors import KNeighborsRegressor\nfrom sklearn.datasets import load_diabetes\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_diabetes(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = KNeighborsRegressor(n_neighbors=5)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "ŷ(x) = (1/k)·Σ_{i∈N_k(x)} y_i (ou média ponderada por 1/distância quando weights='distance')",
+    "fundamentos": {
+      "complexidade": "Treino O(1); predição O(n·d) por consulta na busca exaustiva. Memória O(n·d).",
+      "formula": "ŷ(x) = (1/k)·Σ_{i∈N_k(x)} y_i (ou média ponderada por 1/distância quando weights='distance')",
+      "leitura": [
+        "Hastie, Tibshirani & Friedman (2009), The Elements of Statistical Learning, cap. 2"
+      ],
+      "otimiza": "Nada no treino: a predição é a média local dos vizinhos.",
+      "pressupostos": [
+        "A função alvo é localmente suave: pontos próximos têm valores próximos.",
+        "Atributos em escalas comparáveis."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": 5,
@@ -790,6 +949,21 @@
       "Quando os atributos têm escalas diferentes e não foram normalizados.",
       "Quando você precisa prever valores fora da faixa observada (KNN não extrapola)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Não extrapola: fora da nuvem de treino a predição vira a média dos vizinhos da borda.",
+        "Sem escalar, a distância é dominada pela variável de maior amplitude."
+      ],
+      "codigo": "from sklearn.neighbors import KNeighborsRegressor\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.model_selection import cross_val_score\n\npipe = Pipeline([(\"escala\", StandardScaler()),\n                 (\"modelo\", KNeighborsRegressor(n_neighbors=5))])\nprint(cross_val_score(pipe, X, y, cv=5, scoring=\"r2\").mean())",
+      "diagnostico": [
+        "Resíduos com degraus: k pequeno demais.",
+        "Predições quase constantes: k grande demais para o tamanho da base."
+      ],
+      "tuning": [
+        "n_neighbors: poucos vizinhos deixam a curva serrilhada; muitos achatam o sinal.",
+        "weights='distance' preserva variação local sem cair para k=1."
+      ]
+    },
     "quandoUsar": [
       "Quando você quer prever um número e exemplos parecidos têm valores parecidos.",
       "Como modelo simples de referência (baseline) para regressão.",
@@ -864,6 +1038,19 @@
     ],
     "exemplo": "Você quer descobrir se um aluno vai passar ou não com base em horas de estudo, notas anteriores e frequência. Depois de normalizar os dados, treina um MLPClassifier; a rede combina essas características nas camadas escondidas e aprende a prever 'passa' ou 'não passa' para novos alunos.",
     "exemplo_codigo": "from sklearn.neural_network import MLPClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_iris(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = MLPClassifier(hidden_layer_sizes=(100,), max_iter=1000, random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))",
+    "formula": "a⁽ˡ⁾ = g(W⁽ˡ⁾a⁽ˡ⁻¹⁾ + b⁽ˡ⁾), saída softmax; minimiza a entropia cruzada por retropropagação com Adam ou L-BFGS",
+    "fundamentos": {
+      "complexidade": "Treino O(épocas·n·Σ(unidades por camada)); memória cresce com o número de pesos.",
+      "formula": "a⁽ˡ⁾ = g(W⁽ˡ⁾a⁽ˡ⁻¹⁾ + b⁽ˡ⁾), saída softmax; minimiza a entropia cruzada por retropropagação com Adam ou L-BFGS",
+      "leitura": [
+        "Goodfellow, Bengio & Courville (2016), Deep Learning, cap. 6"
+      ],
+      "otimiza": "Entropia cruzada + penalidade L2 (alpha). Problema não convexo: o resultado depende da inicialização.",
+      "pressupostos": [
+        "Há dados suficientes para estimar muitos parâmetros.",
+        "Atributos padronizados — sem isso o treino não converge bem."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "(100,)",
@@ -941,6 +1128,23 @@
       "Quando um modelo mais simples (como árvore ou regressão logística) já resolve bem.",
       "Quando você não pode escalonar/normalizar as características (sem isso o treino fica instável)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Sem padronizar, não converge (é o erro mais comum).",
+        "Resultado muda entre execuções: não convexo — fixe random_state e compare médias.",
+        "Em tabelas pequenas, floresta e boosting costumam ganhar com muito menos ajuste."
+      ],
+      "codigo": "from sklearn.neural_network import MLPClassifier\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\n\npipe = Pipeline([(\"escala\", StandardScaler()),\n                 (\"modelo\", MLPClassifier(hidden_layer_sizes=(64, 32),\n                                          early_stopping=True, random_state=42))])\npipe.fit(X_treino, y_treino)\nprint(\"épocas usadas:\", pipe[-1].n_iter_)",
+      "diagnostico": [
+        "Aviso de convergência: aumente max_iter ou ajuste a taxa de aprendizado.",
+        "Perda de validação subindo enquanto a de treino cai: aumente alpha ou reduza a rede."
+      ],
+      "tuning": [
+        "hidden_layer_sizes primeiro (comece pequeno); depois alpha para regularizar.",
+        "early_stopping=True quase sempre — evita treinar além do ponto útil.",
+        "learning_rate_init quando a perda oscila."
+      ]
+    },
     "quandoUsar": [
       "Quando os padrões nos dados são complexos e não lineares (uma reta simples não separa as classes).",
       "Quando você tem uma quantidade razoável de exemplos para treinar.",
@@ -1014,6 +1218,19 @@
     ],
     "exemplo": "Você quer prever a temperatura de amanhã usando umidade, pressão e temperatura de hoje. Depois de normalizar os dados, treina um MLPRegressor; as camadas escondidas combinam essas características e a saída devolve um número estimado para a temperatura.",
     "exemplo_codigo": "from sklearn.neural_network import MLPRegressor\nfrom sklearn.datasets import load_diabetes\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_diabetes(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = MLPRegressor(hidden_layer_sizes=(100,), max_iter=2000, random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))",
+    "formula": "Mesma arquitetura do MLP com saída linear; minimiza o erro quadrático médio + alpha·‖W‖²",
+    "fundamentos": {
+      "complexidade": "Igual à versão classificadora: O(épocas·n·pesos).",
+      "formula": "Mesma arquitetura do MLP com saída linear; minimiza o erro quadrático médio + alpha·‖W‖²",
+      "leitura": [
+        "Goodfellow, Bengio & Courville (2016), Deep Learning, cap. 6"
+      ],
+      "otimiza": "MSE por retropropagação (Adam/L-BFGS). Não convexo.",
+      "pressupostos": [
+        "Atributos padronizados; padronizar o alvo também ajuda a convergência.",
+        "Dados suficientes para o número de pesos."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "(100,)",
@@ -1091,6 +1308,21 @@
       "Quando um modelo simples como regressão linear já resolve bem.",
       "Quando não é possível escalonar/normalizar as características."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Alvo em escala grande sem padronizar trava o treino.",
+        "Extrapolação é arbitrária: fora da faixa de treino a rede inventa."
+      ],
+      "codigo": "from sklearn.neural_network import MLPRegressor\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.compose import TransformedTargetRegressor\n\nrede = Pipeline([(\"escala\", StandardScaler()),\n                 (\"modelo\", MLPRegressor(hidden_layer_sizes=(64,), early_stopping=True,\n                                         random_state=42))])\nmodelo = TransformedTargetRegressor(regressor=rede, transformer=StandardScaler())\nmodelo.fit(X_treino, y_treino)",
+      "diagnostico": [
+        "Predições quase constantes: rede subdimensionada ou alvo não padronizado.",
+        "Erro de validação subindo: reduza a rede ou aumente alpha."
+      ],
+      "tuning": [
+        "Padronize o alvo (TransformedTargetRegressor) antes de mexer na arquitetura.",
+        "hidden_layer_sizes e alpha, nessa ordem."
+      ]
+    },
     "quandoUsar": [
       "Quando você quer prever um número (preço, temperatura, nota) e a relação é complexa/não linear.",
       "Quando há uma boa quantidade de exemplos com a resposta numérica certa.",
@@ -1157,6 +1389,19 @@
     ],
     "exemplo": "Classificar flores de íris em três espécies usando comprimento e largura das pétalas e sépalas. O modelo aprende a média e a variância de cada medida em cada espécie e, para uma flor nova, calcula qual espécie é mais provável.",
     "exemplo_codigo": "from sklearn.naive_bayes import GaussianNB\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = GaussianNB()\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "P(y|x) ∝ P(y)·Π_j P(x_j|y), com P(x_j|y) = N(μ_{jy}, σ²_{jy}) no caso gaussiano",
+    "fundamentos": {
+      "complexidade": "Treino O(n·d) — uma passada; predição O(d·classes). É dos modelos mais baratos que existem.",
+      "formula": "P(y|x) ∝ P(y)·Π_j P(x_j|y), com P(x_j|y) = N(μ_{jy}, σ²_{jy}) no caso gaussiano",
+      "leitura": [
+        "Hand & Yu (2001), Idiot's Bayes — Not So Stupid After All?, International Statistical Review"
+      ],
+      "otimiza": "Nada iterativo: estima médias, variâncias e priors por máxima verossimilhança numa passada.",
+      "pressupostos": [
+        "Atributos condicionalmente independentes dada a classe (o 'naive').",
+        "Cada atributo é aproximadamente gaussiano dentro de cada classe."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "None",
@@ -1185,6 +1430,21 @@
       "Quando você precisa de probabilidades muito precisas e bem calibradas (o Naive Bayes costuma exagerar nelas).",
       "Quando os dados não se parecem nem um pouco com curvas em forma de sino, sem nenhum tratamento."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Probabilidades saem mal calibradas (muito próximas de 0 ou 1), embora o ranking seja útil.",
+        "Atributos altamente correlacionados quebram o pressuposto e enviesam a decisão."
+      ],
+      "codigo": "from sklearn.naive_bayes import GaussianNB\nfrom sklearn.model_selection import cross_val_score\n\nmodelo = GaussianNB()\nprint(cross_val_score(modelo, X, y, cv=5, scoring=\"accuracy\").mean())\nmodelo.fit(X_treino, y_treino)\nprint(\"priors:\", modelo.class_prior_)",
+      "diagnostico": [
+        "Probabilidades sempre ~0/1: esperado; use o ranking ou calibre.",
+        "Desempenho muito abaixo da logística: a independência não vale nesta base."
+      ],
+      "tuning": [
+        "var_smoothing é praticamente o único ajuste (estabiliza variâncias muito pequenas).",
+        "Escolher a variante certa importa mais que ajustar: MultinomialNB para contagens, BernoulliNB para binários."
+      ]
+    },
     "quandoUsar": [
       "Quando você precisa de um modelo rápido para treinar e prever, mesmo com muitos dados.",
       "Quando há muitas características numéricas.",
@@ -1254,6 +1514,19 @@
     ],
     "exemplo": "Uma escola tem uma tabela com 20 notas e medidas de cada aluno e quer fazer um gráfico simples mostrando quais alunos se parecem. Usando o PCA com n_components=2, as 20 características viram apenas duas, permitindo desenhar todos os alunos num gráfico de dois eixos, onde alunos parecidos ficam perto uns dos outros.",
     "exemplo_codigo": "from sklearn.decomposition import PCA\nfrom sklearn.datasets import load_iris\n\nX, y = load_iris(return_X_y=True)\n\npca = PCA(n_components=2)\nX_2d = pca.fit_transform(X)\nprint(X_2d[:5])\nprint(pca.explained_variance_ratio_)",
+    "formula": "Componentes = autovetores de Σ = (1/n)XᵀX (X centrado), obtidos por SVD: X = UΣVᵀ; a variância explicada de cada componente é λ_i/Σλ",
+    "fundamentos": {
+      "complexidade": "O(n·d·min(n,d)) pela SVD; svd_solver='randomized' reduz o custo quando só se quer poucos componentes.",
+      "formula": "Componentes = autovetores de Σ = (1/n)XᵀX (X centrado), obtidos por SVD: X = UΣVᵀ; a variância explicada de cada componente é λ_i/Σλ",
+      "leitura": [
+        "Jolliffe (2002), Principal Component Analysis"
+      ],
+      "otimiza": "Maximiza a variância retida em cada direção ortogonal sucessiva (equivalente a minimizar o erro de reconstrução).",
+      "pressupostos": [
+        "Direções de maior variância são as mais informativas.",
+        "Relações lineares entre atributos; dados centrados (e padronizados quando as unidades diferem)."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "None",
@@ -1319,6 +1592,22 @@
       "Quando há poucas características e nenhuma sobra de informação para resumir.",
       "Quando os dados não foram colocados em escalas comparáveis (uma característica grande pode dominar)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Sem padronizar, a variável de maior unidade vira o primeiro componente.",
+        "Componentes não têm significado direto — não são 'os atributos importantes'.",
+        "Ajustar o PCA no conjunto inteiro antes de dividir treino/teste é vazamento."
+      ],
+      "codigo": "from sklearn.decomposition import PCA\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\nimport numpy as np\n\npipe = Pipeline([(\"escala\", StandardScaler()), (\"pca\", PCA(n_components=0.95))])\nZ = pipe.fit_transform(X)\nprint(\"componentes para 95% da variância:\", pipe[-1].n_components_)\nprint(np.cumsum(pipe[-1].explained_variance_ratio_))",
+      "diagnostico": [
+        "Primeiro componente com quase toda a variância: provável falta de padronização.",
+        "Desempenho cai muito após o PCA: informação útil estava em direções de baixa variância."
+      ],
+      "tuning": [
+        "n_components como fração (0.95) diz 'quero 95% da variância' e escolhe o número sozinho.",
+        "whiten=True quando o passo seguinte assume atributos descorrelacionados de variância 1."
+      ]
+    },
     "quandoUsar": [
       "Quando há muitas características e você quer simplificar os dados.",
       "Para visualizar dados complexos em 2D ou 3D.",
@@ -1389,6 +1678,19 @@
     ],
     "exemplo": "from sklearn.linear_model import Perceptron\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_treino, X_teste, y_treino, y_teste = train_test_split(X, y, random_state=42)\n\nmodelo = make_pipeline(\n    StandardScaler(),\n    Perceptron(eta0=1.0, max_iter=1000, random_state=42)\n)\nmodelo.fit(X_treino, y_treino)\nprint('Acuracia:', modelo.score(X_teste, y_teste))",
     "exemplo_codigo": "from sklearn.linear_model import Perceptron\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_iris(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = Perceptron(random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "Se y_i(⟨w, x_i⟩ + b) ≤ 0 então w ← w + η·y_i·x_i — atualiza só quando erra",
+    "fundamentos": {
+      "complexidade": "O(épocas·n·d), memória O(d).",
+      "formula": "Se y_i(⟨w, x_i⟩ + b) ≤ 0 então w ← w + η·y_i·x_i — atualiza só quando erra",
+      "leitura": [
+        "Rosenblatt (1958), The Perceptron: A Probabilistic Model, Psychological Review 65(6)"
+      ],
+      "otimiza": "Nada além de separar: converge em número finito de passos **se** os dados forem linearmente separáveis (teorema de Novikoff).",
+      "pressupostos": [
+        "Classes linearmente separáveis (caso contrário oscila sem convergir).",
+        "Atributos padronizados."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "None",
@@ -1449,6 +1751,21 @@
       "Quando quer o melhor desempenho possível (modelos modernos costumam ir melhor).",
       "Quando há muito ruído nos dados (o perceptron pode nunca estabilizar)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Em dados não separáveis não converge — fica alternando fronteiras.",
+        "Não dá probabilidade e não maximiza margem: para produção, LinearSVC ou logística."
+      ],
+      "codigo": "from sklearn.linear_model import Perceptron\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\n\npipe = Pipeline([(\"escala\", StandardScaler()),\n                 (\"modelo\", Perceptron(max_iter=1000, tol=1e-3, random_state=42))])\npipe.fit(X_treino, y_treino)",
+      "diagnostico": [
+        "Acurácia mudando muito a cada execução: dados não separáveis.",
+        "Comparar com LinearSVC responde se vale manter o Perceptron (quase nunca, fora do valor histórico)."
+      ],
+      "tuning": [
+        "penalty/alpha para regularizar quando os dados não são separáveis.",
+        "eta0 e max_iter afetam a convergência, mas o modelo é o que é: linear e sem margem."
+      ]
+    },
     "quandoUsar": [
       "Para aprender e demonstrar a ideia básica de um classificador que aprende com erros.",
       "Quando os dados são (ou quase são) separáveis por uma linha reta.",
@@ -1512,6 +1829,19 @@
     ],
     "exemplo": "Separar dois tipos de sementes em que um grupo forma uma nuvem alongada e o outro uma nuvem mais redonda. O QDA aprende o formato de cada nuvem e traça uma fronteira curva que se encaixa melhor do que uma linha reta.",
     "exemplo_codigo": "from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = QuadraticDiscriminantAnalysis()\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "δ_c(x) = −½ log|Σ_c| − ½(x−μ_c)ᵀΣ_c⁻¹(x−μ_c) + log π_c — fronteira quadrática por ter uma covariância por classe",
+    "fundamentos": {
+      "complexidade": "Treino O(n·d² + classes·d³) pela inversão das covariâncias; predição O(classes·d²).",
+      "formula": "δ_c(x) = −½ log|Σ_c| − ½(x−μ_c)ᵀΣ_c⁻¹(x−μ_c) + log π_c — fronteira quadrática por ter uma covariância por classe",
+      "leitura": [
+        "Hastie, Tibshirani & Friedman (2009), The Elements of Statistical Learning, cap. 4.3"
+      ],
+      "otimiza": "Estima μ_c, Σ_c e π_c por máxima verossimilhança; a decisão é o maior δ_c.",
+      "pressupostos": [
+        "Cada classe é aproximadamente gaussiana multivariada.",
+        "Há exemplos suficientes por classe para estimar uma matriz de covariância inteira."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "None",
@@ -1560,6 +1890,21 @@
       "Quando todas as classes têm formatos parecidos, caso em que o LDA, mais simples, costuma bastar.",
       "Quando há muitas características em relação ao número de amostras, levando a estimativas instáveis."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Com d grande e poucos exemplos, a covariância fica singular (aviso de colinearidade).",
+        "Sensível a outliers, que inflam a covariância estimada."
+      ],
+      "codigo": "from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis\n\nmodelo = QuadraticDiscriminantAnalysis(reg_param=0.1)\nmodelo.fit(X_treino, y_treino)\nprint(modelo.score(X_teste, y_teste))",
+      "diagnostico": [
+        "Aviso 'variables are collinear': aumente reg_param ou reduza dimensionalidade.",
+        "Desempenho pior que LDA: não há ganho em covariâncias separadas nesta base."
+      ],
+      "tuning": [
+        "reg_param encolhe a covariância — é o remédio quando há poucos exemplos por classe.",
+        "Compare com LDA: se a covariância for parecida entre classes, LDA generaliza melhor."
+      ]
+    },
     "quandoUsar": [
       "Quando as classes têm formatos ou espalhamentos claramente diferentes.",
       "Quando uma fronteira reta não separa bem os grupos.",
@@ -1623,6 +1968,19 @@
     ],
     "exemplo": "Prever o tempo de entrega de uma pizzaria: a média pode ser enganada por uma entrega que demorou 2 horas (carro quebrou). Usando quantile=0.5 você prevê o tempo mediano, mais realista; usando quantile=0.9 você estima 'em 90% das vezes a entrega chega em até X minutos', útil para dar uma promessa segura ao cliente.",
     "exemplo_codigo": "from sklearn.linear_model import QuantileRegressor\nfrom sklearn.datasets import make_regression\nfrom sklearn.model_selection import train_test_split\n\nX, y = make_regression(n_samples=200, n_features=4, noise=10, random_state=42)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = QuantileRegressor(quantile=0.5, alpha=0.0, solver='highs')\nmodelo.fit(X_tr, y_tr)\nprint(modelo.predict(X_te[:5]))",
+    "formula": "min Σ ρ_τ(y_i − ⟨w,x_i⟩) + α‖w‖₁, com a perda pinball ρ_τ(u) = u·τ se u ≥ 0, u·(τ−1) caso contrário",
+    "fundamentos": {
+      "complexidade": "Programação linear: custo cresce bem mais rápido que mínimos quadrados; pesado em bases grandes.",
+      "formula": "min Σ ρ_τ(y_i − ⟨w,x_i⟩) + α‖w‖₁, com a perda pinball ρ_τ(u) = u·τ se u ≥ 0, u·(τ−1) caso contrário",
+      "leitura": [
+        "Koenker & Bassett (1978), Regression Quantiles, Econometrica 46(1)"
+      ],
+      "otimiza": "Estima o quantil τ do alvo (τ=0.5 é a mediana condicional), não a média.",
+      "pressupostos": [
+        "Interessa uma faixa/quantil da resposta, não o valor médio.",
+        "Problema resolvido por programação linear — atributos padronizados ajudam a convergência."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "0.5",
@@ -1686,6 +2044,21 @@
       "Em conjuntos de dados muito grandes onde a programação linear fica lenta.",
       "Quando não há outliers e os pressupostos da regressão linear comum são satisfeitos."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Comparar com R² não faz sentido: a métrica natural é a perda pinball.",
+        "Quantis extremos (0.01, 0.99) precisam de muitos dados para serem estáveis."
+      ],
+      "codigo": "from sklearn.linear_model import QuantileRegressor\n\nfaixas = {}\nfor tau in (0.1, 0.5, 0.9):\n    m = QuantileRegressor(quantile=tau, alpha=0.0, solver=\"highs\").fit(X_treino, y_treino)\n    faixas[tau] = m.predict(X_teste)\n# faixas[0.1] e faixas[0.9] delimitam um intervalo de predição empírico",
+      "diagnostico": [
+        "Faixas 0.1/0.9 que se cruzam: sinal de instabilidade — mais dados ou menos atributos.",
+        "Solver lento: reduza a base ou use HistGradientBoosting com perda quantílica."
+      ],
+      "tuning": [
+        "quantile é a decisão de negócio (mediana? pior caso? melhor caso?), não um ajuste técnico.",
+        "alpha=0 quando não quiser encolher coeficientes; solver='highs' é o rápido."
+      ]
+    },
     "quandoUsar": [
       "Quando você quer prever a mediana ou outra faixa específica, não a média.",
       "Quando há outliers que distorceriam a regressão linear comum.",
@@ -1750,6 +2123,19 @@
     ],
     "exemplo": "from sklearn.ensemble import RandomForestClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)\n\nmodelo = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)\nmodelo.fit(X_train, y_train)\nprint(modelo.score(X_test, y_test))",
     "exemplo_codigo": "from sklearn.ensemble import RandomForestClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = RandomForestClassifier(n_estimators=100, random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "Predição por votação/média de B árvores treinadas em amostras bootstrap, cada corte considerando um subconjunto aleatório de atributos: ŷ = moda{T_b(x)}",
+    "fundamentos": {
+      "complexidade": "Treino ~B vezes o custo de uma árvore (paralelizável por n_jobs); predição O(B·profundidade). Memória cresce com B.",
+      "formula": "Predição por votação/média de B árvores treinadas em amostras bootstrap, cada corte considerando um subconjunto aleatório de atributos: ŷ = moda{T_b(x)}",
+      "leitura": [
+        "Breiman (2001), Random Forests, Machine Learning 45(1)"
+      ],
+      "otimiza": "Reduz a variância das árvores individuais tornando-as pouco correlacionadas (bagging + aleatoriedade nos atributos).",
+      "pressupostos": [
+        "Erros das árvores são parcialmente independentes — é a média que estabiliza a predição.",
+        "Como a árvore, não exige escala comum nem distribuição específica."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "100",
@@ -1825,6 +2211,23 @@
       "Quando o tempo/memória de treino são muito limitados e há muitos dados.",
       "Quando precisa de previsões em tempo real ultra-rápidas com modelo pequeno."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Custo de treino e memória crescem linearmente com n_estimators.",
+        "feature_importances_ herda o viés por cardinalidade da árvore; prefira permutation_importance.",
+        "Extrapola mal: nunca prevê fora da faixa vista no treino (vale para a versão regressora)."
+      ],
+      "codigo": "from sklearn.ensemble import RandomForestClassifier\nfrom sklearn.model_selection import cross_val_score\n\nmodelo = RandomForestClassifier(n_estimators=300, n_jobs=-1, random_state=42)\nscores = cross_val_score(modelo, X, y, cv=5, scoring=\"f1_macro\")\nprint(scores.mean(), scores.std())\nmodelo.fit(X_treino, y_treino)\nimportancias = sorted(zip(modelo.feature_importances_, colunas), reverse=True)",
+      "diagnostico": [
+        "A métrica para de melhorar ao dobrar n_estimators: pare de aumentar.",
+        "Diferença grande entre treino e validação mesmo com muitas árvores: limite a profundidade."
+      ],
+      "tuning": [
+        "n_estimators: mais árvores só ajudam até estabilizar — comece em 300 e observe.",
+        "max_features controla a descorrelação; é o parâmetro com mais efeito depois do número de árvores.",
+        "max_depth / min_samples_leaf quando o conjunto é pequeno e o modelo ainda decora."
+      ]
+    },
     "quandoUsar": [
       "Quando você quer boa precisão sem ajustar muitos detalhes.",
       "Quando os dados têm muitos atributos e relações complexas.",
@@ -1890,6 +2293,19 @@
     ],
     "exemplo": "Medir a temperatura ao longo do dia com um sensor que às vezes falha e cospe valores absurdos (ex.: 200 graus). O RANSAC sorteia conjuntos de leituras, encontra a linha que a maioria das medições corretas segue e marca as leituras malucas como outliers, ajustando o modelo final só com as medições confiáveis.",
     "exemplo_codigo": "from sklearn.linear_model import RANSACRegressor\nfrom sklearn.datasets import make_regression\nfrom sklearn.model_selection import train_test_split\n\nX, y = make_regression(n_samples=200, n_features=1, noise=10, random_state=42)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = RANSACRegressor(random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "Repete: amostra o mínimo de pontos, ajusta o modelo, conta inliers (|resíduo| < limiar); fica com o consenso maior. Iterações ~ log(1−p)/log(1−w^m)",
+    "fundamentos": {
+      "complexidade": "Custo = número de iterações × custo do estimador base; cresce rápido quando a fração de inliers é baixa.",
+      "formula": "Repete: amostra o mínimo de pontos, ajusta o modelo, conta inliers (|resíduo| < limiar); fica com o consenso maior. Iterações ~ log(1−p)/log(1−w^m)",
+      "leitura": [
+        "Fischler & Bolles (1981), Random Sample Consensus, Communications of the ACM 24(6)"
+      ],
+      "otimiza": "Maximiza o número de pontos consistentes com o modelo (consenso), ignorando o resto.",
+      "pressupostos": [
+        "Existe um subconjunto majoritário coerente (os inliers) e o restante é ruído grosseiro.",
+        "É possível estimar um limiar de resíduo que separe inlier de outlier."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "None",
@@ -1948,6 +2364,7 @@
         "default": "inf",
         "descricao": "Para a busca se o score atingir este valor.",
         "efeito": "Permite parada antecipada por qualidade do modelo.",
+        "faixa": "qualquer float; o padrão inf desativa a parada antecipada",
         "nome": "stop_score",
         "quando_ajustar": "Use para encerrar assim que um score satisfatório for alcançado.",
         "tipo": "float"
@@ -1977,6 +2394,7 @@
         "default": "None",
         "descricao": "Semente do gerador aleatório para reprodutibilidade.",
         "efeito": "Fixar garante que os sorteios sejam sempre os mesmos.",
+        "faixa": "qualquer inteiro — fixe para reproduzir o mesmo consenso",
         "nome": "random_state",
         "quando_ajustar": "Defina um inteiro sempre que precisar de resultados reproduzíveis.",
         "tipo": "int, RandomState ou None"
@@ -1990,6 +2408,23 @@
       "Quando a relação é fortemente não linear (a menos que o estimador base trate isso).",
       "Quando precisa de resultado totalmente determinístico sem fixar random_state."
     ],
+    "pratica": {
+      "armadilhas": [
+        "É aleatório por construção: duas execuções podem dar retas diferentes.",
+        "Limiar mal escolhido joga metade dos dados fora (ou não descarta nada).",
+        "Com poucos pontos, a amostragem mínima vira sorte."
+      ],
+      "codigo": "from sklearn.linear_model import RANSACRegressor, LinearRegression\nimport numpy as np\n\nmodelo = RANSACRegressor(estimator=LinearRegression(), random_state=42)\nmodelo.fit(X_treino, y_treino)\ninliers = modelo.inlier_mask_\nprint(\"inliers:\", inliers.sum(), \"de\", len(inliers))",
+      "diagnostico": [
+        "inlier_mask_ com quase todos os pontos: limiar frouxo, virou regressão linear.",
+        "Resultados diferentes a cada rodada: aumente max_trials e fixe random_state."
+      ],
+      "tuning": [
+        "residual_threshold é o parâmetro que decide tudo — em unidade do alvo (padrão: MAD do y).",
+        "max_trials maior quando a fração de outliers é alta.",
+        "random_state fixo: sem ele o resultado muda a cada execução."
+      ]
+    },
     "quandoUsar": [
       "Quando há muitos outliers, até uma fração grande dos dados.",
       "Quando existe um padrão claro seguido pela maioria dos pontos.",
@@ -2054,6 +2489,20 @@
     ],
     "exemplo": "from sklearn.linear_model import LinearRegression\n\nmodelo = LinearRegression()  # fit_intercept=True, positive=False\nmodelo.fit(X_treino, y_treino)\n\nprevisoes = modelo.predict(X_teste)\nprint('Pesos (coeficientes):', modelo.coef_)\nprint('Intercepto:', modelo.intercept_)",
     "exemplo_codigo": "from sklearn.linear_model import LinearRegression\nfrom sklearn.datasets import load_diabetes\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_diabetes(return_X_y=True)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = LinearRegression()\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "ŷ = ⟨w, x⟩ + b, com w = argmin ‖y − Xw‖² (solução de mínimos quadrados, via pseudo-inversa)",
+    "fundamentos": {
+      "complexidade": "Treino O(n·d² ) na decomposição usada pelo sklearn (d ≪ n); predição O(d).",
+      "formula": "ŷ = ⟨w, x⟩ + b, com w = argmin ‖y − Xw‖² (solução de mínimos quadrados, via pseudo-inversa)",
+      "leitura": [
+        "Draper & Smith (1998), Applied Regression Analysis"
+      ],
+      "otimiza": "Minimiza a soma dos quadrados dos resíduos — solução fechada, sem hiperparâmetro.",
+      "pressupostos": [
+        "Relação linear entre atributos e alvo.",
+        "Resíduos com média zero, variância constante (homocedasticidade) e independentes.",
+        "Baixa colinearidade entre atributos."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "True",
@@ -2100,6 +2549,22 @@
       "Quando o objetivo é prever categorias (gato/cachorro, aprovado/reprovado) — aí o problema é de classificação.",
       "Quando há muitos valores extremos (outliers), porque eles puxam a linha e atrapalham."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Um outlier desloca a reta inteira (o quadrado do erro pune muito o ponto distante).",
+        "R² alto não garante que a relação seja linear — olhe o gráfico de resíduos.",
+        "Colinearidade deixa os coeficientes instáveis, mesmo com boa predição."
+      ],
+      "codigo": "from sklearn.linear_model import LinearRegression\nfrom sklearn.model_selection import cross_val_score\nimport numpy as np\n\nmodelo = LinearRegression()\nr2 = cross_val_score(modelo, X, y, cv=5, scoring=\"r2\")\nprint(r2.mean())\nmodelo.fit(X_treino, y_treino)\nresiduos = y_teste - modelo.predict(X_teste)\nprint(\"resíduo médio:\", np.mean(residuos))",
+      "diagnostico": [
+        "Resíduos em forma de U: falta termo não linear.",
+        "Resíduos abrindo em leque: variância não constante, considere transformar o alvo."
+      ],
+      "tuning": [
+        "Não tem hiperparâmetro: o ajuste é na escolha e transformação dos atributos.",
+        "Se houver colinearidade, troque por Ridge em vez de mexer nos dados às cegas."
+      ]
+    },
     "quandoUsar": [
       "Quando você quer prever um número e suspeita que a relação entre as características e o alvo é mais ou menos uma linha reta.",
       "Como primeiro modelo (linha de base) para comparar com modelos mais complexos.",
@@ -2169,6 +2634,19 @@
     ],
     "exemplo": "from sklearn.linear_model import LogisticRegression\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_treino, X_teste, y_treino, y_teste = train_test_split(X, y, random_state=42)\n\nmodelo = LogisticRegression(C=1.0, solver='lbfgs', max_iter=200)\nmodelo.fit(X_treino, y_treino)\n\nprint('Acuracia:', modelo.score(X_teste, y_teste))\nprint('Probabilidades do 1o exemplo:', modelo.predict_proba(X_teste[:1]))",
     "exemplo_codigo": "from sklearn.linear_model import LogisticRegression\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_iris(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = LogisticRegression(max_iter=1000)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "P(y=1|x) = σ(⟨w, x⟩ + b), σ(z)=1/(1+e^{−z}); minimiza a log-verossimilhança negativa + penalidade: Σ log(1+e^{−y_i f(x_i)}) + (1/C)·R(w)",
+    "fundamentos": {
+      "complexidade": "Treino aproximadamente O(n·d) por iteração do solver; predição O(d).",
+      "formula": "P(y=1|x) = σ(⟨w, x⟩ + b), σ(z)=1/(1+e^{−z}); minimiza a log-verossimilhança negativa + penalidade: Σ log(1+e^{−y_i f(x_i)}) + (1/C)·R(w)",
+      "leitura": [
+        "Hastie, Tibshirani & Friedman (2009), The Elements of Statistical Learning, cap. 4"
+      ],
+      "otimiza": "Máxima verossimilhança com regularização (L2 por padrão), por otimização convexa — há um único mínimo global.",
+      "pressupostos": [
+        "O log-odds é aproximadamente linear nos atributos.",
+        "Observações independentes; atributos padronizados quando se usa regularização."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "1.0",
@@ -2239,6 +2717,23 @@
       "Quando há muitíssimas variáveis irrelevantes sem nenhum ajuste de regularização.",
       "Quando os atributos têm escalas muito diferentes e não foram padronizados (pode atrapalhar a convergência)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Interpretar coeficientes sem padronizar os atributos leva a conclusões erradas.",
+        "Separação perfeita faz os coeficientes explodirem — a regularização é o que segura.",
+        "O limiar 0.5 raramente é o melhor em classes desbalanceadas."
+      ],
+      "codigo": "from sklearn.linear_model import LogisticRegression\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.model_selection import cross_val_score\n\npipe = Pipeline([(\"escala\", StandardScaler()),\n                 (\"modelo\", LogisticRegression(max_iter=1000))])\nprint(cross_val_score(pipe, X, y, cv=5, scoring=\"roc_auc\").mean())\npipe.fit(X_treino, y_treino)\ncoefs = sorted(zip(pipe[-1].coef_[0], colunas), key=abs, reverse=True)",
+      "diagnostico": [
+        "Aviso de convergência: aumente max_iter ou padronize.",
+        "AUC boa e acurácia ruim: é problema de limiar, não de modelo."
+      ],
+      "tuning": [
+        "C (inverso da regularização) em escala logarítmica.",
+        "class_weight='balanced' antes de reamostrar dados desbalanceados.",
+        "penalty='l1' com solver='saga' quando quiser seleção de atributos."
+      ]
+    },
     "quandoUsar": [
       "Quando você precisa classificar em duas ou mais categorias.",
       "Quando quer não só a resposta, mas também a probabilidade/confiança de cada classe.",
@@ -2304,6 +2799,19 @@
     ],
     "exemplo": "from sklearn.preprocessing import PolynomialFeatures\nfrom sklearn.linear_model import LinearRegression\nfrom sklearn.pipeline import make_pipeline\n\n# Cria potencias (grau 2) e depois ajusta uma regressao linear\nmodelo = make_pipeline(\n    PolynomialFeatures(degree=2),  # include_bias=True por padrao\n    LinearRegression()\n)\nmodelo.fit(X_treino, y_treino)\n\nprevisoes = modelo.predict(X_teste)",
     "exemplo_codigo": "from sklearn.preprocessing import PolynomialFeatures\nfrom sklearn.linear_model import LinearRegression\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.datasets import make_regression\nfrom sklearn.model_selection import train_test_split\n\nX, y = make_regression(n_samples=200, n_features=1, noise=10, random_state=42)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = make_pipeline(PolynomialFeatures(degree=2), LinearRegression())\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "ŷ = w₀ + Σ w_i x_i + Σ w_ij x_i x_j + … — é regressão linear sobre atributos expandidos por PolynomialFeatures(degree=k)",
+    "fundamentos": {
+      "complexidade": "O número de termos cresce como C(d+k, k) — com d atributos e grau k, a expansão explode rápido; o ajuste depois é o da regressão linear.",
+      "formula": "ŷ = w₀ + Σ w_i x_i + Σ w_ij x_i x_j + … — é regressão linear sobre atributos expandidos por PolynomialFeatures(degree=k)",
+      "leitura": [
+        "Hastie, Tibshirani & Friedman (2009), The Elements of Statistical Learning, cap. 5"
+      ],
+      "otimiza": "Mínimos quadrados no espaço expandido: o modelo continua linear nos parâmetros.",
+      "pressupostos": [
+        "A relação é suave e capturável por um polinômio de grau baixo.",
+        "Mesmos pressupostos de resíduo da regressão linear."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "2",
@@ -2346,6 +2854,22 @@
       "Quando há muitas características: o número de termos polinomiais cresce muito rápido e o modelo fica pesado e propenso a overfitting.",
       "Quando você precisa prever categorias (isso é classificação)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Grau alto oscila entre os pontos e dispara fora da faixa de treino.",
+        "Sem padronizar depois da expansão, x³ domina numericamente x.",
+        "interaction_only=True quando só interessam interações, não potências."
+      ],
+      "codigo": "from sklearn.preprocessing import PolynomialFeatures, StandardScaler\nfrom sklearn.linear_model import Ridge\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.model_selection import GridSearchCV\n\npipe = Pipeline([(\"poly\", PolynomialFeatures(include_bias=False)),\n                 (\"escala\", StandardScaler()),\n                 (\"modelo\", Ridge())])\nbusca = GridSearchCV(pipe, {\"poly__degree\": [2, 3, 4],\n                            \"modelo__alpha\": [0.1, 1, 10]}, cv=5).fit(X, y)",
+      "diagnostico": [
+        "Curva com ondulações que não existem nos dados: reduza o grau.",
+        "Erro de treino ínfimo e de teste alto: excesso de termos."
+      ],
+      "tuning": [
+        "degree é o ajuste central — 2 ou 3 resolvem a maioria dos casos escolares.",
+        "Combine com Ridge: a expansão polinomial quase sempre pede regularização."
+      ]
+    },
     "quandoUsar": [
       "Quando o gráfico dos dados mostra uma curva clara, e não uma reta.",
       "Quando a regressão linear simples deixa um padrão sobrando nos resíduos (erros), sugerindo curvatura.",
@@ -2408,6 +2932,19 @@
     ],
     "exemplo": "from sklearn.linear_model import Ridge\n\nmodelo = Ridge(alpha=1.0)  # fit_intercept=True, solver='auto'\nmodelo.fit(X_treino, y_treino)\n\nprevisoes = modelo.predict(X_teste)\nprint('Pesos (coeficientes):', modelo.coef_)\nprint('Intercepto:', modelo.intercept_)",
     "exemplo_codigo": "from sklearn.linear_model import Ridge\nfrom sklearn.datasets import load_diabetes\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_diabetes(return_X_y=True)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = Ridge(alpha=1.0)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "w = argmin ‖y − Xw‖² + α‖w‖² (solução fechada: w = (XᵀX + αI)⁻¹Xᵀy)",
+    "fundamentos": {
+      "complexidade": "Treino da mesma ordem da regressão linear; predição O(d).",
+      "formula": "w = argmin ‖y − Xw‖² + α‖w‖² (solução fechada: w = (XᵀX + αI)⁻¹Xᵀy)",
+      "leitura": [
+        "Hoerl & Kennard (1970), Ridge Regression: Biased Estimation for Nonorthogonal Problems, Technometrics"
+      ],
+      "otimiza": "Mínimos quadrados com penalidade L2, que encolhe coeficientes em direção a zero sem zerá-los.",
+      "pressupostos": [
+        "Os mesmos da regressão linear, com tolerância a colinearidade.",
+        "Atributos padronizados — a penalidade é sensível à escala."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "1.0",
@@ -2478,6 +3015,21 @@
       "Quando a relação entre dados e alvo é claramente curva (uma reta, mesmo regularizada, não acompanha curvas).",
       "Quando o problema é prever categorias (isso é classificação)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Ridge não zera coeficientes: para seleção de atributos, o caminho é L1 (Lasso).",
+        "alpha grande demais achata o modelo até virar a média do alvo."
+      ],
+      "codigo": "from sklearn.linear_model import RidgeCV\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\nimport numpy as np\n\npipe = Pipeline([(\"escala\", StandardScaler()),\n                 (\"modelo\", RidgeCV(alphas=np.logspace(-3, 3, 13)))])\npipe.fit(X_treino, y_treino)\nprint(\"alpha escolhido:\", pipe[-1].alpha_)",
+      "diagnostico": [
+        "Coeficientes todos próximos de zero e R² baixo: alpha exagerado.",
+        "Coeficientes instáveis entre dobras da validação: colinearidade ainda alta."
+      ],
+      "tuning": [
+        "alpha em escala logarítmica; RidgeCV faz a busca por validação cruzada de uma vez.",
+        "Padronize antes: sem isso, alpha pune mais as colunas de menor escala."
+      ]
+    },
     "quandoUsar": [
       "Quando a regressão linear comum está com overfitting (vai bem no treino e mal no teste).",
       "Quando há muitas características, ou várias muito parecidas entre si (multicolinearidade).",
@@ -2547,6 +3099,19 @@
     ],
     "exemplo": "from sklearn.linear_model import SGDClassifier\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\n\nX, y = load_iris(return_X_y=True)\nX_treino, X_teste, y_treino, y_teste = train_test_split(X, y, random_state=42)\n\nmodelo = make_pipeline(\n    StandardScaler(),\n    SGDClassifier(loss='hinge', alpha=0.0001, max_iter=1000, random_state=42)\n)\nmodelo.fit(X_treino, y_treino)\nprint('Acuracia:', modelo.score(X_teste, y_teste))",
     "exemplo_codigo": "from sklearn.linear_model import SGDClassifier\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_iris(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = SGDClassifier(loss='hinge', random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "w ← w − η(t)·∇L(y_i, f(x_i)) por exemplo, com L = hinge (SVM linear), log_loss (logística) etc. + penalidade α·R(w)",
+    "fundamentos": {
+      "complexidade": "Treino O(épocas·n·d), com memória O(d): é a opção para bases que não cabem em memória (partial_fit).",
+      "formula": "w ← w − η(t)·∇L(y_i, f(x_i)) por exemplo, com L = hinge (SVM linear), log_loss (logística) etc. + penalidade α·R(w)",
+      "leitura": [
+        "Bottou (2010), Large-Scale Machine Learning with Stochastic Gradient Descent"
+      ],
+      "otimiza": "Minimiza a perda escolhida por gradiente estocástico — atualiza a cada exemplo, não a cada época.",
+      "pressupostos": [
+        "Problema linear (nos atributos fornecidos) e dados padronizados — o passo de aprendizado é global.",
+        "Exemplos apresentados em ordem aleatória (shuffle)."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "'hinge'",
@@ -2624,6 +3189,22 @@
       "Quando a separação entre classes é muito curva e não linear.",
       "Quando você não quer perder tempo ajustando taxa de aprendizado e outros parâmetros sensíveis."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Extremamente sensível à escala: sem padronizar, não converge.",
+        "Resultado varia com a ordem dos exemplos — fixe random_state ao comparar.",
+        "Poucas épocas em base pequena entregam um modelo pior que o equivalente fechado."
+      ],
+      "codigo": "from sklearn.linear_model import SGDClassifier\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\n\npipe = Pipeline([(\"escala\", StandardScaler()),\n                 (\"modelo\", SGDClassifier(loss=\"log_loss\", early_stopping=True,\n                                          random_state=42))])\npipe.fit(X_treino, y_treino)",
+      "diagnostico": [
+        "Métrica oscilando entre execuções: aumente max_iter ou reduza eta0.",
+        "Desempenho abaixo de LogisticRegression na mesma base: a base é pequena — use o modelo fechado."
+      ],
+      "tuning": [
+        "loss define o modelo: 'hinge' vira SVM linear, 'log_loss' vira logística.",
+        "alpha (regularização) e learning_rate/eta0 depois; early_stopping evita épocas inúteis."
+      ]
+    },
     "quandoUsar": [
       "Quando o conjunto de dados é muito grande (muitos exemplos ou muitas variáveis).",
       "Quando você precisa de um treino rápido e que use pouca memória.",
@@ -2689,6 +3270,19 @@
     ],
     "exemplo": "from sklearn.svm import SVC\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import make_pipeline\n\n# Sempre padronize antes do SVM\nmodelo = make_pipeline(StandardScaler(), SVC(C=1.0, kernel='rbf', gamma='scale'))\nmodelo.fit(X_treino, y_treino)\npredicoes = modelo.predict(X_teste)",
     "exemplo_codigo": "from sklearn.svm import SVC\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_iris(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = SVC(kernel='rbf', C=1.0)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "min_w,b ½‖w‖² + C·Σ ξ_i sujeito a y_i(⟨w, φ(x_i)⟩ + b) ≥ 1 − ξ_i, ξ_i ≥ 0; com kernel K(x, x') = ⟨φ(x), φ(x')⟩ (rbf: exp(−γ‖x−x'‖²))",
+    "fundamentos": {
+      "complexidade": "Treino entre O(n²·d) e O(n³·d) na implementação libsvm; predição proporcional ao número de vetores de suporte. Inviável para n muito grande — nesse caso use LinearSVC ou SGD.",
+      "formula": "min_w,b ½‖w‖² + C·Σ ξ_i sujeito a y_i(⟨w, φ(x_i)⟩ + b) ≥ 1 − ξ_i, ξ_i ≥ 0; com kernel K(x, x') = ⟨φ(x), φ(x')⟩ (rbf: exp(−γ‖x−x'‖²))",
+      "leitura": [
+        "Cortes & Vapnik (1995), Support-Vector Networks, Machine Learning 20(3)"
+      ],
+      "otimiza": "Maximiza a margem entre as classes, penalizando violações com peso C.",
+      "pressupostos": [
+        "As classes são separáveis num espaço induzido pelo kernel (não necessariamente no original).",
+        "Atributos padronizados — o kernel rbf compara distâncias."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "1.0",
@@ -2745,6 +3339,23 @@
       "Você precisa de probabilidades calibradas e rápidas por padrão.",
       "Os dados têm muito ruído e classes muito sobrepostas sem padrão claro."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Sem padronizar, o rbf fica inútil (a distância é dominada por uma coluna).",
+        "gamma alto memoriza cada ponto; C alto ignora o ruído e sobreajusta.",
+        "Treino cresce mais que linearmente com o número de exemplos."
+      ],
+      "codigo": "from sklearn.svm import SVC\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.model_selection import GridSearchCV\n\npipe = Pipeline([(\"escala\", StandardScaler()), (\"modelo\", SVC(kernel=\"rbf\"))])\ngrade = {\"modelo__C\": [0.1, 1, 10, 100],\n         \"modelo__gamma\": [\"scale\", 0.01, 0.1, 1]}\nbusca = GridSearchCV(pipe, grade, cv=5, n_jobs=-1).fit(X_treino, y_treino)",
+      "diagnostico": [
+        "Quase todos os pontos viram vetores de suporte: gamma alto demais.",
+        "Fronteira que envolve exemplos isolados: reduza C."
+      ],
+      "tuning": [
+        "C e gamma juntos (grade log-espaçada): eles se compensam e não devem ser ajustados isolados.",
+        "kernel='linear' primeiro em dados de muitas dimensões — costuma bastar e treina bem mais rápido.",
+        "probability=True só quando precisar de probabilidade: custa uma calibração interna."
+      ]
+    },
     "quandoUsar": [
       "Conjuntos de dados pequenos a médios (até alguns milhares de exemplos).",
       "Quando a fronteira entre as classes é complexa/curva (use kernel 'rbf').",
@@ -2810,6 +3421,19 @@
     ],
     "exemplo": "from sklearn.svm import LinearSVC\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import make_pipeline\n\nmodelo = make_pipeline(StandardScaler(), LinearSVC(C=1.0, max_iter=1000))\nmodelo.fit(X_treino, y_treino)\npredicoes = modelo.predict(X_teste)",
     "exemplo_codigo": "from sklearn.svm import LinearSVC\nfrom sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_iris(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = LinearSVC(C=1.0, max_iter=5000)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "min_w,b ½‖w‖² + C·Σ max(0, 1 − y_i(⟨w, x_i⟩ + b))^p — perda hinge (p=1) ou hinge quadrática (p=2)",
+    "fundamentos": {
+      "complexidade": "Treino aproximadamente linear em n·d — escala para bases bem maiores que o SVC com kernel; predição O(d).",
+      "formula": "min_w,b ½‖w‖² + C·Σ max(0, 1 − y_i(⟨w, x_i⟩ + b))^p — perda hinge (p=1) ou hinge quadrática (p=2)",
+      "leitura": [
+        "Fan et al. (2008), LIBLINEAR: A Library for Large Linear Classification, JMLR 9"
+      ],
+      "otimiza": "Maximiza a margem de um separador linear com perda hinge, resolvido por liblinear.",
+      "pressupostos": [
+        "As classes são aproximadamente separáveis por um hiperplano no espaço original.",
+        "Atributos padronizados."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "1.0",
@@ -2862,6 +3486,22 @@
       "Você precisa de estimativas de probabilidade prontas (use outra abordagem).",
       "Há poucos exemplos e a relação é complexa - o SVC pode capturar melhor."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Não devolve probabilidade (não tem predict_proba); use CalibratedClassifierCV se precisar.",
+        "Aviso de convergência costuma significar dados não padronizados, não max_iter baixo."
+      ],
+      "codigo": "from sklearn.svm import LinearSVC\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\n\npipe = Pipeline([(\"escala\", StandardScaler()),\n                 (\"modelo\", LinearSVC(C=1.0, max_iter=5000, dual=\"auto\"))])\npipe.fit(X_treino, y_treino)",
+      "diagnostico": [
+        "Desempenho muito abaixo do SVC rbf: o problema não é linearmente separável.",
+        "Coeficientes enormes: C alto demais."
+      ],
+      "tuning": [
+        "C em escala logarítmica (0.01 → 100) é praticamente o único ajuste relevante.",
+        "class_weight='balanced' com classes desbalanceadas.",
+        "max_iter maior quando aparecer aviso de convergência."
+      ]
+    },
     "quandoUsar": [
       "Conjuntos de dados grandes (muitos exemplos e/ou muitas características) - escala bem.",
       "Quando as classes são separáveis (ou quase) por uma reta/hiperplano.",
@@ -2927,6 +3567,19 @@
     ],
     "exemplo": "from sklearn.svm import SVR\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import make_pipeline\n\nmodelo = make_pipeline(StandardScaler(), SVR(C=1.0, kernel='rbf', epsilon=0.1, gamma='scale'))\nmodelo.fit(X_treino, y_treino)\npredicoes = modelo.predict(X_teste)",
     "exemplo_codigo": "from sklearn.svm import SVR\nfrom sklearn.datasets import load_diabetes\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\n\nX, y = load_diabetes(return_X_y=True)\nX = StandardScaler().fit_transform(X)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = SVR(kernel='rbf', C=1.0)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "min ½‖w‖² + C·Σ(ξ_i + ξ*_i) sujeito a |y_i − f(x_i)| ≤ ε + ξ — erros dentro do tubo de largura ε não são penalizados",
+    "fundamentos": {
+      "complexidade": "Mesma ordem do SVC: entre O(n²·d) e O(n³·d) no libsvm; predição proporcional aos vetores de suporte.",
+      "formula": "min ½‖w‖² + C·Σ(ξ_i + ξ*_i) sujeito a |y_i − f(x_i)| ≤ ε + ξ — erros dentro do tubo de largura ε não são penalizados",
+      "leitura": [
+        "Smola & Schölkopf (2004), A Tutorial on Support Vector Regression, Statistics and Computing 14"
+      ],
+      "otimiza": "Ajusta a função mais 'plana' que mantém os desvios dentro de uma tolerância ε.",
+      "pressupostos": [
+        "Desvios menores que ε são irrelevantes para o problema.",
+        "Atributos e alvo padronizados (o ε é absoluto, na escala do alvo)."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "1.0",
@@ -2982,6 +3635,21 @@
       "A relação é claramente linear e simples - modelos lineares são mais rápidos.",
       "Você não pode padronizar os dados (o SVR é sensível à escala)."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Alvo em escala grande com epsilon padrão (0.1) faz o tubo virar quase zero.",
+        "Custo de treino cresce rápido com o número de exemplos."
+      ],
+      "codigo": "from sklearn.svm import SVR\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.model_selection import GridSearchCV\n\npipe = Pipeline([(\"escala\", StandardScaler()), (\"modelo\", SVR(kernel=\"rbf\"))])\ngrade = {\"modelo__C\": [1, 10, 100], \"modelo__epsilon\": [0.01, 0.1, 0.5]}\nbusca = GridSearchCV(pipe, grade, cv=5, scoring=\"neg_mean_absolute_error\").fit(X, y)",
+      "diagnostico": [
+        "Predição quase constante: epsilon ou C mal dimensionados para a escala do alvo.",
+        "Muitos vetores de suporte (quase todos os pontos): reduza gamma."
+      ],
+      "tuning": [
+        "epsilon define o que é erro aceitável — decida em unidade do alvo antes de ajustar C.",
+        "C e gamma como no SVC, em grade log-espaçada."
+      ]
+    },
     "quandoUsar": [
       "Problemas de regressão (prever números) com conjuntos pequenos a médios.",
       "Quando a relação entre entrada e saída é curva/não-linear (use kernel 'rbf').",
@@ -3047,6 +3715,19 @@
     ],
     "exemplo": "Estimar a tendência de crescimento de uma planta medida por um aluno ao longo de semanas: em algumas semanas a régua foi lida errado e gerou valores absurdos. Theil-Sen calcula a inclinação entre muitos pares de medições e usa a mediana, então as leituras erradas não distorcem a tendência de crescimento estimada.",
     "exemplo_codigo": "from sklearn.linear_model import TheilSenRegressor\nfrom sklearn.datasets import make_regression\nfrom sklearn.model_selection import train_test_split\n\nX, y = make_regression(n_samples=200, n_features=4, noise=10, random_state=42)\nX_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=42)\n\nmodelo = TheilSenRegressor(random_state=42)\nmodelo.fit(X_tr, y_tr)\nprint(modelo.score(X_te, y_te))\nprint(modelo.predict(X_te[:5]))",
+    "formula": "Coeficiente = mediana das inclinações entre pares (ou de subconjuntos de tamanho n_subsamples em várias dimensões)",
+    "fundamentos": {
+      "complexidade": "Combinatória nos subconjuntos: cresce muito com n e d, por isso o sklearn amostra (max_subpopulation).",
+      "formula": "Coeficiente = mediana das inclinações entre pares (ou de subconjuntos de tamanho n_subsamples em várias dimensões)",
+      "leitura": [
+        "Theil (1950) e Sen (1968), estimadores por mediana de inclinações"
+      ],
+      "otimiza": "Estimativa por mediana espacial — ponto de ruptura de ~29,3%, isto é, tolera até ~29% de contaminação.",
+      "pressupostos": [
+        "Relação linear com ruído possivelmente assimétrico ou com outliers.",
+        "Número moderado de atributos (o custo combinatório cresce rápido)."
+      ]
+    },
     "hiperparametros_doc": [
       {
         "default": "True",
@@ -3100,6 +3781,7 @@
         "default": "None",
         "descricao": "Estado do gerador aleatório usado na amostragem das subpopulações.",
         "efeito": "Fixar garante reprodutibilidade da amostragem.",
+        "faixa": "qualquer inteiro — fixe para reproduzir a mesma amostragem",
         "nome": "random_state",
         "quando_ajustar": "Defina um inteiro para resultados reproduzíveis.",
         "tipo": "int, RandomState ou None"
@@ -3138,6 +3820,21 @@
       "Quando a relação é claramente não linear.",
       "Quando o conjunto de dados é enorme e o tempo de treino é crítico."
     ],
+    "pratica": {
+      "armadilhas": [
+        "Muito lento com muitos atributos — é o preço da robustez.",
+        "Não substitui tratamento de dados sujos: só resiste melhor a eles."
+      ],
+      "codigo": "from sklearn.linear_model import TheilSenRegressor\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\n\npipe = Pipeline([(\"escala\", StandardScaler()),\n                 (\"modelo\", TheilSenRegressor(random_state=42, max_subpopulation=10_000))])\npipe.fit(X_treino, y_treino)",
+      "diagnostico": [
+        "Treino demorando demais: baixe max_subpopulation.",
+        "Coeficientes próximos aos da regressão linear: a base provavelmente não tem outliers."
+      ],
+      "tuning": [
+        "max_subpopulation controla o custo: reduza em bases grandes.",
+        "n_subsamples equilibra robustez (menor) e eficiência estatística (maior)."
+      ]
+    },
     "quandoUsar": [
       "Quando há outliers moderados e você quer robustez sem ajustar um limiar.",
       "Quando deseja um método robusto com boa propriedade estatística (ponto de ruptura alto).",

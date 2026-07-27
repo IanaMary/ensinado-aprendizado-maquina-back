@@ -154,3 +154,35 @@ class TestGerenciarUsuarios:
         response = await client.put("/usuario/id-invalido/status?novo_status=ativo", headers=auth_headers)
 
         assert response.status_code == 400
+
+
+class TestPreferenciasDoUsuario:
+    """Nível do tutor: preferência do PRÓPRIO aluno (base do ensino personalizado)."""
+
+    @pytest.mark.asyncio
+    async def test_usuario_sem_o_campo_le_basico(self, client, mock_db, auth_headers, mock_user):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_user)  # doc antigo, sem nível
+        r = await client.get("/usuario/preferencias", headers=auth_headers)
+        assert r.status_code == 200
+        assert r.json() == {"nivel_tutor": "basico"}
+
+    @pytest.mark.asyncio
+    async def test_salva_o_proprio_nivel(self, client, mock_db, auth_headers, mock_user):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_user)
+        mock_db["usuarios"].update_one = AsyncMock()
+        r = await client.put("/usuario/preferencias", headers=auth_headers,
+                             json={"nivel_tutor": "avancado"})
+        assert r.status_code == 200 and r.json() == {"nivel_tutor": "avancado"}
+        filtro, update = mock_db["usuarios"].update_one.call_args[0][:2]
+        # O id vem do JWT, nunca do corpo: ninguém muda a preferência de outro aluno.
+        assert filtro == {"_id": mock_user["_id"]}
+        assert update == {"$set": {"nivel_tutor": "avancado"}}
+
+    @pytest.mark.asyncio
+    async def test_nivel_invalido_recusado(self, client, mock_db, auth_headers, mock_user):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_user)
+        mock_db["usuarios"].update_one = AsyncMock()
+        r = await client.put("/usuario/preferencias", headers=auth_headers,
+                             json={"nivel_tutor": "doutorado"})
+        assert r.status_code == 422
+        mock_db["usuarios"].update_one.assert_not_called()

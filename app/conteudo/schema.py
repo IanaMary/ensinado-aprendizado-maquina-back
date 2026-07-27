@@ -48,6 +48,34 @@ class Referencia(BaseModel):
     citacao: Optional[str] = None
 
 
+class Fundamentos(BaseModel):
+    """Bloco formal do modo Avançado: o que o método é, matematicamente.
+
+    Existe porque a "descrição técnica" sozinha é um parágrafo — não sustenta um público que
+    vai até o primeiro ano da graduação. Aqui entram fórmula, o que o algoritmo otimiza, os
+    pressupostos que ele assume e o custo computacional.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    formula: Optional[str] = None
+    otimiza: Optional[str] = None           # a função objetivo, em uma frase
+    pressupostos: Optional[List[str]] = None
+    complexidade: Optional[str] = None      # treino e predição, em n (amostras) e d (atributos)
+    leitura: Optional[List[str]] = None     # referência canônica (autor, ano, título)
+
+
+class Pratica(BaseModel):
+    """Bloco operacional do modo Avançado: como usar isso sem se enganar."""
+
+    model_config = ConfigDict(extra="allow")
+
+    codigo: Optional[str] = None            # pipeline sklearn completo (CV / busca)
+    tuning: Optional[List[str]] = None      # o que ajustar primeiro e por quê
+    armadilhas: Optional[List[str]] = None
+    diagnostico: Optional[List[str]] = None  # como perceber que deu errado
+
+
 class Conteudo(BaseModel):
     """Conteúdo educacional de um elemento do pipeline (modo Básico + Avançado)."""
 
@@ -74,5 +102,8 @@ class Conteudo(BaseModel):
     link_sklearn: Optional[str] = None
     # NOVO: link para a doc do Yellowbrick (gráficos e modelos com visualização)
     link_yellowbrick: Optional[str] = None
+    # Avançado: os dois blocos que fazem o modo ser de fato avançado
+    fundamentos: Optional[Fundamentos] = None
+    pratica: Optional[Pratica] = None
     midia: Optional[List[Midia]] = None
     referencias: Optional[List[Referencia]] = None

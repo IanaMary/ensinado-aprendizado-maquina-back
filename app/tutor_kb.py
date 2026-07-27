@@ -18,39 +18,105 @@ from app import database
 # Tamanhos defensivos para não estourar o contexto do modelo.
 _TTL = 600  # 10 min
 _MAX_ITENS_DETALHADOS = 8
+# A ficha avançada é bem maior (descrição técnica inteira + efeito dos hiperparâmetros +
+# fundamentos/prática), então o teto do bloco acompanha: com 6000 o corte caía no meio da
+# primeira ficha e o aluno avançado recebia menos contexto que o básico.
 _MAX_BLOCO_CHARS = 6000
+_MAX_BLOCO_CHARS_AVANCADO = 9000
+# O texto básico é curto por natureza (mediana ~310 chars); o técnico chega a 936, então
+# cortá-lo em 500 mutilava justamente o que o aluno avançado veio buscar.
+_MAX_TEXTO_BASICO = 500
+_MAX_TEXTO_AVANCADO = 1200
+
+NIVEL_AVANCADO = "avancado"
 
 _cache: dict = {"itens": {}, "indice": "", "valores": set(), "ts": 0.0}
 _lock = asyncio.Lock()
 
 
-def _resumo_compacto(valor: str, c: dict, grupo: str) -> str:
-    """Transforma o `conteudo` de um item numa ficha curta em markdown."""
+def _lista(valores, limite: int) -> str:
+    return "; ".join(str(x) for x in (valores or [])[:limite])
+
+
+def _resumo_compacto(valor: str, c: dict, grupo: str, nivel: str = "basico") -> str:
+    """Ficha curta em markdown de um item do catálogo, no nível pedido.
+
+    O nível não muda só o tom: muda **o que** o modelo recebe. No básico vai a explicação
+    simples; no avançado vai a descrição técnica inteira, o efeito de cada hiperparâmetro e os
+    blocos Fundamentos/Na prática — que é o material que o aluno avançado está lendo no card.
+    """
+    avancado = nivel == NIVEL_AVANCADO
     linhas = [f"### {c.get('titulo') or valor}  (`{valor}` — {grupo})"]
-    texto = c.get("resumo_basico") or c.get("descricao") or ""
+
+    if avancado:
+        texto = c.get("descricao") or c.get("resumo_basico") or ""
+        limite = _MAX_TEXTO_AVANCADO
+    else:
+        texto = c.get("resumo_basico") or c.get("descricao") or ""
+        limite = _MAX_TEXTO_BASICO
     if texto:
-        linhas.append(str(texto).strip()[:500])
-    qu = c.get("quandoUsar") or []
-    if qu:
-        linhas.append("Quando usar: " + "; ".join(str(x) for x in qu[:4]))
-    nu = c.get("naoUsarQuando") or []
-    if nu:
-        linhas.append("Evitar quando: " + "; ".join(str(x) for x in nu[:4]))
+        linhas.append(str(texto).strip()[:limite])
+
+    if c.get("quandoUsar"):
+        linhas.append("Quando usar: " + _lista(c["quandoUsar"], 4))
+    if c.get("naoUsarQuando"):
+        linhas.append("Evitar quando: " + _lista(c["naoUsarQuando"], 4))
+
     hp = c.get("hiperparametros_doc") or []
     if hp:
-        pares = []
-        for h in hp[:6]:
-            nome = h.get("nome")
-            if not nome:
-                continue
-            pares.append(f"{nome}={h.get('default')}")
-        if pares:
-            linhas.append("Hiperparâmetros (padrão): " + ", ".join(pares))
-    if c.get("formula"):
-        linhas.append("Fórmula: " + str(c["formula"]))
+        if avancado:
+            for h in hp[:6]:
+                nome = h.get("nome")
+                if not nome:
+                    continue
+                partes = [f"- {nome} (padrão {h.get('default')}"]
+                faixa = h.get("faixa") or (", ".join(str(o) for o in (h.get("opcoes") or [])) or None)
+                partes.append(f"; {faixa})" if faixa else ")")
+                detalhe = " — ".join(str(x) for x in (h.get("efeito"), h.get("quando_ajustar")) if x)
+                if detalhe:
+                    partes.append(" " + detalhe)
+                linhas.append("".join(partes))
+        else:
+            pares = [f"{h.get('nome')}={h.get('default')}" for h in hp[:6] if h.get("nome")]
+            if pares:
+                linhas.append("Hiperparâmetros (padrão): " + ", ".join(pares))
+
+    fund = c.get("fundamentos") or {}
+    pratica = c.get("pratica") or {}
+    formula = c.get("formula") or fund.get("formula")
+    if formula:
+        linhas.append("Fórmula: " + str(formula))
+    if avancado and fund:
+        if fund.get("otimiza"):
+            linhas.append("Otimiza: " + str(fund["otimiza"]))
+        if fund.get("pressupostos"):
+            linhas.append("Pressupostos: " + _lista(fund["pressupostos"], 4))
+        if fund.get("complexidade"):
+            linhas.append("Complexidade: " + str(fund["complexidade"]))
+    if avancado and pratica:
+        if pratica.get("tuning"):
+            linhas.append("O que ajustar primeiro: " + _lista(pratica["tuning"], 3))
+        if pratica.get("armadilhas"):
+            linhas.append("Armadilhas: " + _lista(pratica["armadilhas"], 3))
+        if pratica.get("diagnostico"):
+            linhas.append("Diagnóstico: " + _lista(pratica["diagnostico"], 3))
+
+    if avancado:
+        ref = (c.get("referencias") or [{}])[0]
+        if ref.get("titulo"):
+            autor = f" ({ref['autor']})" if ref.get("autor") else ""
+            linhas.append(f"Leitura: {ref['titulo']}{autor}")
+
     if c.get("link_sklearn"):
         linhas.append("Doc oficial: " + str(c["link_sklearn"]))
     return "\n".join(linhas)
+
+
+def _nivel_do_contexto(contexto) -> str:
+    """Nível pedido pelo aluno (preferência do perfil, enviada pelo front)."""
+    if isinstance(contexto, dict) and str(contexto.get("nivel") or "").lower() == NIVEL_AVANCADO:
+        return NIVEL_AVANCADO
+    return "basico"
 
 
 async def _carregar() -> dict:
@@ -68,14 +134,16 @@ async def _carregar() -> dict:
                 c = x.get("conteudo")
                 valor = x.get("valor")
                 if c and valor:
-                    itens[valor] = _resumo_compacto(valor, c, "modelo")
+                    # Guarda o conteúdo CRU: a ficha é montada por nível a cada pergunta
+                    # (renderizar é barato; ler o banco é que não é).
+                    itens[valor] = {"conteudo": c, "grupo": "modelo"}
                     indice.append(f"- {c.get('titulo') or valor} (`{valor}`, modelo)")
             async for x in database.opcoes_metricas.find({}, {"valor": 1, "grupo": 1, "conteudo": 1}):
                 c = x.get("conteudo")
                 valor = x.get("valor")
                 if c and valor:
                     grupo = f"métrica/{x.get('grupo')}" if x.get("grupo") else "métrica"
-                    itens[valor] = _resumo_compacto(valor, c, grupo)
+                    itens[valor] = {"conteudo": c, "grupo": grupo}
                     indice.append(f"- {c.get('titulo') or valor} (`{valor}`, {grupo})")
         except Exception:
             # Falha de banco: devolve o que tiver (possivelmente vazio).
@@ -115,6 +183,7 @@ async def bloco_kb(contexto) -> str:
     if not kb["itens"]:
         return ""
 
+    nivel = _nivel_do_contexto(contexto)
     partes = [
         "Catálogo de modelos e métricas disponíveis na plataforma "
         "(use estes nomes e padrões; não invente hiperparâmetros):",
@@ -124,9 +193,11 @@ async def bloco_kb(contexto) -> str:
     if detalhados:
         partes.append("\nDetalhes dos itens em uso agora:")
         for v in detalhados:
-            partes.append(kb["itens"][v])
+            item = kb["itens"][v]
+            partes.append(_resumo_compacto(v, item["conteudo"], item["grupo"], nivel))
 
     bloco = "\n".join(partes)
-    if len(bloco) > _MAX_BLOCO_CHARS:
-        bloco = bloco[:_MAX_BLOCO_CHARS] + "\n... (base de conhecimento truncada)"
+    teto = _MAX_BLOCO_CHARS_AVANCADO if nivel == NIVEL_AVANCADO else _MAX_BLOCO_CHARS
+    if len(bloco) > teto:
+        bloco = bloco[:teto] + "\n... (base de conhecimento truncada)"
     return bloco
