@@ -45,7 +45,8 @@ de truncamento existe justamente para que o próximo ajuste use dado.
 
 ## 2026-07-28 (o desafio não corrige mais a raia errada)
 
-> Backend `master` **`1898d2d`**. Frontend: ver changelog do repo do frontend.
+> **Implantado em 28/07/2026 14h57** (junto com a leva 07-28b). Backend `master` **`1898d2d`**.
+> Frontend: ver changelog do repo do frontend.
 
 ### Corrigido
 - **O tabuleiro do aluno deixou de receber `lane`** (`GET …/tabuleiro`). A etapa a que a peça
