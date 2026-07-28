@@ -10,7 +10,7 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ## 2026-07-28 (o desafio não corrige mais a raia errada)
 
-> Backend `master` **`<pendente>`**. Frontend: ver changelog do repo do frontend.
+> Backend `master` **`1898d2d`**. Frontend: ver changelog do repo do frontend.
 
 ### Corrigido
 - **O tabuleiro do aluno deixou de receber `lane`** (`GET …/tabuleiro`). A etapa a que a peça
