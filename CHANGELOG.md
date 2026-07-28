@@ -10,7 +10,7 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ## 2026-07-28b (tetos do chat: resposta por nível, corte de contexto e truncamento registrado)
 
-> Backend `master` **`<pendente>`**. Frontend inalterado.
+> Backend `master` **`0ab7f26`**. Frontend inalterado.
 
 ### Alterado
 - **Teto da resposta segue o nível do aluno**: `max_tokens` 1024 → **1536** (básico) /
