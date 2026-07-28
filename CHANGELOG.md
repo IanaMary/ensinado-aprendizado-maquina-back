@@ -8,6 +8,30 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-28 (o desafio não corrige mais a raia errada)
+
+> Backend `master` **`<pendente>`**. Frontend: ver changelog do repo do frontend.
+
+### Corrigido
+- **O tabuleiro do aluno deixou de receber `lane`** (`GET …/tabuleiro`). A etapa a que a peça
+  pertence é justamente o que o desafio pergunta: enviá-la deixava a resposta na resposta da
+  API — e era o que permitia o clique único da tela acertar a coluna sozinho.
+- **A rubrica passou a enxergar a peça fora de lugar**, que antes era ignorada:
+  `Contexto.metas(lane)` só considera peça DAQUELA etapa e `estrutura-minima` só conta a etapa
+  como preenchida quando ela recebe peça do tipo certo. Sem isso, uma métrica largada na coluna
+  do modelo satisfazia `modelo-compativel` (métrica não declara `tarefa`, logo "nada
+  incompatível") e um pipeline com modelo e métrica trocados de coluna tirava **10,0**
+  (verificado contra a revisão anterior); hoje tira 4,4.
+
+### Adicionado
+- Regra `peca-na-etapa-certa` (peso 2), com texto que explica o papel de cada etapa. Mesma
+  guarda de `sem-distrator`: entrega em branco não "acerta" a regra.
+- 4 testes de rubrica (peça na etapa errada, na certa, métrica na coluna do modelo sem ganhar
+  ponto, pré-processador fora de lane que não conta como família) e o contrato do tabuleiro sem
+  `lane`. Suíte: **515 passed, 1 skipped**.
+
+---
+
 ## 2026-07-27b (conteúdo avançado nas 61 fichas + pré-processamento no chat)
 
 > Backend `master` **`<pendente>`**. Frontend inalterado. Exige rodar `seed_conteudo`.

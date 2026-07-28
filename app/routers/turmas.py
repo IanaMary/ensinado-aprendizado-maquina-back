@@ -422,7 +422,8 @@ async def obter_tabuleiro(turma_id: str, atividade_id: str, usuario: dict = Depe
 
     O tabuleiro é derivado de (atividade, aluno, tentativa), então recarregar a página
     devolve o mesmo — e a próxima tentativa devolve outro. Nunca inclui `papel` (útil ou
-    distrator) nem o gabarito: com esses campos o desafio se resolveria lendo a resposta.
+    distrator), `lane` (a etapa a que a peça pertence) nem o gabarito: com esses campos o
+    desafio se resolveria lendo a resposta.
     """
     _t, a = await _atividade_de_montagem(turma_id, atividade_id, usuario)
     user_id = str(usuario["_id"])
@@ -437,8 +438,9 @@ async def obter_tabuleiro(turma_id: str, atividade_id: str, usuario: dict = Depe
         "dataset_nome": nome_do_dataset(gabarito.get("dataset") or ""),
         "tentativa": tabuleiro["tentativa"],
         "lanes": tabuleiro["lanes"],
-        "pecas": [{"valor": p["valor"], "nome": p["nome"], "lane": p["lane"]}
-                  for p in tabuleiro["pecas"]],
+        # Só valor e nome: descobrir em QUAL etapa a peça entra é o que o desafio avalia,
+        # então a etapa dela não vai no ar (nem para a tela, nem para quem abre o DevTools).
+        "pecas": [{"valor": p["valor"], "nome": p["nome"]} for p in tabuleiro["pecas"]],
         **hist,
     }
 

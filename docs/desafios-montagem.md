@@ -93,7 +93,8 @@ perde ponto por não imputar faltantes que não existem.
 
 | id | Peso | De onde vem a verificação |
 |---|---|---|
-| `estrutura-minima` | 3 | `gabarito.exige` |
+| `estrutura-minima` | 3 | `gabarito.exige` (etapa preenchida = tem peça DAQUELA etapa) |
+| `peca-na-etapa-certa` | 2 | `lane` da peça no catálogo |
 | `modelo-compativel` | 3 | catálogo: `prever_categoria` / `dados_rotulados` |
 | `metrica-compativel` | 3 | catálogo: `grupo` da métrica; lista `metricas` do modelo como reserva |
 | `escala-antes-de-distancia` | 2 | `MODELOS_SENSIVEIS_A_ESCALA` (distância/gradiente) |
@@ -121,7 +122,15 @@ textos são o produto mais importante — linguagem de sala de aula, dizendo o *
   naquela tentativa; sem essa checagem o re-sorteio não protegeria nada (bastaria reenviar o
   pipeline ideal aprendido no retorno anterior).
 - **A regra `sem-distrator` exige ter montado algo.** Antes, entregar em branco a satisfazia
-  trivialmente e rendia 4/10.
+  trivialmente e rendia 4/10. `peca-na-etapa-certa` tem a mesma guarda, pela mesma razão.
+- **A tela NÃO corrige a peça posta na coluna errada** — saber a que etapa cada bloco pertence
+  é parte do que se mede. Por isso o tabuleiro do aluno **não recebe `lane`** (era o que
+  permitia o clique único acertar a coluna sozinho e o realce apontar o erro na hora), e a
+  alternativa ao arrastar virou de dois toques: peça, depois coluna.
+- **A rubrica é quem enxerga o erro de posição.** `Contexto.metas(lane)` ignora peça de outra
+  etapa: sem isso, uma métrica na coluna do modelo satisfazia `modelo-compativel` (métrica não
+  declara `tarefa`, logo "nada incompatível") e o aluno ganhava ponto por um pipeline sem
+  modelo. O mesmo vale para `estrutura-minima`: coluna cheia de peça errada segue vazia.
 - **O tabuleiro sempre permite uma solução** (`_garantir_minimo`). O professor pode curar as
   peças (`sortear_pecas: false`) ou deixar o sorteio; em qualquer caso, lane exigida sem peça —
   ou sem peça compatível com a tarefa — é completada, **mesmo contra um `vetar`**, em silêncio.
@@ -140,7 +149,7 @@ errado) não são verificáveis aqui.
 
 ## Testes
 
-`tests/test_desafio_montagem.py` (47): cada regra isolada, pesos e nota, normalização da
+`tests/test_desafio_montagem.py` (52): cada regra isolada, pesos e nota, normalização da
 montagem (entrada não confiável), determinismo e re-sorteio, `fixar`/`vetar`, gabarito que não
 vaza, peça fora do tabuleiro, ranking, gates de papel e nome legível das peças.
 

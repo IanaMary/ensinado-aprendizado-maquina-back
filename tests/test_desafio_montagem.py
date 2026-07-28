@@ -180,6 +180,30 @@ class TestRegras:
                                   "modelo": ["knn"], "metrica": ["accuracy_score"]}, ofertadas=ofertadas)
         assert _regra(sem_distrator, "sem-distrator")["ok"] is True
 
+    def test_peca_na_etapa_errada_reprova_e_nao_e_corrigida(self):
+        """O sistema não move a peça para a coluna certa (é o que o desafio mede), então a
+        rubrica é quem registra o erro — e a etapa continua contando como não preenchida."""
+        r = _avaliar({"coleta": ["arquivo"], "modelo": ["accuracy_score"], "metrica": ["knn"]})
+        assert _regra(r, "peca-na-etapa-certa")["ok"] is False
+        assert _regra(r, "estrutura-minima")["ok"] is False   # sem modelo e sem métrica de fato
+
+    def test_peca_na_etapa_certa_passa(self):
+        r = _avaliar({"coleta": ["arquivo"], "modelo": ["arvore_decisao"],
+                      "metrica": ["accuracy_score"]})
+        assert _regra(r, "peca-na-etapa-certa")["ok"] is True
+
+    def test_metrica_na_coluna_do_modelo_nao_ganha_modelo_compativel(self):
+        """Regressão: a métrica não declara `tarefa`, então "nada incompatível" dava ponto
+        em `modelo-compativel` para um pipeline que não tinha modelo nenhum."""
+        r = _avaliar({"coleta": ["arquivo"], "modelo": ["accuracy_score"], "metrica": []})
+        assert _regra(r, "modelo-compativel") is None
+
+    def test_pre_processamento_fora_de_lane_nao_conta_como_familia(self):
+        """Escalar 'na coluna do modelo' não escala nada: a regra da escala segue cobrando."""
+        r = _avaliar({"coleta": ["arquivo"], "modelo": ["knn", "minmax_scaler"],
+                      "metrica": ["accuracy_score"]})
+        assert _regra(r, "escala-antes-de-distancia")["ok"] is False
+
     def test_peca_fora_do_catalogo_e_ignorada_sem_quebrar(self):
         r = _avaliar({"coleta": ["arquivo"], "modelo": ["modelo_que_nao_existe"],
                       "metrica": ["accuracy_score"]})
@@ -211,13 +235,15 @@ class TestNota:
         r = _avaliar({}, ofertadas=ofertadas)
         assert r["nota"] == 0.0
         assert _regra(r, "sem-distrator") is None       # regra não se aplica a entrega vazia
+        assert _regra(r, "peca-na-etapa-certa") is None  # nem esta, pela mesma razão
 
     def test_pontos_max_conta_so_regras_aplicaveis(self):
         # sem faltantes/texto e com árvore: imputação, encoder e escala não entram no total
         r = _avaliar({"coleta": ["arquivo"], "modelo": ["arvore_decisao"], "metrica": ["accuracy_score"]})
         ids = {x["id"] for x in r["regras"]}
-        assert ids == {"estrutura-minima", "modelo-compativel", "metrica-compativel"}
-        assert r["pontos_max"] == 9
+        assert ids == {"estrutura-minima", "peca-na-etapa-certa",
+                       "modelo-compativel", "metrica-compativel"}
+        assert r["pontos_max"] == 11
 
     def test_regras_aplicaveis_por_tarefa_de_agrupamento(self):
         gab = {"tarefa": "agrupamento", "exige": ["coleta", "modelo", "metrica"], "dados": {}}
@@ -375,7 +401,8 @@ class TestRotasDesafio:
         body = r.json()
         assert body["tentativa"] == 1
         assert body["pecas"], "o aluno precisa receber peças"
-        assert all(set(p.keys()) == {"valor", "nome", "lane"} for p in body["pecas"])
+        # `lane` (a etapa da peça) é a resposta do desafio: não pode ir na resposta da API.
+        assert all(set(p.keys()) == {"valor", "nome"} for p in body["pecas"])
         assert "gabarito" not in body and "gabarito" not in body["atividade"]
 
     @pytest.mark.asyncio

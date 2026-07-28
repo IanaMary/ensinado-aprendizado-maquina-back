@@ -56,10 +56,17 @@ class Contexto:
         return list(self.montagem.get(lane) or [])
 
     def metas(self, lane: str) -> List[Dict[str, Any]]:
-        """Metadados das peças usadas na lane, na ordem em que o aluno as colocou.
-        Peças desconhecidas (fora do catálogo) são ignoradas — `sem-distrator` já cobre
-        peça indevida, e uma regra não deve quebrar por dado velho."""
-        return [self.pecas[v] for v in self.usadas(lane) if v in self.pecas]
+        """Metadados das peças que o aluno colocou na lane E pertencem a ela, na ordem
+        escolhida por ele.
+
+        A peça posta na etapa errada NÃO entra: senão uma métrica largada na coluna do
+        modelo satisfazia `modelo-compativel` (ela não declara `tarefa`, logo "nada
+        incompatível") e o aluno ganhava ponto por um pipeline que não existe.
+        Peça desconhecida (fora do catálogo) segue ignorada — `sem-distrator` já cobre
+        peça indevida, e uma regra não deve quebrar por dado velho.
+        """
+        return [self.pecas[v] for v in self.usadas(lane)
+                if v in self.pecas and self.pecas[v].get("lane") == lane]
 
     def familias(self) -> List[str]:
         return [m.get("familia", "outro") for m in self.metas("pre_processamento")]
@@ -82,8 +89,22 @@ class Regra:
     checa: Callable[[Contexto], bool]
 
 
+def _preencheu(ctx: Contexto, lane: str) -> bool:
+    """A etapa recebeu peça DELA. Uma métrica na coluna do modelo não preenche a etapa do
+    modelo — o pipeline continua sem quem aprende. Peça desconhecida (dado velho) conta:
+    a dúvida não é do aluno."""
+    return any(ctx.pecas.get(v, {}).get("lane", lane) == lane for v in ctx.usadas(lane))
+
+
 def _lanes_vazias(ctx: Contexto) -> List[str]:
-    return [lane for lane in ctx.exige if not ctx.usadas(lane)]
+    return [lane for lane in ctx.exige if not _preencheu(ctx, lane)]
+
+
+def _pecas_fora_de_lane(ctx: Contexto) -> List[str]:
+    """Peças que o aluno colocou numa etapa que não é a delas. O sistema não impede o erro
+    (é justamente o que se quer medir), então quem o registra é a rubrica."""
+    return [v for lane in LANES for v in ctx.usadas(lane)
+            if v in ctx.pecas and ctx.pecas[v].get("lane") != lane]
 
 
 def _modelos_incompativeis(ctx: Contexto) -> List[Dict[str, Any]]:
@@ -138,12 +159,28 @@ REGRAS: List[Regra] = [
         titulo="O pipeline está completo",
         texto_ok="Teu pipeline tem todas as etapas que o problema pedia.",
         texto_erro=(
-            "Faltou preencher etapa do pipeline. Sem todas as etapas o computador não "
-            "consegue aprender e depois mostrar como se saiu: os dados entram, o modelo "
-            "aprende e a métrica diz se ele acertou."
+            "Faltou etapa no pipeline: ou a coluna ficou vazia, ou ela recebeu uma peça de "
+            "outro tipo — e aí a etapa continua sem quem faz o trabalho dela. Sem todas as "
+            "etapas o computador não consegue aprender e depois mostrar como se saiu: os "
+            "dados entram, o modelo aprende e a métrica diz se ele acertou."
         ),
         aplica=lambda ctx: bool(ctx.exige),
         checa=lambda ctx: not _lanes_vazias(ctx),
+    ),
+    Regra(
+        id="peca-na-etapa-certa",
+        peso=2,
+        titulo="Cada peça na etapa dela",
+        texto_ok="Cada peça que usaste está na etapa a que pertence.",
+        texto_erro=(
+            "Alguma peça ficou numa coluna que não é dela. Cada coluna é uma etapa com um "
+            "papel: a coleta traz os dados, o pré-processamento os prepara, o modelo aprende "
+            "e a métrica mede o resultado. Reconhecer a que etapa cada bloco pertence é o "
+            "primeiro passo para montar um pipeline que funciona."
+        ),
+        # Mesma guarda de `sem-distrator`: entregar o tabuleiro vazio não "acerta" a regra.
+        aplica=lambda ctx: bool(ctx.todas_usadas()),
+        checa=lambda ctx: not _pecas_fora_de_lane(ctx),
     ),
     Regra(
         id="modelo-compativel",
