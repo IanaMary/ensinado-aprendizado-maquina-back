@@ -88,6 +88,49 @@ class _AsyncCursor:
         return gen()
 
 
+class TestTetosDoChat:
+    """Tetos de contexto e de resposta (`chat_tutor`).
+
+    Existem porque o contexto vem no CORPO da requisição (o cliente decide o tamanho) e
+    porque a resposta é paga por token. O que se cobra aqui é que o teto de saída siga o
+    nível do aluno e que o corte do contexto não parta uma linha do JSON pela metade.
+    """
+
+    def test_teto_de_resposta_segue_o_nivel_do_aluno(self):
+        from app.routers import chat_tutor as ct
+        assert ct.max_tokens_resposta({"nivel": "avancado"}) == ct.MAX_TOKENS_RESPOSTA_AVANCADO
+        assert ct.max_tokens_resposta({"nivel": "basico"}) == ct.MAX_TOKENS_RESPOSTA
+        assert ct.max_tokens_resposta({}) == ct.MAX_TOKENS_RESPOSTA
+        assert ct.max_tokens_resposta(None) == ct.MAX_TOKENS_RESPOSTA
+        assert ct.MAX_TOKENS_RESPOSTA_AVANCADO > ct.MAX_TOKENS_RESPOSTA
+
+    def test_avancado_pede_mais_tokens_na_chamada(self):
+        """O nível tem de chegar ao payload, não só ao helper."""
+        from app.routers import chat_tutor as ct
+        assert ct.max_tokens_resposta({"nivel": "avancado", "modelo": "knn"}) > 1024
+
+    def test_contexto_curto_passa_inteiro(self):
+        from app.routers.chat_tutor import _montar_contexto
+        texto = _montar_contexto({"modelo": "knn"})
+        assert "knn" in texto and "truncado" not in texto
+
+    def test_contexto_sem_pipeline(self):
+        from app.routers.chat_tutor import _montar_contexto
+        assert "Nenhum pipeline" in _montar_contexto(None)
+
+    def test_corte_do_contexto_nao_parte_a_linha_e_diz_o_que_ficou_de_fora(self):
+        """Regressão: `texto[:8000]` entregava campo partido (`"modelo": "random_fo`)."""
+        from app.routers import chat_tutor as ct
+        grande = {f"campo_{i}": "x" * 200 for i in range(200)}
+        texto = ct._montar_contexto(grande)
+        corpo, _, ultima = texto.rpartition("\n")
+        assert ultima.startswith("... (contexto truncado:")
+        assert "caracteres omitidos)" in ultima
+        # nenhuma linha do corpo termina no meio de um valor entre aspas
+        for linha in corpo.splitlines():
+            assert linha.count('"') % 2 == 0, linha
+
+
 class TestHistoricoChat:
     @pytest.mark.asyncio
     async def test_listar_historico_usa_id_do_usuario(self, client, mock_db, auth_headers):
@@ -100,6 +143,46 @@ class TestHistoricoChat:
         assert resp.json() == []
         # confirma que filtrou pelo _id do usuário (não estourou KeyError)
         assert hist.find.called
+
+
+class TestTruncamentoRegistrado:
+    """`finish_reason: length` = o tutor terminou no meio da frase. Tem de ficar no registro:
+    sem isso, só o aluno percebe (ficando sem o final) e ninguém mais."""
+
+    @pytest.mark.asyncio
+    async def test_resposta_cortada_no_teto_vai_para_a_telemetria(
+            self, client, mock_db, auth_headers, monkeypatch):
+        monkeypatch.setenv("NVIDIA_API_KEY", "chave-de-teste")
+        body = {"choices": [{"message": {"content": "A fórmula do gradiente é"},
+                             "finish_reason": "length"}]}
+        registrados = []
+
+        async def _registrar(usuario, tipo, acao, **kw):
+            registrados.append(kw.get("detalhes") or {})
+
+        with patch("app.routers.chat_tutor.httpx.AsyncClient", _mock_async_client(200, body)), \
+             patch("app.routers.chat_tutor.registrar_atividade", _registrar):
+            r = await client.post("/tutor/chat", headers=auth_headers,
+                                  json={"mensagens": [{"role": "user", "content": "explica"}]})
+        assert r.status_code == 200
+        assert registrados and registrados[0]["truncada_no_teto"] is True
+
+    @pytest.mark.asyncio
+    async def test_resposta_completa_nao_e_marcada(
+            self, client, mock_db, auth_headers, monkeypatch):
+        monkeypatch.setenv("NVIDIA_API_KEY", "chave-de-teste")
+        body = {"choices": [{"message": {"content": "Pronto."}, "finish_reason": "stop"}]}
+        registrados = []
+
+        async def _registrar(usuario, tipo, acao, **kw):
+            registrados.append(kw.get("detalhes") or {})
+
+        with patch("app.routers.chat_tutor.httpx.AsyncClient", _mock_async_client(200, body)), \
+             patch("app.routers.chat_tutor.registrar_atividade", _registrar):
+            r = await client.post("/tutor/chat", headers=auth_headers,
+                                  json={"mensagens": [{"role": "user", "content": "oi"}]})
+        assert r.status_code == 200
+        assert registrados and registrados[0]["truncada_no_teto"] is False
 
 
 class TestSaudeModelos:

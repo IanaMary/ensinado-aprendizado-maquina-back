@@ -95,12 +95,12 @@ class TestNivelDaFicha:
         assert len(ficha) > 900, "a descrição técnica mediana (508) e a maior (936) precisam caber"
 
     def test_nivel_vem_do_contexto_e_o_padrao_e_basico(self):
-        assert tutor_kb._nivel_do_contexto({"nivel": "avancado"}) == "avancado"
-        assert tutor_kb._nivel_do_contexto({"nivel": "AVANCADO"}) == "avancado"
-        assert tutor_kb._nivel_do_contexto({"nivel": "basico"}) == "basico"
-        assert tutor_kb._nivel_do_contexto({}) == "basico"
-        assert tutor_kb._nivel_do_contexto(None) == "basico"
-        assert tutor_kb._nivel_do_contexto("texto solto") == "basico"
+        assert tutor_kb.nivel_do_contexto({"nivel": "avancado"}) == "avancado"
+        assert tutor_kb.nivel_do_contexto({"nivel": "AVANCADO"}) == "avancado"
+        assert tutor_kb.nivel_do_contexto({"nivel": "basico"}) == "basico"
+        assert tutor_kb.nivel_do_contexto({}) == "basico"
+        assert tutor_kb.nivel_do_contexto(None) == "basico"
+        assert tutor_kb.nivel_do_contexto("texto solto") == "basico"
 
 
 class TestEscopoDoCatalogo:

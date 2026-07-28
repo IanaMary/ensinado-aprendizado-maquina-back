@@ -8,6 +8,41 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-28b (tetos do chat: resposta por nível, corte de contexto e truncamento registrado)
+
+> Backend `master` **`<pendente>`**. Frontend inalterado.
+
+### Alterado
+- **Teto da resposta segue o nível do aluno**: `max_tokens` 1024 → **1536** (básico) /
+  **3072** (avançado), via `max_tokens_resposta(contexto)` reusando `nivel_do_contexto`. O 1024
+  foi fixado antes de existir o modo Avançado, que pede fórmula e formalismo — ~3 mil
+  caracteres em português, ou seja, a resposta terminava no meio da frase.
+- **Contexto do pipeline**: 8000 → **12000 caracteres**. O teto existe porque o contexto vem no
+  corpo da requisição (o cliente o monta e, no modal, inclui o script gerado): sem ele, quem
+  chama decide quanto o servidor gasta em tokens.
+- Ambos passam a aceitar env (`CHAT_MAX_CONTEXTO_CHARS`, `CHAT_MAX_TOKENS`,
+  `CHAT_MAX_TOKENS_AVANCADO`), no padrão que o rate limit já usava. **Temperatura segue 0,4 e
+  NÃO é configurável**: subir não compra profundidade, compra invenção.
+- `nivel_do_contexto` virou público no `tutor_kb` (o chat também decide pelo nível).
+
+### Corrigido
+- **O corte do contexto partia uma linha do JSON** (`texto[:8000]`), entregando ao modelo campo
+  pela metade (`"modelo": "random_fo`) — pior que a ausência do campo. Agora corta em fim de
+  linha e informa quantos caracteres ficaram de fora, como já se fazia por ficha inteira na KB.
+- **O corte da resposta era invisível**: `finish_reason: "length"` era ignorado. Agora vira
+  `truncada_no_teto` na telemetria do chat + warning no log, nos dois caminhos (stream e não).
+  O teto passa a ser mensurável em vez de virar reclamação.
+
+### Nota de método
+Os valores (antigos e novos) são folgas conservadoras, **não** calibração empírica. O registro
+de truncamento existe justamente para que o próximo ajuste use dado.
+
+### Verificação
+**522 passed, 1 skipped** (7 testes novos: teto por nível, corte que não parte linha,
+`finish_reason` na telemetria). Relato para a escrita: `handoffs/2026-07-28-tetos-do-chat-tutor.md`.
+
+---
+
 ## 2026-07-28 (o desafio não corrige mais a raia errada)
 
 > Backend `master` **`1898d2d`**. Frontend: ver changelog do repo do frontend.

@@ -116,8 +116,12 @@ def _resumo_compacto(valor: str, c: dict, grupo: str, nivel: str = "basico") -> 
     return "\n".join(linhas)
 
 
-def _nivel_do_contexto(contexto) -> str:
-    """Nível pedido pelo aluno (preferência do perfil, enviada pelo front)."""
+def nivel_do_contexto(contexto) -> str:
+    """Nível pedido pelo aluno (preferência do perfil, enviada pelo front).
+
+    Público porque o `chat_tutor` também decide pelo nível — lá é o teto de tokens da
+    resposta; aqui, o quanto cada ficha do catálogo entrega.
+    """
     if isinstance(contexto, dict) and str(contexto.get("nivel") or "").lower() == NIVEL_AVANCADO:
         return NIVEL_AVANCADO
     return "basico"
@@ -196,7 +200,7 @@ async def bloco_kb(contexto) -> str:
     if not kb["itens"]:
         return ""
 
-    nivel = _nivel_do_contexto(contexto)
+    nivel = nivel_do_contexto(contexto)
     teto = _MAX_BLOCO_CHARS_AVANCADO if nivel == NIVEL_AVANCADO else _MAX_BLOCO_CHARS
     partes = [
         "Catálogo de modelos, métricas e pré-processadores disponíveis na plataforma "

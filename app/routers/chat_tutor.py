@@ -23,7 +23,7 @@ from app.conteudo.kb_tutor_chat import MAX_SYSTEM_PROMPT_CHARS, SYSTEM_PROMPT_TU
 from app.database import historico_chat, configuracoes_tutor, tutor_audit, turmas
 from app.routers.atividade import registrar_atividade
 from app.security import get_usuario_atual, exigir_admin_ou_professor
-from app.tutor_kb import bloco_kb
+from app.tutor_kb import NIVEL_AVANCADO, bloco_kb, nivel_do_contexto
 from app.schemas.chat import (
     ChatHistoricoListItem,
     ChatHistoricoResponse,
@@ -69,7 +69,8 @@ def _preview(texto: Optional[str], n: int = 240) -> str:
     return s if len(s) <= n else s[:n] + "…"
 
 
-def _resumo_chat(mensagem: str, resposta: str, modelo: str, contexto, *, stream: bool = False) -> dict:
+def _resumo_chat(mensagem: str, resposta: str, modelo: str, contexto, *, stream: bool = False,
+                 finish_reason: Optional[str] = None) -> dict:
     """Resumo compacto para a telemetria do chat.
 
     Guarda apenas preview + tamanho da pergunta/resposta e um descritor leve do
@@ -93,14 +94,34 @@ def _resumo_chat(mensagem: str, resposta: str, modelo: str, contexto, *, stream:
         "modelo": modelo,
         "contexto": resumo_ctx,
         "stream": stream,
+        # `length` = a resposta bateu no teto de tokens e terminou no meio. Sem registrar,
+        # ninguém percebe que o tutor foi cortado — só o aluno, que fica sem o final.
+        "truncada_no_teto": finish_reason == "length",
     }
 
 
 NVIDIA_BASE_URL = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
 # Default sane: um modelo de chat estável. O env e o config no banco têm prioridade.
 NVIDIA_MODEL = os.getenv("NVIDIA_MODEL", "meta/llama-3.3-70b-instruct")
-# Limite defensivo para nao mandar um contexto gigante ao modelo.
-MAX_CONTEXTO_CHARS = 8000
+# ------------------------------------------------------------------ tetos do chat
+# O contexto vem no CORPO da requisição (o cliente o monta, e no modal ele inclui o script
+# Python gerado): sem teto, quem chama decide quanto o servidor gasta em tokens. 12k chars
+# ≈ 3–4k tokens, folgado na janela do modelo (128k no llama-3.3-70b) e ainda barato.
+MAX_CONTEXTO_CHARS = int(os.getenv("CHAT_MAX_CONTEXTO_CHARS", "12000"))
+# Teto da RESPOSTA. No avançado o tutor tem de caber fórmula, formalismo e leitura de
+# referência — 1024 tokens (~3 mil caracteres em português) cortavam no meio da frase.
+MAX_TOKENS_RESPOSTA = int(os.getenv("CHAT_MAX_TOKENS", "1536"))
+MAX_TOKENS_RESPOSTA_AVANCADO = int(os.getenv("CHAT_MAX_TOKENS_AVANCADO", "3072"))
+# Temperatura NÃO é configurável de propósito: subir aqui não compra profundidade, compra
+# invenção — e o público é de estudantes que não têm como conferir um default inventado.
+TEMPERATURA = 0.4
+
+
+def max_tokens_resposta(contexto) -> int:
+    """Teto de tokens da resposta, pelo nível que o aluno escolheu no perfil."""
+    if nivel_do_contexto(contexto) == NIVEL_AVANCADO:
+        return MAX_TOKENS_RESPOSTA_AVANCADO
+    return MAX_TOKENS_RESPOSTA
 
 
 # ============================================================
@@ -355,7 +376,15 @@ def _montar_contexto(contexto) -> str:
     except Exception:
         texto = str(contexto)
     if len(texto) > MAX_CONTEXTO_CHARS:
-        texto = texto[:MAX_CONTEXTO_CHARS] + "\n... (contexto truncado)"
+        # Corta em fim de LINHA (o JSON sai indentado, então cada linha é um campo) e diz
+        # quanto ficou de fora. Cortar no meio de uma linha entregava ao modelo um campo
+        # partido, do tipo `"modelo": "random_fo` — pior que a ausência do campo.
+        corte = texto[:MAX_CONTEXTO_CHARS]
+        fim = corte.rfind("\n")
+        if fim > 0:
+            corte = corte[:fim]
+        omitidos = len(texto) - len(corte)
+        texto = f"{corte}\n... (contexto truncado: {omitidos} caracteres omitidos)"
     return texto
 
 
@@ -420,19 +449,21 @@ async def chat_tutor(request: ChatTutorRequest, usuario: dict = Depends(get_usua
     payload = {
         "model": modelo,
         "messages": mensagens,
-        "temperature": 0.4,
-        "max_tokens": 1024,
+        "temperature": TEMPERATURA,
+        "max_tokens": max_tokens_resposta(request.contexto),
         "stream": False,
     }
 
     inicio = time.perf_counter()
 
-    async def _logar(status: str, resposta: str = "", erro: Optional[str] = None):
+    async def _logar(status: str, resposta: str = "", erro: Optional[str] = None,
+                     finish_reason: Optional[str] = None):
         await registrar_atividade(
             usuario,
             "chat",
             "resposta_tutor",
-            detalhes=_resumo_chat(_ultima_msg_usuario(request), resposta, modelo, request.contexto),
+            detalhes=_resumo_chat(_ultima_msg_usuario(request), resposta, modelo, request.contexto,
+                                  finish_reason=finish_reason),
             duracao_ms=int((time.perf_counter() - inicio) * 1000),
             status=status,
             erro=erro,
@@ -462,11 +493,15 @@ async def chat_tutor(request: ChatTutorRequest, usuario: dict = Depends(get_usua
     try:
         data = resp.json()
         resposta = data["choices"][0]["message"]["content"]
+        finish_reason = data["choices"][0].get("finish_reason")
     except (KeyError, IndexError, ValueError):
         await _logar("erro", erro="resposta em formato inesperado")
         raise HTTPException(status_code=502, detail="Resposta do tutor em formato inesperado.")
 
-    await _logar("sucesso", resposta=resposta)
+    if finish_reason == "length":
+        logger.warning("Resposta do tutor cortada no teto de tokens (modelo=%s, %d chars)",
+                       modelo, len(resposta))
+    await _logar("sucesso", resposta=resposta, finish_reason=finish_reason)
     return {"resposta": resposta}
 
 
@@ -478,6 +513,7 @@ async def _stream_nvidia(api_key: str, payload: dict, *, usuario=None, modelo=""
     acumulado: list[str] = []
     status_final = "sucesso"
     erro_final: Optional[str] = None
+    finish_reason: Optional[str] = None
     completou = False  # vira True só quando o stream termina normalmente
     inicio = time.perf_counter()
     try:
@@ -503,6 +539,7 @@ async def _stream_nvidia(api_key: str, payload: dict, *, usuario=None, modelo=""
                         return
                     try:
                         chunk = json.loads(data_str)
+                        finish_reason = chunk["choices"][0].get("finish_reason") or finish_reason
                         delta = chunk["choices"][0].get("delta", {})
                         token = delta.get("content", "")
                         if token:
@@ -533,6 +570,7 @@ async def _stream_nvidia(api_key: str, payload: dict, *, usuario=None, modelo=""
                         modelo,
                         getattr(request, "contexto", None),
                         stream=True,
+                        finish_reason=finish_reason,
                     ),
                     duracao_ms=int((time.perf_counter() - inicio) * 1000),
                     status=status_final,
@@ -572,8 +610,8 @@ async def chat_tutor_stream(request: ChatTutorRequest, usuario: dict = Depends(g
     payload = {
         "model": modelo,
         "messages": mensagens,
-        "temperature": 0.4,
-        "max_tokens": 1024,
+        "temperature": TEMPERATURA,
+        "max_tokens": max_tokens_resposta(request.contexto),
         "stream": True,
     }
 
