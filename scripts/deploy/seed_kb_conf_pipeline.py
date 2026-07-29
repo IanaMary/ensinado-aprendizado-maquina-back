@@ -1,13 +1,16 @@
 #!/usr/bin/env python
-"""Semeia a base de conhecimento do assistente do admin (guia de preenchimento
-da Configuração do Pipeline) no MongoDB: db.tutor, doc {pipe: 'conf-pipeline'}.
+"""Semeia o guia de preenchimento do conf-pipeline: db.tutor, doc {pipe: 'conf-pipeline'},
+campo texto_pipe. É o contexto que o assistente do admin recebe no chat.
 
-Idempotente: upsert com $set só de texto_pipe (a fonte versionada em
-app/conteudo/kb_conf_pipeline.py sobrescreve o texto; demais campos do doc,
-se existirem, são preservados).
+Idempotente e CONSERVADOR: preserva o texto que o admin gravar (a decisão de escrever ou preservar
+vive em `app/conteudo/texto_versionado.py`, com dez estados testados lá). Antes este script
+sobrescrevia sem ler o que havia no banco — motivo de ele nunca ter entrado no `deploy.sh`.
+
+O backend também semeia no boot (`app/main.py`); este CLI existe para rodar sem reiniciar, para o
+`--forcar` e para o resultado aparecer no log do deploy.
 
 Uso (na VM, dentro do backend, com o .env carregado):
-    .venv/bin/python -m scripts.deploy.seed_kb_conf_pipeline
+    venv/bin/python -m scripts.deploy.seed_kb_conf_pipeline [--forcar]
 """
 import asyncio
 import os
@@ -18,18 +21,12 @@ if _RAIZ not in sys.path:
     sys.path.insert(0, _RAIZ)
 
 
-async def _main() -> None:
-    from app.database import tutor
-    from app.conteudo.kb_conf_pipeline import KB_CONF_PIPELINE
+async def _main(forcar: bool) -> None:
+    from app.conteudo.textos_do_tutor import ALVO_CONF_PIPELINE, resumo_legivel, semear_texto_do_tutor
 
-    resultado = await tutor.update_one(
-        {"pipe": "conf-pipeline"},
-        {"$set": {"texto_pipe": KB_CONF_PIPELINE}, "$setOnInsert": {"pipe": "conf-pipeline"}},
-        upsert=True,
-    )
-    acao = "inserido" if resultado.upserted_id else ("atualizado" if resultado.modified_count else "sem mudança")
-    print(f"KB conf-pipeline: {acao} ({len(KB_CONF_PIPELINE)} chars)")
+    resultado = await semear_texto_do_tutor(ALVO_CONF_PIPELINE, forcar=forcar)
+    print(resumo_legivel(resultado, ALVO_CONF_PIPELINE))
 
 
 if __name__ == "__main__":
-    asyncio.run(_main())
+    asyncio.run(_main("--forcar" in sys.argv[1:]))

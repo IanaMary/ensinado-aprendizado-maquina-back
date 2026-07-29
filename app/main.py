@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import os
 from fastapi import Depends, FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -227,7 +226,44 @@ async def semear_instrucao_do_tutor():
 
         resultado = await semear_system_prompt()
         if resultado["escreveu"] or resultado["acao"].startswith("preservou"):
-            logging.getLogger(__name__).info(resumo_legivel(resultado))
+            # `logger` é o do loguru: o `setup_logging` só encaminha os loggers do uvicorn/FastAPI
+            # para ele, então `logging.getLogger(__name__).info` não apareceria em lugar nenhum.
+            logger.info(resumo_legivel(resultado))
+    except Exception:
+        pass
+
+
+@app.on_event("startup")
+async def semear_textos_do_tutor():
+    """Sincroniza os textos versionados de `db.tutor` (boas-vindas e guia do conf-pipeline).
+
+    Hook separado do da instrução de sistema de propósito: uma falha em um não pode engolir o outro.
+
+    Por que no boot e não só no `deploy.sh`: para o pipe `inicio` o documento SEMPRE existe (o
+    `seed-mongodb.sh` o insere), então o fallback versionado do `GET /tutor/?pipe=inicio` nunca
+    dispara — o seed é o único mecanismo capaz de atualizar o texto que o aluno lê. Um seed só no
+    script faria `git pull` + restart publicar backend novo com boas-vindas velhas, sem sintoma.
+    """
+    try:
+        from app.conteudo.textos_do_tutor import ALVOS_POR_PIPE, semear_texto_do_tutor
+        from app.conteudo.texto_versionado import resumir
+        from app.database import tutor
+
+        try:
+            # Com 2 workers do uvicorn, dois upserts concorrentes criariam dois docs do mesmo pipe
+            # e o `find_one` passaria a devolver um deles arbitrariamente.
+            await tutor.create_index("pipe", unique=True)
+        except Exception as e:
+            logger.warning("Índice único em tutor.pipe não criado ({}) — verifique pipes "
+                           "duplicados", type(e).__name__)
+
+        for alvo in ALVOS_POR_PIPE.values():
+            try:
+                resultado = await semear_texto_do_tutor(alvo)
+                if resultado["escreveu"] or resultado["acao"].startswith("preservou"):
+                    logger.info(resumir(resultado, alvo))
+            except Exception:
+                logger.warning("Falha ao semear o texto do tutor '{}'", alvo.identidade)
     except Exception:
         pass
 

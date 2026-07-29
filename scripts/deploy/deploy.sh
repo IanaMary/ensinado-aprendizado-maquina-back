@@ -97,9 +97,10 @@ echo ""
 echo "=== [5b/6] Semeando conteúdo educacional (app/conteudo/*.json) ==="
 cd "$PROJECT_DIR"
 PYTHONPATH="$PROJECT_DIR" python -m scripts.deploy.seed_conteudo || echo "  AVISO: seed de conteúdo falhou"
-PYTHONPATH="$PROJECT_DIR" python -m scripts.deploy.seed_tutor_inicio || echo "  AVISO: seed das boas-vindas do tutor falhou"
-# A instrução de sistema também é semeada no boot do backend (app/main.py) — aqui é para o
+# Os três textos versionados também são semeados no boot do backend (app/main.py) — aqui é para o
 # resultado (propagou? preservou a edição do admin?) ficar visível no log do deploy.
+PYTHONPATH="$PROJECT_DIR" python -m scripts.deploy.seed_tutor_inicio || echo "  AVISO: seed das boas-vindas do tutor falhou"
+PYTHONPATH="$PROJECT_DIR" python -m scripts.deploy.seed_kb_conf_pipeline || echo "  AVISO: seed do guia do conf-pipeline falhou"
 PYTHONPATH="$PROJECT_DIR" python -m scripts.deploy.seed_system_prompt || echo "  AVISO: seed da instrução do tutor falhou"
 
 # ---- Reiniciar serviço ----
