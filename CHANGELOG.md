@@ -10,7 +10,7 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ## 2026-07-29 (instrução de sistema persistida e versionada + healthcheck honesto)
 
-> Backend `master` **`<pendente>`**. Frontend: ver changelog do repo do frontend.
+> Backend `master` **`f4ae2fc`**. Frontend: ver changelog do repo do frontend.
 
 ### Adicionado
 - **A instrução de sistema do chat passou a viver no banco.** Antes a constante
