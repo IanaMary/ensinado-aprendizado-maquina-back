@@ -4,8 +4,48 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from app.schemas.tutor import AtualizarContextoRequest, AtualizarSelecaoModeloRequest, ContextoPipeInicio, ContextoPipeColetaDados, ContextoPipePreProcessamento, ContextoPipeSelecaoModelo, ContextoPipeTreinamento, ContextoPipeSelecaoMetricas
 from app.funcoes_genericas.funcoes_genericas import serialize_doc, concatenar_campos
 from app.database import tutor, tutor_audit
+from app.conteudo.textos_do_tutor import ALVOS_POR_PIPE
+from app.conteudo.texto_versionado import classificar_origem
 from app.security import exigir_admin_ou_professor
 from bson import ObjectId
+
+# Metadados do seed versionado (app/conteudo/texto_versionado.py). Nunca vêm do cliente: o
+# `contexto` do request é `Dict[str, Any]` sem validação, e uma `versao` string faria TODO `$inc`
+# posterior naquele documento estourar 500 — para sempre.
+_CAMPOS_DO_SEED = {"origem", "padrao_hash", "versao", "atualizado_em", "atualizado_por"}
+
+
+async def _pipe_do_doc(filtro: dict) -> Optional[str]:
+    """Slug do pipe de um documento achado por `_id` — as rotas por id não o recebem, e é ele que
+    diz se o texto tem padrão versionado a comparar."""
+    try:
+        doc = await tutor.find_one(filtro, {"pipe": 1})
+    except Exception:
+        return None
+    return (doc or {}).get("pipe")
+
+
+def _ops_com_marcacao(pipe: Optional[str], set_data: dict, usuario: dict) -> dict:
+    """Operações do Mongo para uma edição de texto, marcando de quem o texto é.
+
+    Sem esta marcação o seed do deploy classificaria a edição do admin como "versionado" e
+    propagaria o padrão por cima dela — pior que não ter guarda, porque escondido atrás de um
+    mecanismo que diz proteger.
+
+    Devolve operações NOVAS de propósito: `set_data` é ao mesmo tempo o corpo da resposta e a fonte
+    de `campos_alterados` do histórico. Mutá-lo faria a tela do admin dizer "campos alterados:
+    texto_pipe, origem, padrao_hash, versao".
+    """
+    ops = {"$set": dict(set_data)}
+    alvo = ALVOS_POR_PIPE.get(pipe or "")
+    if alvo and alvo.campo in set_data:
+        ops["$set"]["origem"] = classificar_origem(set_data[alvo.campo] or "", alvo)
+        # Baseline: o padrão que o admin tinha à frente ao gravar. Não é hash do que ele escreveu.
+        ops["$set"]["padrao_hash"] = alvo.hash_padrao
+        ops["$set"]["atualizado_por"] = str(usuario.get("_id") or "")
+        ops["$set"]["atualizado_em"] = datetime.now(timezone.utc)
+        ops["$inc"] = {"versao": 1}
+    return ops
 
 router = APIRouter(prefix="/tutor", tags=["Tutor"])
 
@@ -165,14 +205,14 @@ async def atualizar_por_pipe(
 
     set_data = {
         k: v for k, v in (request.contexto or {}).items()
-        if v is not None and k not in {"pipe", "_id", "id"}
+        if v is not None and k not in {"pipe", "_id", "id"} | _CAMPOS_DO_SEED
     }
     if not set_data:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
 
     await tutor.update_one(
         {"pipe": pipe},
-        {"$set": set_data, "$setOnInsert": {"pipe": pipe}},
+        {**_ops_com_marcacao(pipe, set_data, usuario), "$setOnInsert": {"pipe": pipe}},
         upsert=True,
     )
     doc = await tutor.find_one({"pipe": pipe}, {"_id": 1})
@@ -195,7 +235,10 @@ async def atualizar_descricao(
     except Exception:
         raise HTTPException(status_code=400, detail="ID inválido")
 
-    update_data = {k: v for k, v in (request.contexto or {}).items() if v is not None}
+    update_data = {
+        k: v for k, v in (request.contexto or {}).items()
+        if v is not None and k not in _CAMPOS_DO_SEED
+    }
     set_data = {}
 
     if modelos and len(modelos) == 2:
@@ -214,7 +257,8 @@ async def atualizar_descricao(
     if not set_data:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
 
-    resultado = await tutor.update_one(filtro, {"$set": set_data})
+    resultado = await tutor.update_one(filtro, _ops_com_marcacao(
+        await _pipe_do_doc(filtro) if "texto_pipe" in set_data else None, set_data, usuario))
 
     if resultado.matched_count == 0:
         raise HTTPException(status_code=404, detail="Documento não encontrado")
@@ -335,7 +379,8 @@ async def atualizar_chaves_fixas(
     if not set_data:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
 
-    resultado = await tutor.update_one(filtro, {"$set": set_data})
+    resultado = await tutor.update_one(filtro, _ops_com_marcacao(
+        await _pipe_do_doc(filtro) if "texto_pipe" in set_data else None, set_data, usuario))
 
     if resultado.matched_count == 0:
         raise HTTPException(status_code=404, detail="Documento não encontrado")
