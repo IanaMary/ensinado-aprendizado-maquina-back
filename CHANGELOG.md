@@ -8,6 +8,57 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-29b (guia do conf-pipeline entra no deploy + marca única H2IA Tutor)
+
+> Backend `master` **`<pendente>`**. Frontend: ver changelog do repo do frontend.
+> **Exige renomear o experimento MLflow em produção** (ver Alterado).
+
+### Adicionado
+- **O guia do conf-pipeline passou a ser semeado com guarda.** `seed_kb_conf_pipeline.py` fazia
+  `$set` de `texto_pipe` sem ler o banco, e por isso estava fora do `deploy.sh`: ligá-lo apagaria em
+  silêncio a edição do admin. Agora os dois textos de `db.tutor` (boas-vindas e guia) usam o mesmo
+  motor versionado da instrução de sistema, semeados **no boot e no `deploy.sh`**, ambos com
+  `--forcar`.
+- `app/conteudo/texto_versionado.py`: o motor (matriz de decisão + `TextoVersionado`, que descreve o
+  alvo uma vez em vez de repetir nove parâmetros por chamada) — extraído de
+  `system_prompt_seed.py`, que ficou como fachada fina. Os 22 testes dele passam **verbatim**.
+- Estado novo na matriz: `legados`. Texto que NÓS publicamos antes (o placeholder de uma frase do
+  `seed-mongodb.sh`) não é edição do admin e pode receber o padrão novo. É a única exceção ao "o
+  seed nunca sobrescreve o admin", e existe porque o caso realista é o admin abrir a tela, ver a
+  frase e clicar em Salvar sem escrever nada seu.
+- As rotas que gravam `texto_pipe` (`PUT /tutor/pipe/{pipe}`, o catch-all `PUT /tutor/{id}` e
+  `/editar-tipo-aprendizado/{id}`) marcam `origem`/`padrao_hash`/`versao`. **Pré-requisito**, não
+  complemento: sem isso o seed classificaria a edição do admin como "versionado" e propagaria por
+  cima dela — pior que não ter guarda, porque escondido atrás de um mecanismo que diz proteger.
+- Índice único em `tutor.pipe` (dois workers poderiam duplicar o documento).
+
+### Corrigido
+- **Bug ativo em produção:** o doc `{pipe:'inicio'}` tinha o HTML versionado **+ 2 caracteres de
+  espaço**, e a comparação era `==` de string bruta — então o seed vinha relatando "preservado
+  (texto editado pelo admin)" a cada deploy, para um texto que ninguém editou, e as boas-vindas não
+  recebiam atualização nenhuma. Comparando por hash (que faz `strip`), isso se autocorrige no
+  primeiro boot como ajuste de metadado, sem reescrever o texto.
+- **Os logs dos seeds não apareciam em lugar nenhum.** `setup_logging` só encaminha os loggers do
+  uvicorn/FastAPI para o loguru, então o `logging.getLogger(__name__).info` do hook de ontem era
+  descartado — nem `journalctl`, nem painel de logs do admin. Passaram a usar o loguru.
+- `_CAMPOS_DO_SEED` sai do `contexto` que o cliente manda: uma `versao` string faria todo `$inc`
+  posterior naquele documento estourar 500, para sempre.
+
+### Alterado
+- **Marca:** "Iana" deixa de ser nome da plataforma em docstrings, README, documentação e nos
+  defaults de infra. `MLFLOW_EXPERIMENT` → **`h2ia-treinamento`**, com o experimento **renomeado no
+  MLflow de produção na mesma janela** (trocar só o default criaria um experimento novo e orfanaria
+  os runs históricos na tela de Artefatos; um rollback sem renomear de volta tem o mesmo efeito).
+  `EMAIL_FROM` default → `noreply@h2ia.ufpel.edu.br`. **Preservados:** o nome da autora, o usuário
+  `IanaMary`, a branch `mestrado-iana` e as entradas que narram a própria mudança de marca.
+
+### Verificação
+**585 passed, 1 skipped** (32 novos; **nenhum teste existente alterado**). E2E contra um Mongo real:
+placeholder legado → propagou (auditoria guarda o texto anterior); texto do admin salvo pela API →
+`origem: admin` e preservado no restart; HTML com 2 espaços → normalizado sem reescrever.
+
+---
+
 ## 2026-07-29 (instrução de sistema persistida e versionada + healthcheck honesto)
 
 > Backend `master` **`f4ae2fc`**. Frontend: ver changelog do repo do frontend.
