@@ -185,6 +185,11 @@ class TestTruncamentoRegistrado:
         assert registrados and registrados[0]["truncada_no_teto"] is False
 
 
+_PROVEDOR = {"id": "nvidia", "nome": "NVIDIA NIM", "api_key": "chave",
+             "base_url": "https://integrate.api.nvidia.com/v1", "modelo": "modelo-x",
+             "todos_gratuitos": True}
+
+
 class TestSaudeModelos:
     @pytest.mark.asyncio
     async def test_modelo_que_responde(self):
@@ -193,7 +198,7 @@ class TestSaudeModelos:
         resp.status_code = 200
         cliente = MagicMock()
         cliente.post = AsyncMock(return_value=resp)
-        out = await _testar_modelo(cliente, "chave", "meta/llama-3.3-70b-instruct")
+        out = await _testar_modelo(cliente, _PROVEDOR, "meta/llama-3.3-70b-instruct")
         assert out["responde"] is True
         assert "latencia_ms" in out
 
@@ -205,6 +210,6 @@ class TestSaudeModelos:
         resp.json = MagicMock(return_value={"detail": "DEGRADED function cannot be invoked"})
         cliente = MagicMock()
         cliente.post = AsyncMock(return_value=resp)
-        out = await _testar_modelo(cliente, "chave", "minimaxai/minimax-m3")
+        out = await _testar_modelo(cliente, _PROVEDOR, "minimaxai/minimax-m3")
         assert out["responde"] is False
         assert "DEGRADED" in out["erro"]

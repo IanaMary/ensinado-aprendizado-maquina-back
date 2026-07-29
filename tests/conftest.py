@@ -163,6 +163,9 @@ def mock_db(mock_user):
         patch("app.routers.toy_datasets.arquivos", mock_arquivos),
         patch("app.routers.toy_datasets.configuracoes_treinamento", mock_config),
         patch("app.routers.chat_tutor.configuracoes_tutor", _make_mock_collection()),
+        # `app.tutor_provedores` resolve a coleção pelo módulo `app.database` na hora do uso —
+        # sem este patch, ele fala com o Mongo real e a suíte tenta conectar em localhost:27017.
+        patch("app.database.configuracoes_tutor", _make_mock_collection()),
         patch("app.routers.chat_tutor.historico_chat", _make_mock_collection()),
         patch("app.database.atividade_usuario", mock_atividade),
         patch("app.routers.atividade.atividade_usuario", mock_atividade),

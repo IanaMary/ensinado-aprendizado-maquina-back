@@ -1,7 +1,9 @@
-"""Chatbot tutor: proxy seguro para a API da NVIDIA (OpenAI-compatible).
+"""Chatbot tutor: proxy seguro para o provedor de LLM ativo (dialeto OpenAI-compatible).
 
-A chave NVIDIA_API_KEY fica SOMENTE no backend (variavel de ambiente / .env, nao
-versionada). O frontend nunca a recebe — fala apenas com este endpoint. O chatbot
+Qual provedor atende (NVIDIA NIM, OpenRouter ou um endpoint customizado), com que chave e que
+modelo, é resolvido por `app/tutor_provedores.py`. **Nenhuma chave de API chega ao frontend**: a da
+NVIDIA vive só no `.env`; as dos provedores configuráveis ficam no banco e a leitura só devolve os
+últimos 4 caracteres. O chatbot
 recebe o contexto do pipeline carregado (dataset, modelo, hiperparametros, metricas,
 graficos, codigo Python gerado) e responde de forma pedagogica, em PT-BR, para alunos.
 """
@@ -26,6 +28,7 @@ from app.conteudo.kb_tutor_chat import (
     hash_prompt,
 )
 from app.conteudo.system_prompt_seed import ORIGEM_ADMIN, ORIGEM_VERSIONADO
+from app import tutor_provedores as prov
 from app.database import historico_chat, configuracoes_tutor, tutor_audit, turmas
 from app.routers.atividade import registrar_atividade
 from app.security import get_usuario_atual, exigir_admin_ou_professor
@@ -107,9 +110,7 @@ def _resumo_chat(mensagem: str, resposta: str, modelo: str, contexto, *, stream:
     }
 
 
-NVIDIA_BASE_URL = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
-# Default sane: um modelo de chat estável. O env e o config no banco têm prioridade.
-NVIDIA_MODEL = os.getenv("NVIDIA_MODEL", "meta/llama-3.3-70b-instruct")
+# base_url/chave/modelo de cada provedor vivem em `app/tutor_provedores.py` (CATALOGO).
 # ------------------------------------------------------------------ tetos do chat
 # O contexto vem no CORPO da requisição (o cliente o monta, e no modal ele inclui o script
 # Python gerado): sem teto, quem chama decide quanto o servidor gasta em tokens. 12k chars
@@ -135,44 +136,63 @@ def max_tokens_resposta(contexto) -> int:
 # CONFIGURAÇÃO DO MODELO LLM
 # ============================================================
 
-@router.get("/modelos")
-async def listar_modelos(usuario=Depends(get_usuario_atual)):
-    """Lista os modelos LLM disponíveis na NVIDIA."""
-    api_key = os.getenv("NVIDIA_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="NVIDIA_API_KEY não configurada no servidor.",
-        )
+async def _buscar_modelos(provedor: dict) -> list[dict]:
+    """Modelos do provedor vigente, com `gratuito` resolvido e os gratuitos na frente.
 
+    Ordenar aqui (e não na tela) mantém a mesma ordem no seletor e em qualquer outro consumidor.
+    """
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(
-                f"{NVIDIA_BASE_URL}/models",
-                headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
-            )
+            resp = await client.get(f"{provedor['base_url']}/models",
+                                    headers=prov.cabecalhos(provedor))
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Timeout ao listar modelos.")
     except httpx.HTTPError:
-        raise HTTPException(status_code=502, detail="Erro ao conectar com a NVIDIA.")
+        raise HTTPException(status_code=502,
+                            detail=f"Erro ao conectar com {provedor['nome']}.")
 
     if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail="Erro ao listar modelos da NVIDIA.")
-
+        raise HTTPException(status_code=502,
+                            detail=f"Erro ao listar modelos de {provedor['nome']} "
+                                   f"(HTTP {resp.status_code}).")
     try:
         data = resp.json()
-        modelos = [
-            {"id": m["id"], "owned_by": m.get("owned_by", "")}
-            for m in data.get("data", [])
-        ]
-    except (KeyError, ValueError):
+    except ValueError:
         raise HTTPException(status_code=502, detail="Resposta inesperada ao listar modelos.")
 
-    # Busca o modelo configurado atualmente
-    config = await configuracoes_tutor.find_one({"chave": "llm_model"})
-    modelo_atual = config.get("valor", NVIDIA_MODEL) if config else NVIDIA_MODEL
+    modelos = []
+    for m in data.get("data", []):
+        if not m.get("id"):
+            continue
+        modelos.append({
+            "id": m["id"],
+            "owned_by": m.get("owned_by") or (m.get("name") or ""),
+            "gratuito": prov.eh_gratuito(m, provedor),
+            "contexto": m.get("context_length"),
+        })
+    # Gratuitos primeiro; depois os de preço desconhecido; pagos por último. Alfabético dentro
+    # de cada faixa, para a lista não dançar entre recarregamentos.
+    ordem = {True: 0, None: 1, False: 2}
+    modelos.sort(key=lambda m: (ordem.get(m["gratuito"], 1), m["id"]))
+    return modelos
 
-    return {"modelos": modelos, "modelo_atual": modelo_atual}
+
+@router.get("/modelos")
+async def listar_modelos(usuario=Depends(get_usuario_atual)):
+    """Modelos disponíveis no provedor ativo (NVIDIA NIM, OpenRouter ou customizado)."""
+    provedor = await prov.provedor_vigente()
+    if not provedor["api_key"]:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{provedor['nome']} está sem chave de API configurada.",
+        )
+    modelos = await _buscar_modelos(provedor)
+    return {
+        "modelos": modelos,
+        "modelo_atual": provedor["modelo"],
+        "provedor": {"id": provedor["id"], "nome": provedor["nome"],
+                     "todos_gratuitos": provedor["todos_gratuitos"]},
+    }
 
 
 # ============================================================
@@ -189,7 +209,7 @@ _saude_cache: dict = {
 _saude_lock = asyncio.Lock()
 
 
-async def _testar_modelo(client: httpx.AsyncClient, api_key: str, model_id: str) -> dict:
+async def _testar_modelo(client: httpx.AsyncClient, provedor: dict, model_id: str) -> dict:
     """Faz um ping mínimo (max_tokens=1) para saber se o modelo responde a chat."""
     payload = {
         "model": model_id,
@@ -201,8 +221,8 @@ async def _testar_modelo(client: httpx.AsyncClient, api_key: str, model_id: str)
     inicio = time.time()
     try:
         resp = await client.post(
-            f"{NVIDIA_BASE_URL}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
+            f"{provedor['base_url']}/chat/completions",
+            headers=prov.cabecalhos(provedor),
             json=payload,
         )
         if resp.status_code == 200:
@@ -218,7 +238,7 @@ async def _testar_modelo(client: httpx.AsyncClient, api_key: str, model_id: str)
         return {"responde": False, "erro": str(e)[:140] or "falha de conexão"}
 
 
-async def _rodar_health_check(api_key: str, modelos: list[str]):
+async def _rodar_health_check(provedor: dict, modelos: list[str]):
     """Testa todos os modelos com concorrência limitada, preenchendo o cache à medida
     que cada um responde (a UI mostra o progresso)."""
     sem = asyncio.Semaphore(8)
@@ -228,7 +248,7 @@ async def _rodar_health_check(api_key: str, modelos: list[str]):
         async with httpx.AsyncClient(timeout=15.0) as client:
             async def worker(mid: str):
                 async with sem:
-                    res = await _testar_modelo(client, api_key, mid)
+                    res = await _testar_modelo(client, provedor, mid)
                 _saude_cache["resultados"][mid] = res
                 _saude_cache["concluidos"] += 1
             await asyncio.gather(*(worker(m) for m in modelos), return_exceptions=True)
@@ -237,33 +257,57 @@ async def _rodar_health_check(api_key: str, modelos: list[str]):
         _saude_cache["em_andamento"] = False
 
 
+def _modelos_a_testar(modelos: list[dict], modelo_atual: str) -> list[str]:
+    """Quais modelos entram no teste automático.
+
+    Só os **gratuitos** e o **que está em uso**: no OpenRouter são 367 modelos, e testar todos
+    significaria centenas de requisições por rodada — algumas cobradas — só para montar a tela. Os
+    pagos aparecem na lista sem selo e podem ser testados um a um sob demanda.
+
+    Quando o provedor é todo gratuito (NVIDIA), isso naturalmente vira "todos", preservando o
+    comportamento que a tela já tinha.
+    """
+    ids = [m["id"] for m in modelos if m.get("gratuito") is True]
+    if modelo_atual and modelo_atual not in ids:
+        ids.append(modelo_atual)
+    return ids
+
+
 @router.get("/modelos/saude")
-async def saude_modelos(usuario=Depends(get_usuario_atual), forcar: bool = Query(False)):
-    """Status de resposta de cada modelo LLM. Retorna o cache atual de imediato e
-    dispara o teste em segundo plano quando o cache está velho (ou forcar=True)."""
-    api_key = os.getenv("NVIDIA_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="NVIDIA_API_KEY não configurada no servidor.")
+async def saude_modelos(usuario=Depends(get_usuario_atual), forcar: bool = Query(False),
+                        modelo: Optional[str] = Query(None)):
+    """Status de resposta dos modelos. Devolve o cache de imediato e dispara o teste em segundo
+    plano quando ele está velho (ou `forcar=True`). Com `modelo=<id>`, testa só aquele — é o
+    "testar este" dos modelos pagos, que ficam fora do teste automático."""
+    provedor = await prov.provedor_vigente()
+    if not provedor["api_key"]:
+        raise HTTPException(status_code=503,
+                            detail=f"{provedor['nome']} está sem chave de API configurada.")
+
+    if modelo:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            _saude_cache["resultados"][modelo] = await _testar_modelo(client, provedor, modelo)
+        return {
+            "resultados": _saude_cache["resultados"],
+            "atualizado_em": _saude_cache["atualizado_em"],
+            "em_andamento": _saude_cache["em_andamento"],
+            "total": _saude_cache["total"],
+            "concluidos": _saude_cache["concluidos"],
+        }
 
     fresco = (time.time() - _saude_cache["atualizado_em"]) < _SAUDE_TTL
     async with _saude_lock:
         if (forcar or not fresco) and not _saude_cache["em_andamento"]:
-            ids: list[str] = []
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    resp = await client.get(
-                        f"{NVIDIA_BASE_URL}/models",
-                        headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
-                    )
-                if resp.status_code == 200:
-                    ids = [m["id"] for m in resp.json().get("data", []) if m.get("id")]
-            except Exception:
-                ids = []
+                modelos = await _buscar_modelos(provedor)
+            except HTTPException:
+                modelos = []
+            ids = _modelos_a_testar(modelos, provedor["modelo"])
             if ids:
                 _saude_cache["em_andamento"] = True
                 if forcar:
                     _saude_cache["resultados"] = {}
-                asyncio.create_task(_rodar_health_check(api_key, ids))
+                asyncio.create_task(_rodar_health_check(provedor, ids))
 
     return {
         "resultados": _saude_cache["resultados"],
@@ -310,6 +354,27 @@ async def _auditar_prompt(usuario: dict, operacao: str, tamanho: int, *,
         })
     except Exception:
         # Auditoria nao deve quebrar a edicao.
+        pass
+
+
+async def _auditar_llm(usuario: dict, operacao: str, detalhe: str) -> None:
+    """Registra mudanças de provedor/modelo em `db.tutor_audit`, na aba LLM.
+
+    Antes, trocar o modelo do tutor não deixava rastro nenhum — a única mudança da tela sem
+    histórico. **A chave de API nunca entra aqui**: só o provedor e o modelo.
+    """
+    try:
+        await tutor_audit.insert_one({
+            "pipe": "llm",
+            "tutor_id": "",
+            "operacao": operacao,
+            "campos_alterados": [detalhe],
+            "usuario_id": str(usuario.get("_id") or ""),
+            "usuario_email": usuario.get("email", ""),
+            "usuario_nome": usuario.get("nome") or usuario.get("name") or usuario.get("email", ""),
+            "timestamp": datetime.now(timezone.utc),
+        })
+    except Exception:
         pass
 
 
@@ -401,15 +466,16 @@ async def definir_system_prompt(body: DefinirSystemPromptRequest,
 
 @router.get("/modelo")
 async def obter_modelo(usuario=Depends(get_usuario_atual)):
-    """Retorna o modelo LLM atualmente selecionado."""
-    config = await configuracoes_tutor.find_one({"chave": "llm_model"})
-    modelo = config.get("valor", NVIDIA_MODEL) if config else NVIDIA_MODEL
-    return {"modelo": modelo}
+    """Modelo em uso, com o provedor a que ele pertence."""
+    provedor = await prov.provedor_vigente()
+    return {"modelo": provedor["modelo"],
+            "provedor": {"id": provedor["id"], "nome": provedor["nome"]}}
 
 
 @router.put("/modelo")
 async def definir_modelo(body: dict, usuario=Depends(get_usuario_atual)):
-    """Define o modelo LLM a ser utilizado pelo tutor."""
+    """Define o modelo do tutor **no provedor ativo** (cada provedor guarda o seu: um id do
+    OpenRouter não existe na NVIDIA, e um "modelo global" apontaria para o nada ao trocar)."""
     if usuario.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Apenas admins podem alterar o modelo do tutor.")
 
@@ -417,12 +483,60 @@ async def definir_modelo(body: dict, usuario=Depends(get_usuario_atual)):
     if not modelo or not isinstance(modelo, str):
         raise HTTPException(status_code=400, detail="Campo 'modelo' é obrigatório.")
 
-    await configuracoes_tutor.update_one(
-        {"chave": "llm_model"},
-        {"$set": {"chave": "llm_model", "valor": modelo, "atualizado_por": str(usuario.get("_id", ""))}},
-        upsert=True,
-    )
-    return {"modelo": modelo}
+    pid = await prov.id_ativo()
+    await prov.definir_modelo(pid, modelo, str(usuario.get("_id", "")))
+    await _auditar_llm(usuario, "definiu_modelo", f"{pid}: {modelo}")
+    return {"modelo": modelo, "provedor": pid}
+
+
+# ============================================================
+# PROVEDORES DE LLM (aba "Provedores" do conf-tutor)
+# ============================================================
+
+@router.get("/provedores")
+async def listar_provedores(usuario=Depends(exigir_admin_ou_professor)):
+    """Provedores e como cada um está configurado. **Nunca devolve chave em claro** — só os
+    últimos 4 caracteres e de onde ela vem (`banco`/`env`/`ausente`)."""
+    return await prov.listar_para_tela()
+
+
+@router.put("/provedores/{pid}")
+async def salvar_provedor(pid: str, body: dict, usuario=Depends(get_usuario_atual)):
+    """Grava URL base, porta, nome e chave de um provedor editável.
+
+    Campo `api_key` vazio mantém a chave atual — assim o admin corrige a URL sem redigitar o
+    segredo (e sem que a tela precise conhecê-lo).
+    """
+    if usuario.get("role") != "admin":
+        raise HTTPException(status_code=403,
+                            detail="Apenas admins podem configurar provedores de LLM.")
+    try:
+        await prov.salvar_provedor(pid, body or {}, str(usuario.get("_id", "")))
+    except prov.ProvedorInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    # A chave em si nunca entra na auditoria; o que se registra é que houve mudança e onde.
+    await _auditar_llm(usuario, "configurou_provedor", pid)
+    return await prov.listar_para_tela()
+
+
+@router.put("/provedor-ativo")
+async def definir_provedor_ativo(body: dict, usuario=Depends(get_usuario_atual)):
+    """Troca o provedor que atende o chat."""
+    if usuario.get("role") != "admin":
+        raise HTTPException(status_code=403,
+                            detail="Apenas admins podem trocar o provedor de LLM.")
+    pid = (body or {}).get("provedor")
+    try:
+        await prov.definir_ativo(str(pid or ""), str(usuario.get("_id", "")))
+    except prov.ProvedorInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    # O teste de saúde é por provedor: manter o cache mostraria o resultado do provedor antigo.
+    _saude_cache["resultados"] = {}
+    _saude_cache["atualizado_em"] = 0.0
+    _saude_cache["total"] = 0
+    _saude_cache["concluidos"] = 0
+    await _auditar_llm(usuario, "trocou_provedor", str(pid))
+    return await prov.listar_para_tela()
 
 
 
@@ -499,16 +613,19 @@ async def chat_tutor(request: ChatTutorRequest, usuario: dict = Depends(get_usua
     user_id = str(usuario.get("_id") or "anonymous")
     _check_rate_limit(user_id)
 
-    api_key = os.getenv("NVIDIA_API_KEY")
-    if not api_key:
+    provedor = await prov.provedor_vigente()
+    if not provedor["api_key"]:
         raise HTTPException(
             status_code=503,
-            detail="O tutor por chat não está configurado no servidor (NVIDIA_API_KEY ausente).",
+            detail=("O tutor por chat não está configurado no servidor "
+                    f"({provedor['nome']} sem chave de API)."),
         )
-
-    # Busca o modelo configurado
-    config = await configuracoes_tutor.find_one({"chave": "llm_model"})
-    modelo = config.get("valor", NVIDIA_MODEL) if config else NVIDIA_MODEL
+    if not provedor["modelo"]:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Nenhum modelo escolhido para {provedor['nome']} (conf-tutor → LLM).",
+        )
+    modelo = provedor["modelo"]
 
     mensagens = [
         {"role": "system", "content": await _montar_system(request.contexto)},
@@ -546,21 +663,21 @@ async def chat_tutor(request: ChatTutorRequest, usuario: dict = Depends(get_usua
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
-                f"{NVIDIA_BASE_URL}/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+                f"{provedor['base_url']}/chat/completions",
+                headers=prov.cabecalhos(provedor),
                 json=payload,
             )
     except httpx.TimeoutException:
         await _logar("erro", erro="timeout")
         raise HTTPException(status_code=504, detail="O tutor demorou demais para responder. Tente de novo.")
     except httpx.HTTPError as e:
-        logger.warning("Falha de rede ao chamar NVIDIA: %s", type(e).__name__)
+        logger.warning("Falha de rede ao chamar o provedor de LLM: %s", type(e).__name__)
         await _logar("erro", erro=f"rede: {type(e).__name__}")
         raise HTTPException(status_code=502, detail="Não consegui falar com o tutor agora. Tente novamente.")
 
     if resp.status_code != 200:
         # Nao propagar corpo bruto do provedor (pode conter detalhes sensiveis).
-        logger.warning("NVIDIA respondeu %s", resp.status_code)
+        logger.warning("Provedor de LLM respondeu %s", resp.status_code)
         await _logar("erro", erro=f"http {resp.status_code}")
         raise HTTPException(status_code=502, detail="O tutor retornou um erro. Tente novamente em instantes.")
 
@@ -579,8 +696,8 @@ async def chat_tutor(request: ChatTutorRequest, usuario: dict = Depends(get_usua
     return {"resposta": resposta}
 
 
-async def _stream_nvidia(api_key: str, payload: dict, *, usuario=None, modelo="", request=None):
-    """Gera tokens SSE a partir do streaming da NVIDIA.
+async def _stream_llm(provedor: dict, payload: dict, *, usuario=None, modelo="", request=None):
+    """Gera tokens SSE a partir do streaming do provedor ativo.
 
     Acumula a resposta para registrar a atividade (fire-and-forget) ao final,
     com sucesso (resposta completa) ou erro (motivo)."""
@@ -594,12 +711,12 @@ async def _stream_nvidia(api_key: str, payload: dict, *, usuario=None, modelo=""
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
                 "POST",
-                f"{NVIDIA_BASE_URL}/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+                f"{provedor['base_url']}/chat/completions",
+                headers=prov.cabecalhos(provedor),
                 json=payload,
             ) as resp:
                 if resp.status_code != 200:
-                    logger.warning("NVIDIA stream respondeu %s", resp.status_code)
+                    logger.warning("Stream do provedor de LLM respondeu %s", resp.status_code)
                     status_final, erro_final = "erro", f"http {resp.status_code}"
                     yield f"data: {json.dumps({'error': 'O tutor retornou um erro.'})}\n\n"
                     return
@@ -660,16 +777,19 @@ async def chat_tutor_stream(request: ChatTutorRequest, usuario: dict = Depends(g
     user_id = str(usuario.get("_id") or "anonymous")
     _check_rate_limit(user_id)
 
-    api_key = os.getenv("NVIDIA_API_KEY")
-    if not api_key:
+    provedor = await prov.provedor_vigente()
+    if not provedor["api_key"]:
         raise HTTPException(
             status_code=503,
-            detail="O tutor por chat não está configurado no servidor (NVIDIA_API_KEY ausente).",
+            detail=("O tutor por chat não está configurado no servidor "
+                    f"({provedor['nome']} sem chave de API)."),
         )
-
-    # Busca o modelo configurado
-    config = await configuracoes_tutor.find_one({"chave": "llm_model"})
-    modelo = config.get("valor", NVIDIA_MODEL) if config else NVIDIA_MODEL
+    if not provedor["modelo"]:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Nenhum modelo escolhido para {provedor['nome']} (conf-tutor → LLM).",
+        )
+    modelo = provedor["modelo"]
 
     mensagens = [
         {"role": "system", "content": await _montar_system(request.contexto)},
@@ -690,7 +810,7 @@ async def chat_tutor_stream(request: ChatTutorRequest, usuario: dict = Depends(g
     }
 
     return StreamingResponse(
-        _stream_nvidia(api_key, payload, usuario=usuario, modelo=modelo, request=request),
+        _stream_llm(provedor, payload, usuario=usuario, modelo=modelo, request=request),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
