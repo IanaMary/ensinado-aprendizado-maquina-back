@@ -128,7 +128,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     index = [
         "# Conteúdo didático dos elementos do pipeline de Machine Learning\n",
-        "Material de apoio gerado a partir da plataforma educacional (H2IA Tutor / Mestrado Iana) "
+        "Material de apoio gerado a partir da plataforma educacional (H2IA Tutor) "
         "para enriquecer a dissertação. Cada elemento do pipeline tem explicação em **dois níveis** — "
         "**Básico** (linguagem acessível, voltada a adolescentes) e **Avançado** (fundamentação técnica, "
         "fórmula e código) — além de conceitos, quando usar/evitar, vantagens/desvantagens, exemplo de "

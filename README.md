@@ -1,4 +1,4 @@
-# Iana / H2IA Tutor - Backend (FastAPI)
+# H2IA Tutor - Backend (FastAPI)
 
 Este é o repositório backend da plataforma educacional H2IA Tutor, construído com **FastAPI** e **MongoDB**.
 

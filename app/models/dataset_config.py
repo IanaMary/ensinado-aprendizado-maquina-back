@@ -1,5 +1,5 @@
 """
-Dataset models for the Iana ML pipeline.
+Dataset models for the H2IA Tutor ML pipeline.
 
 Base class DatasetConfig provides common fields.
 Subclasses specialize for specific dataset types (toy, UCI, custom).

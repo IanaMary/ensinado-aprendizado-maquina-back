@@ -1,7 +1,7 @@
 """Wrapper fino sobre o SDK do MLflow.
 
 Quando `MLFLOW_TRACKING_URI` não está definido, todas as funções viram no-op
-(devolvem `None` ou listas vazias). Isso permite que o backend Iana rode sem
+(devolvem `None` ou listas vazias). Isso permite que o backend do H2IA Tutor rode sem
 um tracking server em desenvolvimento e nos testes.
 
 Falhas de rede contra o tracking server são engolidas: o treinamento principal
@@ -18,7 +18,7 @@ from typing import Any, Iterator, Optional
 
 logger = logging.getLogger(__name__)
 
-_EXPERIMENT_DEFAULT = os.environ.get("MLFLOW_EXPERIMENT", "iana-treinamento")
+_EXPERIMENT_DEFAULT = os.environ.get("MLFLOW_EXPERIMENT", "h2ia-treinamento")
 
 
 def mlflow_enabled() -> bool:
