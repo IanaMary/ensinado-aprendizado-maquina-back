@@ -8,6 +8,44 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-29c (provedores de LLM: OpenRouter, endpoint customizado, selo de gratuito)
+
+> Backend `master` **`<pendente>`**. Frontend: ver changelog do repo do frontend.
+
+### Adicionado
+- `app/tutor_provedores.py`: o chat deixa de falar só com a NVIDIA. Provedores suportados: **NVIDIA
+  NIM**, **OpenRouter** e **qualquer endpoint OpenAI-compatible** (URL base + porta) — o caso de uso
+  desta última é modelo self-hosted (Ollama, vLLM, LM Studio).
+- Rotas `GET /tutor/provedores`, `PUT /tutor/provedores/{id}`, `PUT /tutor/provedor-ativo`
+  (admin-only para escrever). `GET /tutor/modelos` passa a devolver `gratuito` por modelo e a lista
+  **com os gratuitos primeiro**; `GET /tutor/modelos/saude?modelo=<id>` testa um modelo isolado.
+- Trocar provedor/modelo passou a ser **auditado** em `db.tutor_audit` (`pipe: 'llm'`) — era a única
+  mudança da tela sem histórico. A chave de API **nunca** entra na auditoria.
+
+### Decisões
+- **Chave:** a da NVIDIA continua só no `.env`. As dos provedores configuráveis pela tela ficam em
+  `db.configuracoes_tutor`, porque é o que permite ligá-los sem deploy; a leitura devolve apenas os
+  últimos 4 caracteres (`chave_mascarada`) e de onde ela vem (`banco`/`env`/`ausente`). PUT com
+  `api_key` vazio **mantém** a chave — o admin corrige a URL sem redigitar o segredo.
+- **Modelo é por provedor.** Um id do OpenRouter não existe na NVIDIA. O `llm_model` legado continua
+  valendo para a NVIDIA, então produção não sente a migração; a NVIDIA também continua gravando lá,
+  para um rollback encontrar o modelo onde ele sempre esteve.
+- **URL base privada é permitida** (admin-only), de propósito: o anti-SSRF de
+  `POST /coleta_dados/url` existe para dado vindo de aluno, não para configuração de admin.
+- **Gratuidade vem do preço**, não do nome: o OpenRouter manda `pricing` em cada modelo, e 3 dos 17
+  gratuitos não terminam em `:free`. A NVIDIA é marcada como toda gratuita por convenção do catálogo
+  (a plataforma de build é de uso livre com limite de taxa); provedor arbitrário fica sem afirmação
+  (`null` ≠ `false`).
+- **Teste de saúde automático só nos gratuitos + o em uso.** No OpenRouter são 367 modelos: testar
+  todos seriam centenas de requisições por rodada — algumas cobradas — só para montar a tela.
+
+### Verificação
+**615 passed, 1 skipped** (30 novos: normalização de URL com porta, mascaramento, modelo por
+provedor, chave vazia que mantém, gratuidade por preço). Verificado contra a API real do OpenRouter:
+367 modelos, 17 gratuitos, gratuitos primeiro.
+
+---
+
 ## 2026-07-29b (guia do conf-pipeline entra no deploy + marca única H2IA Tutor)
 
 > Backend `master` **`<pendente>`**. Frontend: ver changelog do repo do frontend.
