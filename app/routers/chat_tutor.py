@@ -19,7 +19,13 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from app.conteudo.kb_tutor_chat import MAX_SYSTEM_PROMPT_CHARS, SYSTEM_PROMPT_TUTOR
+from app.conteudo.kb_tutor_chat import (
+    HASH_SYSTEM_PROMPT,
+    MAX_SYSTEM_PROMPT_CHARS,
+    SYSTEM_PROMPT_TUTOR,
+    hash_prompt,
+)
+from app.conteudo.system_prompt_seed import ORIGEM_ADMIN, ORIGEM_VERSIONADO
 from app.database import historico_chat, configuracoes_tutor, tutor_audit, turmas
 from app.routers.atividade import registrar_atividade
 from app.security import get_usuario_atual, exigir_admin_ou_professor
@@ -30,6 +36,7 @@ from app.schemas.chat import (
     ChatMensagem,
     ChatTutorRequest,
 )
+from app.schemas.tutor import DefinirSystemPromptRequest
 
 logger = logging.getLogger(__name__)
 
@@ -267,7 +274,10 @@ async def saude_modelos(usuario=Depends(get_usuario_atual), forcar: bool = Query
     }
 
 
-async def _auditar_prompt(usuario: dict, operacao: str, tamanho: int) -> None:
+async def _auditar_prompt(usuario: dict, operacao: str, tamanho: int, *,
+                          texto_anterior: str = "", hash_anterior: Optional[str] = None,
+                          hash_novo: Optional[str] = None,
+                          origem: Optional[str] = None) -> None:
     """Registra a edição do prompt em db.tutor_audit (a mesma tela mostra o histórico).
 
     Inserção própria em vez de reusar `_registrar_edicao` de app/routers/tutor.py: aquele
@@ -276,6 +286,10 @@ async def _auditar_prompt(usuario: dict, operacao: str, tamanho: int) -> None:
 
     `pipe: "llm"` porque a tela mostra o histórico da ABA atual e o editor do prompt vive na aba
     LLM — gravar com outro slug esconderia a entrada de quem acabou de editar.
+
+    Guarda o `texto_anterior` INTEIRO (≤ MAX_SYSTEM_PROMPT_CHARS): é o que torna "Voltar ao padrão"
+    uma operação reversível. Antes, a auditoria gravava só o tamanho e o texto do admin era
+    destruído pelo `delete_one`. A projeção de `GET /tutor/audit` não devolve este campo.
     """
     try:
         await tutor_audit.insert_one({
@@ -284,6 +298,11 @@ async def _auditar_prompt(usuario: dict, operacao: str, tamanho: int) -> None:
             "operacao": operacao,
             "campos_alterados": ["system_prompt"],
             "tamanho": tamanho,
+            "tamanho_anterior": len(texto_anterior or ""),
+            "texto_anterior": texto_anterior or "",
+            "hash_anterior": hash_anterior,
+            "hash_novo": hash_novo,
+            "origem": origem,
             "usuario_id": str(usuario.get("_id") or usuario.get("id") or ""),
             "usuario_email": usuario.get("email", ""),
             "usuario_nome": usuario.get("nome") or usuario.get("name") or usuario.get("email", ""),
@@ -295,27 +314,43 @@ async def _auditar_prompt(usuario: dict, operacao: str, tamanho: int) -> None:
 
 
 @router.get("/system-prompt")
-async def obter_system_prompt(usuario=Depends(get_usuario_atual)):
-    """Instrução de sistema vigente do chat, o padrão versionado e se está personalizada."""
-    vigente = await _system_prompt_vigente()
+async def obter_system_prompt(usuario=Depends(exigir_admin_ou_professor)):
+    """Estado da instrução de sistema: texto vigente, padrão versionado e metadados de versão.
+
+    Gate de papel porque o prompt é a regra que o tutor segue: entregá-lo ao aluno é entregar o
+    mapa para contorná-la.
+    """
+    estado = await _estado_system_prompt()
+    baseline = estado.get("padrao_hash")
     return {
-        "texto": vigente,
+        "texto": estado["texto"],
         "padrao": SYSTEM_PROMPT_TUTOR,
-        "personalizado": vigente != SYSTEM_PROMPT_TUTOR,
+        "personalizado": hash_prompt(estado["texto"]) != HASH_SYSTEM_PROMPT,
         "limite": MAX_SYSTEM_PROMPT_CHARS,
+        # `fonte` distingue "banco" (persistido, regime normal) de "versionado" (caiu no fallback:
+        # o seed não rodou ou a leitura falhou) — é o que torna a persistência observável na tela.
+        "fonte": estado["fonte"],
+        "origem": estado.get("origem"),
+        "padrao_hash": HASH_SYSTEM_PROMPT,
+        "padrao_hash_base": baseline,
+        # Só avisa quando SABEMOS de que padrão a edição derivou: baseline ausente é "não sei",
+        # e alarmar aí daria ao admin um aviso que ele não tem como resolver.
+        "padrao_desatualizado": bool(
+            estado.get("origem") == ORIGEM_ADMIN and baseline and baseline != HASH_SYSTEM_PROMPT
+        ),
+        "versao": estado.get("versao"),
+        "atualizado_em": estado.get("atualizado_em"),
     }
 
 
 @router.put("/system-prompt")
-async def definir_system_prompt(body: dict, usuario=Depends(get_usuario_atual)):
+async def definir_system_prompt(body: DefinirSystemPromptRequest,
+                                usuario=Depends(get_usuario_atual)):
     """Grava a instrução de sistema do chat. Texto vazio volta ao padrão versionado."""
     if usuario.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Apenas admins podem alterar o prompt do tutor.")
 
-    texto = body.get("texto")
-    if texto is not None and not isinstance(texto, str):
-        raise HTTPException(status_code=400, detail="Campo 'texto' deve ser texto.")
-    texto = (texto or "").strip()
+    texto = (body.texto or "").strip()
 
     if len(texto) > MAX_SYSTEM_PROMPT_CHARS:
         raise HTTPException(
@@ -324,21 +359,44 @@ async def definir_system_prompt(body: dict, usuario=Depends(get_usuario_atual)):
                     "o contexto do pipeline e a base de conhecimento também ocupam a janela do modelo."),
         )
 
-    if not texto:
-        # Sem texto = sem personalização: volta a valer o versionado.
-        await configuracoes_tutor.delete_one({"chave": "system_prompt"})
-        await _auditar_prompt(usuario, "restaurou_padrao", len(SYSTEM_PROMPT_TUTOR))
-        return {"texto": SYSTEM_PROMPT_TUTOR, "personalizado": False}
+    estado = await _estado_system_prompt()
+    anterior = estado["texto"] if estado["fonte"] == "banco" else ""
+    restaurando = not texto
+    # Texto vazio = voltar ao padrão. Isso agora GRAVA o padrão em vez de apagar o documento: o
+    # estado "padrão" passa a ser um fato persistido, não a ausência de fato.
+    novo = SYSTEM_PROMPT_TUTOR if restaurando else texto
+    hash_novo = hash_prompt(novo)
+    # Quem colou exatamente o padrão não é "admin": marcá-lo assim o congelaria fora das próximas
+    # atualizações do repo sem que ele tenha um texto próprio a proteger.
+    origem = ORIGEM_VERSIONADO if hash_novo == HASH_SYSTEM_PROMPT else ORIGEM_ADMIN
+
+    if (hash_prompt(anterior) == hash_novo and estado["fonte"] == "banco"
+            and estado.get("origem") == origem):
+        # Nada mudou (duplo clique em Salvar): não grava nem audita, para o histórico não encher
+        # de entradas idênticas.
+        return {"texto": novo, "personalizado": origem == ORIGEM_ADMIN, "versao": estado.get("versao")}
 
     await configuracoes_tutor.update_one(
         {"chave": "system_prompt"},
-        {"$set": {"chave": "system_prompt", "valor": texto,
+        {"$set": {"chave": "system_prompt", "valor": novo,
+                  "origem": origem,
+                  # Baseline: o padrão que o admin tinha à frente ao gravar. Não é hash de `valor`.
+                  "padrao_hash": HASH_SYSTEM_PROMPT,
                   "atualizado_por": str(usuario.get("_id", "")),
-                  "atualizado_em": datetime.now(timezone.utc)}},
+                  "atualizado_em": datetime.now(timezone.utc)},
+         "$inc": {"versao": 1}},
         upsert=True,
     )
-    await _auditar_prompt(usuario, "editou", len(texto))
-    return {"texto": texto, "personalizado": texto != SYSTEM_PROMPT_TUTOR}
+    await _auditar_prompt(
+        usuario,
+        "restaurou_padrao" if restaurando else "editou",
+        len(novo),
+        texto_anterior=anterior,
+        hash_anterior=hash_prompt(anterior) if anterior else None,
+        hash_novo=hash_novo,
+        origem=origem,
+    )
+    return {"texto": novo, "personalizado": origem == ORIGEM_ADMIN}
 
 
 @router.get("/modelo")
@@ -388,8 +446,11 @@ def _montar_contexto(contexto) -> str:
     return texto
 
 
-async def _system_prompt_vigente() -> str:
-    """Texto do `system`: o que o admin gravou, senão o versionado.
+async def _estado_system_prompt() -> dict:
+    """Estado completo da instrução de sistema: texto + de onde ele veio.
+
+    `fonte: 'banco'` é o regime normal (o seed persistiu o texto); `fonte: 'versionado'` significa
+    que caímos no fallback — documento ausente, vazio ou ilegível.
 
     `try/except` amplo de propósito: uma falha de leitura da configuração não pode derrubar o
     chat — o pior caso aceitável é responder com o prompt versionado.
@@ -398,10 +459,23 @@ async def _system_prompt_vigente() -> str:
         config = await configuracoes_tutor.find_one({"chave": "system_prompt"})
         texto = ((config or {}).get("valor") or "").strip()
         if texto:
-            return texto
+            return {
+                "texto": texto,
+                "fonte": "banco",
+                "origem": (config or {}).get("origem"),
+                "padrao_hash": (config or {}).get("padrao_hash"),
+                "versao": (config or {}).get("versao"),
+                "atualizado_em": (config or {}).get("atualizado_em"),
+            }
     except Exception:
         pass
-    return SYSTEM_PROMPT_TUTOR
+    return {"texto": SYSTEM_PROMPT_TUTOR, "fonte": "versionado", "origem": None,
+            "padrao_hash": None, "versao": None, "atualizado_em": None}
+
+
+async def _system_prompt_vigente() -> str:
+    """Só o texto do `system` — é o que o chat precisa em cada pergunta."""
+    return (await _estado_system_prompt())["texto"]
 
 
 async def _montar_system(contexto) -> str:

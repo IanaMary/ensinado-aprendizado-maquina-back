@@ -98,6 +98,9 @@ echo "=== [5b/6] Semeando conteúdo educacional (app/conteudo/*.json) ==="
 cd "$PROJECT_DIR"
 PYTHONPATH="$PROJECT_DIR" python -m scripts.deploy.seed_conteudo || echo "  AVISO: seed de conteúdo falhou"
 PYTHONPATH="$PROJECT_DIR" python -m scripts.deploy.seed_tutor_inicio || echo "  AVISO: seed das boas-vindas do tutor falhou"
+# A instrução de sistema também é semeada no boot do backend (app/main.py) — aqui é para o
+# resultado (propagou? preservou a edição do admin?) ficar visível no log do deploy.
+PYTHONPATH="$PROJECT_DIR" python -m scripts.deploy.seed_system_prompt || echo "  AVISO: seed da instrução do tutor falhou"
 
 # ---- Reiniciar serviço ----
 echo ""
@@ -132,14 +135,38 @@ sleep 2
 sudo systemctl status h2ia-backend --no-pager
 
 # ---- Healthcheck ----
+# A porta vem de variável porque o serviço acima escuta na 8002: apontar para a 8000 (como este
+# passo fazia) dava AVISO de falha em TODO deploy, com o serviço saudável. E não basta olhar o
+# corpo: `{"status":"erro"}` é JSON válido, então `| json.tool` saía 0 e o deploy se declarava
+# bem-sucedido com o Mongo fora. Agora conferimos o código HTTP (a rota devolve 503 quando o ping
+# ao Mongo falha) E o campo `status`.
+PORTA_BACKEND="${PORTA_BACKEND:-8002}"
 echo ""
-echo "=== Testando healthcheck ==="
+echo "=== Testando healthcheck (porta $PORTA_BACKEND) ==="
 sleep 1
-curl -s http://localhost:8000/healthcheck | python3 -m json.tool || echo "AVISO: Healthcheck falhou"
+HEALTH_BODY=$(curl -s -m 10 -w '\n%{http_code}' "http://localhost:$PORTA_BACKEND/healthcheck" || true)
+HEALTH_CODE=$(printf '%s' "$HEALTH_BODY" | tail -n1)
+HEALTH_JSON=$(printf '%s' "$HEALTH_BODY" | sed '$d')
+echo "  HTTP $HEALTH_CODE — $HEALTH_JSON"
+if [ "$HEALTH_CODE" = "200" ] && printf '%s' "$HEALTH_JSON" | grep -q '"status": *"ok"'; then
+    echo "  Healthcheck OK"
+    HEALTH_OK=1
+else
+    echo "  FALHA: o backend não respondeu saudável em http://localhost:$PORTA_BACKEND/healthcheck"
+    echo "         verifique: sudo journalctl -u h2ia-backend -n 50 --no-pager"
+    HEALTH_OK=0
+fi
 
 echo ""
 echo "=========================================="
-echo "  Deploy do backend concluído!"
+if [ "$HEALTH_OK" = "1" ]; then
+    echo "  Deploy do backend concluído!"
+else
+    # Sai diferente de zero: um deploy que termina com o serviço doente não pode reportar sucesso
+    # (era o que acontecia — o aviso ia para o meio do log e o script saía 0).
+    echo "  Deploy do backend concluído COM FALHA NO HEALTHCHECK"
+fi
 echo "  Backups: $BACKUP_DIR"
 echo "  Logs: sudo journalctl -u h2ia-backend -f"
 echo "=========================================="
+[ "$HEALTH_OK" = "1" ] || exit 1

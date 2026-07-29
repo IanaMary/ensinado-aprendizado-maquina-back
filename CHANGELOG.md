@@ -8,6 +8,57 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-29 (instrução de sistema persistida e versionada + healthcheck honesto)
+
+> Backend `master` **`<pendente>`**. Frontend: ver changelog do repo do frontend.
+
+### Adicionado
+- **A instrução de sistema do chat passou a viver no banco.** Antes a constante
+  `SYSTEM_PROMPT_TUTOR` era padrão E fallback, e `db.configuracoes_tutor {chave:'system_prompt'}`
+  só existia se um admin gravasse: em produção não havia documento nenhum, então "o que está
+  rodando" não era observável — a ausência de doc era indistinguível de "nunca semeado".
+- `app/conteudo/system_prompt_seed.py`: `decidir_seed` **pura** (dez estados) + `semear_system_prompt`
+  com coleção injetável. O documento carrega `origem: 'versionado'|'admin'`, `padrao_hash`
+  (**baseline**: o padrão vigente no momento da gravação — não checksum de `valor`) e `versao`
+  (`$inc`). Com isso o deploy **propaga** um padrão novo para quem nunca editou e **preserva** a
+  edição do admin, avisando na tela quando o padrão mudou desde ela.
+- Seed no **startup** do backend + CLI `scripts/deploy/seed_system_prompt.py [--forcar]` + etapa 5b
+  do `deploy.sh`. O gatilho primário é o boot porque produção é atualizada tanto pelo `deploy.sh`
+  quanto por `git pull` + `systemctl restart`; amarrar o seed a um só deixaria o documento ausente
+  **sem sintoma** (o fallback esconde).
+- `GET /tutor/system-prompt` devolve `fonte` (`banco`/`versionado`), `origem`, `versao`,
+  `padrao_hash_base` e `padrao_desatualizado`. `hash_prompt`/`HASH_SYSTEM_PROMPT` em
+  `kb_tutor_chat.py` — identidade computada, não um `VERSAO = 3` que alguém precisa lembrar de
+  incrementar.
+- Índice **único** em `configuracoes_tutor.chave`: sem ele, os dois workers do uvicorn podiam
+  inserir dois docs `system_prompt` e o `find_one` passaria a devolver um deles arbitrariamente.
+
+### Corrigido
+- **"Voltar ao padrão" deixou de destruir.** O texto vazio no PUT fazia `delete_one` e a auditoria
+  guardava só o tamanho: uma instrução de 5000 chars se perdia num clique. Agora grava o padrão
+  (o estado "padrão" passa a ser um fato persistido) e o texto anterior fica em
+  `db.tutor_audit.texto_anterior`.
+- **`/healthcheck` responde 503** quando o Mongo não responde (antes: 200 sempre, com a distinção
+  só no corpo — qualquer probe por código HTTP via serviço saudável). A espera pelo ping é limitada
+  a `HEALTHCHECK_TIMEOUT` (3s): sem isso o driver segurava 30s e o 503 nunca chegava a ser visto.
+- **O healthcheck do `deploy.sh` testava a porta 8000**, e o serviço que o próprio script cria
+  escuta na **8002** — era um `AVISO: Healthcheck falhou` em todo deploy, com o serviço saudável.
+  Agora a porta vem de variável (default 8002), confere código HTTP **e** o campo `status`, e o
+  script sai diferente de zero quando termina doente (antes o aviso ia para o meio do log e o
+  deploy se declarava concluído).
+- Gate de papel nas leituras: `GET /tutor/system-prompt` (o prompt é a regra que o tutor segue —
+  entregá-la ao aluno é entregar o mapa para contorná-la) e `GET /tutor/audit` (traz nome e e-mail
+  de quem editou) passam a exigir admin/professor. O `tamanho`, gravado desde sempre e nunca lido,
+  entrou na projeção da auditoria.
+
+### Verificação
+**553 passed, 1 skipped** (eram 522; 31 novos, incluindo os dez estados do seed e os dois casos do
+healthcheck). **E2E local** com Mongo em Docker: o doc nasce no boot, e cada estado foi forçado à
+mão e reconciliado pelo CLI (propagou / preservou / curou / normalizou legado / forçou). Tela do
+admin conferida no navegador; bloco do healthcheck exercitado com a porta certa e com a errada.
+
+---
+
 ## 2026-07-28b (tetos do chat: resposta por nível, corte de contexto e truncamento registrado)
 
 > Backend `master` **`0ab7f26`**. Frontend inalterado.

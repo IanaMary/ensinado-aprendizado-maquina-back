@@ -1,8 +1,10 @@
 """Instrução de sistema do chat do tutor (LLM).
 
-Fonte da verdade VERSIONADA do `system` enviado em cada pergunta. O admin pode editar o texto
-em conf-tutor → LLM, e o que ele gravar (`db.configuracoes_tutor {chave: 'system_prompt'}`)
-prevalece; sem doc — ou com falha de leitura — vale este texto.
+Fonte da verdade VERSIONADA do `system` enviado em cada pergunta. O texto é **semeado** em
+`db.configuracoes_tutor {chave: 'system_prompt'}` (`app/conteudo/system_prompt_seed.py`), então em
+regime normal quem responde é o banco; este módulo é o padrão de onde o seed parte e o fallback de
+quando a leitura falha. O admin edita em conf-tutor → LLM, e a edição dele é preservada nos deploys
+seguintes (o seed distingue `origem: 'versionado'` de `origem: 'admin'` pelo `padrao_hash`).
 
 Convenções que o texto assume e que o resto do sistema garante:
 
@@ -12,6 +14,7 @@ Convenções que o texto assume e que o resto do sistema garante:
 - o mesmo endpoint atende o **assistente do admin** no conf-pipeline, que manda
   `papel_do_usuario` no contexto — daí a frase que distingue quem pergunta.
 """
+import hashlib
 
 SYSTEM_PROMPT_TUTOR = (
     "Você é o tutor de Aprendizado de Máquina da plataforma H2IA Tutor. "
@@ -46,6 +49,21 @@ SYSTEM_PROMPT_TUTOR = (
 )
 
 # Teto do texto editável pelo admin. O `system` já disputa espaço com o contexto do pipeline
-# (8000 chars) e a base de conhecimento (6000): um prompt gigante empurraria os dois para fora
-# da janela do modelo.
+# (12000 chars) e a base de conhecimento (8000, ou 14000 no nível avançado): um prompt gigante
+# empurraria os dois para fora da janela do modelo.
 MAX_SYSTEM_PROMPT_CHARS = 6000
+
+
+def hash_prompt(texto: str) -> str:
+    """Identidade curta de um texto de prompt (12 hex do sha256 do texto sem espaço nas pontas).
+
+    Serve para detectar mudança, não para criptografia. O `.strip()` é deliberado: sem ele, um
+    `\\n` final digitado pelo admin criaria um falso "personalizado" e a comparação divergiria do
+    `PUT`, que já grava o texto com `strip()`.
+    """
+    return hashlib.sha256((texto or "").strip().encode("utf-8")).hexdigest()[:12]
+
+
+# Identidade do padrão versionado. É COMPUTADA de propósito: um `VERSAO = 3` mantido à mão
+# depende de alguém lembrar de incrementar, e é exatamente isso que se esquece.
+HASH_SYSTEM_PROMPT = hash_prompt(SYSTEM_PROMPT_TUTOR)

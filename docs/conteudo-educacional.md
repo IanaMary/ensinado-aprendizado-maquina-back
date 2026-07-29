@@ -151,3 +151,43 @@ editado pelo admin é preservado — `--forcar` sobrescreve de propósito.
 
 Formato: **HTML** (`h4/p/b/i/ul/ol/li`). O front renderiza com `[innerHTML]` sob o
 sanitizer do Angular, que remove `style`, `script` e handlers.
+
+## Instrução de sistema do chat (`db.configuracoes_tutor {chave:'system_prompt'}`)
+
+O texto enviado ao modelo em **toda** pergunta segue o mesmo caminho (fonte versionada → semeada
+no banco → editável pelo admin), com uma diferença: aqui o seed sabe **de qual padrão** a edição
+do admin derivou, e por isso consegue propagar um padrão novo sem atropelar quem editou.
+
+| Onde | O quê |
+|---|---|
+| `app/conteudo/kb_tutor_chat.py` | `SYSTEM_PROMPT_TUTOR` (fonte da verdade), `MAX_SYSTEM_PROMPT_CHARS` (6000) e `hash_prompt()`/`HASH_SYSTEM_PROMPT` — a identidade do padrão é **computada**, não um número mantido à mão. |
+| `app/conteudo/system_prompt_seed.py` | `decidir_seed` (pura, dez estados) + `semear_system_prompt` (coleção injetável). |
+| `app/main.py` (startup) | Cria o índice único em `chave` e semeia. **Roda no boot**, não só no `deploy.sh`: produção é atualizada pelos dois caminhos, e reiniciar o serviço é o que eles têm em comum. |
+| `scripts/deploy/seed_system_prompt.py` | CLI (`--forcar`) para rodar sem reiniciar e para o log do deploy. |
+| `GET /tutor/system-prompt` | Estado completo (texto, padrão, `fonte`, `origem`, `versao`, `padrao_desatualizado`). **Gate admin/professor**: o prompt é a regra que o tutor segue. |
+| `PUT /tutor/system-prompt` | Admin. Texto vazio **grava** o padrão (não apaga) e o texto anterior fica em `db.tutor_audit.texto_anterior`. |
+| conf-tutor → aba **LLM** | Editor, selos (`personalizado`/`padrão do sistema`/`não persistido`) e o aviso de padrão novo. |
+
+Documento:
+
+```jsonc
+{ chave: "system_prompt", valor: "<texto vigente>",
+  origem: "versionado" | "admin",
+  padrao_hash: "<12 hex>",   // BASELINE: o padrão vigente no momento da gravação.
+                             // NÃO é checksum de `valor`; ausente = baseline desconhecido.
+  versao: 3, atualizado_por: "<user_id>|seed", atualizado_em: <utc> }
+```
+
+Matriz do seed, em uma frase cada: doc ausente → **insere**; `origem:'versionado'` com texto
+diferente → **propaga** (é o que "versionado com o sistema" significa); `origem:'admin'` →
+**preserva** (e, se o `padrao_hash` ficou para trás, a tela avisa); doc legado sem `origem` →
+classifica conservadoramente (texto igual ao padrão = versionado; qualquer outro = admin, sem
+baseline); `valor` vazio → **cura** com o padrão; `--forcar` → impõe o padrão.
+
+> **Por que hash e não `VERSAO = 3`.** Um contador no fonte depende de alguém lembrar de
+> incrementar — e é justamente isso que se esquece. O `versao` do documento existe só para humano
+> ler o histórico, e é `$inc` a cada gravação.
+
+> **Por que o fallback à constante permanece.** Persistir muda onde a verdade é *editada*, não o
+> que acontece quando a leitura falha: Mongo fora, doc ausente ou doc vazio não podem deixar o
+> tutor sem instrução. O selo "não persistido" na tela existe para esse estado não passar batido.

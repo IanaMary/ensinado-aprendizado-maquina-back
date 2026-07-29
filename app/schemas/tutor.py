@@ -121,3 +121,11 @@ class AtualizarSelecaoModeloRequest(BaseModel):
     # Tipar direto (sem Union) evita a resolução lossy que caía no `Contexto` genérico
     # e descartava `supervisionado`/`texto_pipe` → 400.
     contexto: ContextoPipeSelecaoModelo
+
+
+class DefinirSystemPromptRequest(BaseModel):
+    # `PUT /tutor/system-prompt`. `texto` opcional porque **vazio tem significado**: volta ao
+    # padrão versionado. O teto de caracteres NÃO entra como `max_length` de propósito — viraria
+    # 422 genérico e perderia a mensagem que explica ao admin por que o teto existe (o contexto
+    # do pipeline e a base de conhecimento disputam a mesma janela).
+    texto: Optional[str] = None

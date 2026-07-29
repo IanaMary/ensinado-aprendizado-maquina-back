@@ -53,7 +53,14 @@ async def _registrar_edicao(usuario: dict, doc_id: str, set_data: dict, operacao
 async def listar_audit(
     pipe: Optional[str] = Query(None),
     limite: int = Query(20, ge=1, le=100),
+    usuario=Depends(exigir_admin_ou_professor),
 ):
+    """Histórico de edições do conteúdo do tutor.
+
+    Gate de papel: as entradas trazem nome e e-mail de quem editou (e, no caso do prompt, o texto
+    anterior) — não é material para o aluno. A projeção é explícita de propósito: `texto_anterior`
+    fica no banco para tornar a edição reversível, mas não sai por esta rota.
+    """
     filtro = {"pipe": pipe} if pipe else {}
     cursor = tutor_audit.find(filtro).sort("timestamp", -1).limit(limite)
     documentos = await cursor.to_list(length=limite)
@@ -63,6 +70,7 @@ async def listar_audit(
             "pipe": d.get("pipe", ""),
             "operacao": d.get("operacao", ""),
             "campos_alterados": d.get("campos_alterados", []),
+            "tamanho": d.get("tamanho"),
             "usuario_email": d.get("usuario_email", ""),
             "usuario_nome": d.get("usuario_nome", ""),
             "timestamp": d.get("timestamp").isoformat() if d.get("timestamp") else None,

@@ -1,5 +1,7 @@
+import asyncio
+import logging
 import os
-from fastapi import FastAPI, Depends
+from fastapi import Depends, FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import client
 from app.routers import usuarios
@@ -132,6 +134,9 @@ app.include_router(visualizacao.router, prefix="/visualizacao", dependencies=aut
 # (TTL). Configurável por env; default 90 dias. 0/negativo desativa o TTL.
 ATIVIDADE_TTL_DIAS = int(os.getenv("ATIVIDADE_TTL_DIAS", "90"))
 
+# Quanto o /healthcheck espera pelo Mongo antes de declarar o serviço indisponível.
+HEALTHCHECK_TIMEOUT = float(os.getenv("HEALTHCHECK_TIMEOUT", "3"))
+
 
 @app.on_event("startup")
 async def criar_indices_atividade():
@@ -197,6 +202,37 @@ async def criar_indices_turmas():
 
 
 @app.on_event("startup")
+async def semear_instrucao_do_tutor():
+    """Persiste a instrução de sistema do chat a partir da fonte versionada.
+
+    Roda no boot (e não só no `deploy.sh`) porque produção é atualizada pelos dois caminhos —
+    `deploy.sh` e `git pull` + `systemctl restart`. Amarrar o seed a um só deles deixaria o
+    documento ausente sem nenhum sintoma: o chat cairia no fallback da constante e ninguém
+    perceberia. Reiniciar o serviço é a única coisa que os dois caminhos têm em comum.
+
+    Idempotente e conservador: preserva o texto que o admin gravou (ver
+    `app/conteudo/system_prompt_seed.py`). O índice único em `chave` vem antes de propósito —
+    sem ele, os dois workers do uvicorn podem inserir dois documentos `system_prompt`, e a partir
+    daí o `find_one` passa a devolver um deles arbitrariamente.
+    """
+    try:
+        from app.conteudo.system_prompt_seed import resumo_legivel, semear_system_prompt
+        from app.database import configuracoes_tutor
+
+        try:
+            await configuracoes_tutor.create_index("chave", unique=True)
+        except Exception:
+            # Já existir, ou haver duplicata legada, não pode impedir o seed.
+            pass
+
+        resultado = await semear_system_prompt()
+        if resultado["escreveu"] or resultado["acao"].startswith("preservou"):
+            logging.getLogger(__name__).info(resumo_legivel(resultado))
+    except Exception:
+        pass
+
+
+@app.on_event("startup")
 def prewarm_datasets():
     # Pre-baixa os datasets UCI para o cache em disco em background, sem bloquear
     # o boot. Na primeira execucao baixa tudo; nos restarts seguintes e no-op.
@@ -207,11 +243,28 @@ def prewarm_datasets():
 
 
 @app.get("/healthcheck")
-async def healthcheck():
+async def healthcheck(response: Response):
+    """Saúde do serviço: responde 200 só quando o MongoDB responde ao ping.
+
+    O 503 no caminho de erro existe porque antes esta rota devolvia 200 mesmo com o banco fora — a
+    distinção vivia só no corpo, então qualquer probe que olhasse o código HTTP (incluindo o passo
+    de healthcheck do `deploy.sh`) considerava o serviço saudável.
+
+    O `wait_for` existe porque, com o Mongo fora, o `ping` fica pendurado até o timeout de seleção
+    de servidor do driver (30 s por padrão) — mais do que qualquer probe espera. Sem ele o 503
+    nunca chegava a ser observado: o cliente desistia antes e via um timeout, não uma resposta.
+    """
     try:
-        await client.admin.command('ping')
+        await asyncio.wait_for(client.admin.command('ping'), timeout=HEALTHCHECK_TIMEOUT)
         return {"status": "ok"}
+    except asyncio.TimeoutError:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {
+            "status": "erro",
+            "detalhe": f"o MongoDB não respondeu em {HEALTHCHECK_TIMEOUT}s",
+        }
     except Exception as e:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {
             "status": "erro",
             "detalhe": str(e),

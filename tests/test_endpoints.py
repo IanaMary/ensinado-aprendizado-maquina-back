@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from bson import ObjectId
@@ -250,3 +251,27 @@ class TestHealthcheck:
             response = await client.get("/healthcheck")
             assert response.status_code == 200
             assert response.json()["status"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_healthcheck_devolve_503_quando_o_banco_falha(self, client):
+        """Antes devolvia 200 com o Mongo fora — a distinção vivia só no corpo, então qualquer
+        probe por código HTTP (o passo do deploy.sh, inclusive) via um serviço saudável."""
+        with patch("app.main.client") as mock_client:
+            mock_client.admin.command = AsyncMock(side_effect=RuntimeError("sem conexão"))
+            response = await client.get("/healthcheck")
+        assert response.status_code == 503
+        assert response.json()["status"] == "erro"
+
+    @pytest.mark.asyncio
+    async def test_healthcheck_nao_fica_pendurado_esperando_o_banco(self, client):
+        """Com o Mongo fora, o `ping` do driver só desiste no timeout de seleção de servidor
+        (30s) — mais do que qualquer probe espera, e o 503 nunca chegava a ser visto."""
+        async def _nunca_responde(*a, **k):
+            await asyncio.sleep(30)
+
+        with patch("app.main.client") as mock_client, \
+             patch("app.main.HEALTHCHECK_TIMEOUT", 0.05):
+            mock_client.admin.command = _nunca_responde
+            response = await client.get("/healthcheck")
+        assert response.status_code == 503
+        assert "não respondeu" in response.json()["detalhe"]
