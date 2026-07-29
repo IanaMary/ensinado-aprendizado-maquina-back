@@ -141,9 +141,15 @@ mesma ideia: fonte versionada no repo → semeada no banco → editável pelo ad
 | conf-tutor → aba **Início** | O admin edita `texto_pipe`/`explicacao` (`PUT /tutor/pipe/inicio`). |
 | `execucoes.component.ts` (`TUTOR_BOAS_VINDAS`) | Fallback **curto** para servidor fora do ar. Mantido curto de propósito: duas cópias longas divergem. |
 
-O seed é **conservador**: escreve só quando o doc não existe ou quando o `texto_pipe` é o
-legado de uma frase gravado pelo `seed-mongodb.sh` antigo (`TUTOR_INICIO_LEGADO`). Texto
-editado pelo admin é preservado — `--forcar` sobrescreve de propósito.
+O seed usa o **motor compartilhado** (`app/conteudo/texto_versionado.py`, seção abaixo): preserva o
+texto editado pelo admin, propaga padrão novo para quem nunca editou, e reconhece o placeholder de
+uma frase do `seed-mongodb.sh` como texto NOSSO (`legados`), substituindo-o. `--forcar` impõe o
+padrão. Roda **no boot do backend e no `deploy.sh`**.
+
+> **Era esse o segundo bug.** A comparação era `==` de string bruta, e o documento de produção tinha
+> o HTML + 2 caracteres de espaço: o seed relatava "preservado (texto editado pelo admin)" a cada
+> deploy, para um texto que ninguém editou, e as boas-vindas nunca eram atualizadas. Comparar por
+> hash (que faz `strip`) resolve — e o estado vira só ajuste de metadado, sem reescrever o texto.
 
 > **Era esse o bug.** O `seed-mongodb.sh` gravava `texto_pipe: "Bem-vindo ao tutor de
 > Aprendizado de Máquina!"`, e como o banco vence o fallback, em produção o aluno lia uma
@@ -191,3 +197,33 @@ baseline); `valor` vazio → **cura** com o padrão; `--forcar` → impõe o pad
 > **Por que o fallback à constante permanece.** Persistir muda onde a verdade é *editada*, não o
 > que acontece quando a leitura falha: Mongo fora, doc ausente ou doc vazio não podem deixar o
 > tutor sem instrução. O selo "não persistido" na tela existe para esse estado não passar batido.
+
+
+## Motor de textos versionados (`app/conteudo/texto_versionado.py`)
+
+Três textos seguem o mesmo caminho — fonte versionada no repo → semeada no banco → editável pelo
+admin — e a disciplina de sincronizar é uma só:
+
+| Alvo | Documento | Editor |
+|---|---|---|
+| Instrução de sistema do chat | `db.configuracoes_tutor {chave:'system_prompt'}.valor` | conf-tutor → LLM |
+| Boas-vindas do tutor | `db.tutor {pipe:'inicio'}.texto_pipe` | conf-tutor → Início |
+| Guia do conf-pipeline | `db.tutor {pipe:'conf-pipeline'}.texto_pipe` | (ainda sem tela) |
+
+`TextoVersionado` descreve o alvo (coleção, identidade, campo, padrão, rótulo, aba da auditoria e
+`legados`); `decidir` é **pura** e cobre doze estados; `semear` aplica e audita. Os alvos de
+`db.tutor` estão em `app/conteudo/textos_do_tutor.py` (`ALVOS_POR_PIPE`), que é também o que permite
+às rotas marcarem `origem`.
+
+Em uma frase por estado: doc ausente → **insere**; `origem:'versionado'` com texto diferente →
+**propaga**; `origem:'admin'` → **preserva** (e, se o `padrao_hash` ficou para trás, a tela avisa);
+texto igual a um `legado` → **propaga** (é nosso); doc sem `origem` → classifica conservadoramente
+(igual ao padrão = versionado; diferente = admin, sem baseline); `valor` vazio → **cura**;
+`--forcar` → impõe.
+
+> **Marcar `origem` nas rotas é pré-requisito do seed, não complemento.** Se o admin salva pela tela
+> e o documento não registra que o texto passou a ser dele, o seed do próximo deploy o classifica
+> como "versionado" e propaga o padrão por cima — pior que não ter guarda nenhuma. Por isso
+> `PUT /tutor/pipe/{pipe}` (e os outros dois caminhos que gravam `texto_pipe`) calculam `origem` por
+> hash e gravam o baseline. Os metadados **não** entram no `update_data` da resposta: aquele dict é
+> também a fonte de `campos_alterados` do histórico do admin.
