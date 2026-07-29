@@ -10,7 +10,8 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ## 2026-07-29c (provedores de LLM: OpenRouter, endpoint customizado, selo de gratuito)
 
-> Backend `master` **`<pendente>`**. Frontend: ver changelog do repo do frontend.
+> **Implantado em 29/07/2026 17h53.** Backend `master` **`6778c20`**.
+> Backup `/home/ubuntu/backups/deploy-20260729-175349`. Frontend: ver changelog do frontend.
 
 ### Adicionado
 - `app/tutor_provedores.py`: o chat deixa de falar só com a NVIDIA. Provedores suportados: **NVIDIA
