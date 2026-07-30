@@ -10,7 +10,8 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ## 2026-07-30 (correções da revisão: gate dos endpoints de modelo, provedor local)
 
-> Backend `master` **`<pendente>`**. Frontend: ver changelog do repo do frontend.
+> **Implantado em 30/07/2026 12h10.** Backend `master` **`fafb7ac`**.
+> Backup `/home/ubuntu/backups/deploy-20260730-121006`. Frontend: ver changelog do frontend.
 
 ### Corrigido — segurança
 - **`GET /tutor/modelos` e `GET /tutor/modelos/saude` exigiam apenas estar logado.** O segundo aceita
@@ -81,7 +82,7 @@ provedor, chave vazia que mantém, gratuidade por preço). Verificado contra a A
 
 ## 2026-07-29b (guia do conf-pipeline entra no deploy + marca única H2IA Tutor)
 
-> Backend `master` **`<pendente>`**. Frontend: ver changelog do repo do frontend.
+> Backend `master` **`76ef813`**. Frontend: ver changelog do repo do frontend.
 > **Exige renomear o experimento MLflow em produção** (ver Alterado).
 
 ### Adicionado
@@ -243,7 +244,7 @@ de truncamento existe justamente para que o próximo ajuste use dado.
 
 ## 2026-07-27b (conteúdo avançado nas 61 fichas + pré-processamento no chat)
 
-> Backend `master` **`<pendente>`**. Frontend inalterado. Exige rodar `seed_conteudo`.
+> Backend `master` **`ee69abf`**. Frontend inalterado. Exige rodar `seed_conteudo`.
 
 ### Adicionado
 - **Fundamentos e Na prática nas 4 categorias que faltavam**: métricas (12), pré-processadores
@@ -269,7 +270,7 @@ de truncamento existe justamente para que o próximo ajuste use dado.
 
 ## 2026-07-27 (modo Avançado de verdade: nível no perfil, no chat e conteúdo à altura)
 
-> Backend `master` **`<pendente>`** / Frontend `mestrado-iana` `<pendente>`. Sem migração
+> Backend `master` **`a9c2eba`** / Frontend `mestrado-iana` `8e4e774`. Sem migração
 > (`nivel_tutor` ausente = básico); exige rodar `seed_conteudo` para o conteúdo novo.
 
 ### Alterado
@@ -302,7 +303,7 @@ de truncamento existe justamente para que o próximo ajuste use dado.
 
 ## 2026-07-26k (instrução do tutor: público da ONIA e edição sem deploy)
 
-> Backend `master` **`<pendente>`** / Frontend `mestrado-iana` `<pendente>`. Sem migração
+> Backend `master` **`7d40bed`** / Frontend `mestrado-iana` `53f1853`. Sem migração
 > (a personalização é uma chave nova em `db.configuracoes_tutor`, opcional).
 
 ### Alterado
@@ -333,7 +334,7 @@ de truncamento existe justamente para que o próximo ajuste use dado.
 
 ## 2026-07-26j (desafio de montagem nasce de um dataset de exemplo)
 
-> Backend `master` **`<pendente>`** / Frontend `mestrado-iana` `<pendente>`. Sem migração
+> Backend `master` **`a1f6f61`** / Frontend `mestrado-iana` `09b419e`. Sem migração
 > (campos novos do gabarito são opcionais; desafios antigos seguem valendo).
 
 ### Adicionado
@@ -370,7 +371,7 @@ de truncamento existe justamente para que o próximo ajuste use dado.
 
 ## 2026-07-26h (boas-vindas do tutor + entrada dos desafios + contas da banca)
 
-> Backend `master` **`<pendente>`** / Frontend `mestrado-iana` `<pendente>`.
+> Backend `master` **`c3faae2`** / Frontend `mestrado-iana` `ac512ff`.
 > Sem migração de dados; dois seeds idempotentes novos.
 
 ### Corrigido
