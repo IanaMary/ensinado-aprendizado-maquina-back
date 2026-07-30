@@ -187,7 +187,32 @@ class TestTruncamentoRegistrado:
 
 _PROVEDOR = {"id": "nvidia", "nome": "NVIDIA NIM", "api_key": "chave",
              "base_url": "https://integrate.api.nvidia.com/v1", "modelo": "modelo-x",
-             "todos_gratuitos": True}
+             "todos_gratuitos": True, "exige_chave": True}
+
+
+class TestGatesDosModelos:
+    """As duas rotas de modelo são ferramentas de admin — e o teste de saúde faz chamada REAL de
+    completion no provedor, com id de modelo arbitrário. Sem gate, um aluno autenticado escolheria
+    o modelo mais caro e o servidor pagaria a conta."""
+
+    @pytest.mark.asyncio
+    async def test_aluno_nao_lista_modelos(self, client, mock_db, auth_headers, monkeypatch):
+        monkeypatch.setenv("NVIDIA_API_KEY", "x")
+        r = await client.get("/tutor/modelos", headers=auth_headers)
+        assert r.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_aluno_nao_dispara_teste_de_saude(self, client, mock_db, auth_headers, monkeypatch):
+        monkeypatch.setenv("NVIDIA_API_KEY", "x")
+        r = await client.get("/tutor/modelos/saude", headers=auth_headers)
+        assert r.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_aluno_nao_testa_um_modelo_escolhido_por_ele(self, client, mock_db, auth_headers,
+                                                              monkeypatch):
+        monkeypatch.setenv("NVIDIA_API_KEY", "x")
+        r = await client.get("/tutor/modelos/saude?modelo=openai/o3-pro", headers=auth_headers)
+        assert r.status_code == 403
 
 
 class TestSaudeModelos:

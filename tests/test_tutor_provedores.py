@@ -13,9 +13,24 @@ from app import tutor_provedores as prov
 
 
 def _colecao(docs: dict):
-    """Coleção fake indexada por `chave`, com upsert que grava no próprio dicionário."""
+    """Coleção fake indexada por `chave`, com upsert que grava no próprio dicionário.
+
+    Suporta `find({"chave": {"$in": [...]}})` porque `provedor_vigente` resolve tudo numa consulta
+    só — uma fixture que só soubesse `find_one` mascararia a leitura em lote com o fallback.
+    """
     async def find_one(filtro, *a, **k):
         return docs.get(filtro.get("chave"))
+
+    class Cursor:
+        def __init__(self, itens):
+            self._itens = itens
+
+        async def to_list(self, length=None):
+            return self._itens
+
+    def find(filtro, *a, **k):
+        pedidas = ((filtro or {}).get("chave") or {}).get("$in") or list(docs)
+        return Cursor([d for c, d in docs.items() if c in pedidas])
 
     async def update_one(filtro, update, **k):
         chave = filtro.get("chave")
@@ -25,6 +40,7 @@ def _colecao(docs: dict):
         return MagicMock(upserted_id=None, modified_count=1)
 
     return MagicMock(find_one=AsyncMock(side_effect=find_one),
+                     find=MagicMock(side_effect=find),
                      update_one=AsyncMock(side_effect=update_one))
 
 
@@ -71,6 +87,34 @@ class TestMascarar:
 
     def test_vazio_continua_vazio(self):
         assert prov.mascarar("") == "" and prov.mascarar(None) == ""
+
+
+class TestLeituraDoBanco:
+    @pytest.mark.asyncio
+    async def test_resolve_o_provedor_em_UMA_consulta(self, monkeypatch):
+        """`provedor_vigente` roda em toda pergunta do chat: três `find_one` por mensagem eram três
+        idas ao banco para montar um dicionário."""
+        chamadas = {"find": 0, "find_one": 0}
+        docs = {"llm_model": {"chave": "llm_model", "valor": "meta/llama-3.3-70b-instruct"}}
+
+        class Cursor:
+            async def to_list(self, length=None):
+                return list(docs.values())
+
+        def find(filtro, *a, **k):
+            chamadas["find"] += 1
+            return Cursor()
+
+        async def find_one(filtro, *a, **k):
+            chamadas["find_one"] += 1
+            return docs.get(filtro.get("chave"))
+
+        monkeypatch.setattr(prov, "_colecao", lambda: MagicMock(
+            find=MagicMock(side_effect=find), find_one=AsyncMock(side_effect=find_one)))
+        monkeypatch.setenv("NVIDIA_API_KEY", "x")
+        p = await prov.provedor_vigente()
+        assert p["modelo"] == "meta/llama-3.3-70b-instruct"
+        assert (chamadas["find"], chamadas["find_one"]) == (1, 0)
 
 
 class TestProvedorVigente:
@@ -169,7 +213,7 @@ class TestListarParaTela:
 
 class TestDefinirAtivo:
     @pytest.mark.asyncio
-    async def test_recusa_provedor_sem_chave(self, banco, monkeypatch):
+    async def test_recusa_provedor_que_exige_chave_e_nao_tem(self, banco, monkeypatch):
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
         with pytest.raises(prov.ProvedorInvalido) as e:
             await prov.definir_ativo("openrouter")
@@ -179,6 +223,24 @@ class TestDefinirAtivo:
     async def test_recusa_custom_sem_url(self, banco):
         with pytest.raises(prov.ProvedorInvalido):
             await prov.definir_ativo("custom")
+
+    @pytest.mark.asyncio
+    async def test_custom_ativa_SEM_chave(self, banco):
+        """Era o caso de uso declarado dos campos de URL base e porta: um LLM self-hosted (Ollama,
+        vLLM, LM Studio) não tem chave de API. Exigir chave inviabilizava exatamente isso."""
+        await prov.salvar_provedor("custom", {"base_url": "http://127.0.0.1:11434/v1",
+                                             "nome": "Ollama local"})
+        await prov.definir_ativo("custom")
+        p = await prov.provedor_vigente()
+        assert p["id"] == "custom" and p["api_key"] == ""
+        assert p["exige_chave"] is False
+
+    @pytest.mark.asyncio
+    async def test_custom_sem_chave_aparece_configurado(self, banco):
+        await prov.salvar_provedor("custom", {"base_url": "http://localhost:1234/v1"})
+        vista = await prov.listar_para_tela()
+        custom = next(p for p in vista["provedores"] if p["id"] == "custom")
+        assert custom["configurado"] is True and custom["exige_chave"] is False
 
 
 class TestGratuidade:
@@ -216,3 +278,14 @@ class TestCabecalhos:
     def test_nvidia_nao_leva_cabecalho_extra(self):
         h = prov.cabecalhos({"id": "nvidia", "api_key": "k"})
         assert "X-Title" not in h
+
+    def test_sem_chave_nao_manda_authorization_vazio(self):
+        """`Authorization: Bearer ` é cabeçalho malformado; alguns servidores locais recusam em
+        vez de ignorar."""
+        h = prov.cabecalhos({"id": "custom", "api_key": ""})
+        assert "Authorization" not in h
+
+    def test_referer_do_openrouter_vem_do_ambiente(self, monkeypatch):
+        monkeypatch.setenv("FRONTEND_URL", "https://exemplo.test/app")
+        assert prov.cabecalhos({"id": "openrouter", "api_key": "k"})["HTTP-Referer"] \
+            == "https://exemplo.test/app"

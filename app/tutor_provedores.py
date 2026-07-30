@@ -49,6 +49,7 @@ CATALOGO: Dict[str, Dict[str, Any]] = {
         "modelo_padrao": os.getenv("NVIDIA_MODEL", "meta/llama-3.3-70b-instruct"),
         "todos_gratuitos": True,
         "editavel": False,      # base_url e chave vêm do .env
+        "exige_chave": True,
     },
     OPENROUTER: {
         "nome": "OpenRouter",
@@ -57,6 +58,7 @@ CATALOGO: Dict[str, Dict[str, Any]] = {
         "modelo_padrao": "",
         "todos_gratuitos": False,   # o preço vem em `pricing` na resposta de /models
         "editavel": True,
+        "exige_chave": True,
     },
     CUSTOM: {
         "nome": "Outro provedor (OpenAI-compatible)",
@@ -66,6 +68,9 @@ CATALOGO: Dict[str, Dict[str, Any]] = {
         # Um provedor arbitrário pode ser pago; sem informação de preço, não afirmamos nada.
         "todos_gratuitos": None,
         "editavel": True,
+        # Um endpoint self-hosted (Ollama, vLLM, LM Studio) normalmente não pede chave — e ele é
+        # justamente o motivo de existirem os campos de URL base e porta.
+        "exige_chave": False,
     },
 }
 
@@ -116,12 +121,30 @@ def _colecao():
     return database.configuracoes_tutor
 
 
+def tem_chave(pid: str, salvo: Dict[str, Any]) -> bool:
+    """Há chave utilizável para este provedor (gravada pelo admin ou vinda do ambiente)?"""
+    base = CATALOGO.get(pid) or {}
+    do_env = os.getenv(base.get("env_chave") or "", "") if base.get("env_chave") else ""
+    return bool((salvo.get("api_key") or "").strip() or do_env)
+
+
 async def _ler(chave: str) -> Any:
     try:
         doc = await _colecao().find_one({"chave": chave})
     except Exception:
         return None
     return (doc or {}).get("valor")
+
+
+async def _ler_muitas(*chaves: str) -> Dict[str, Any]:
+    """Lê várias configurações numa consulta só — `provedor_vigente` roda em TODA pergunta do chat,
+    e três `find_one` por mensagem eram três idas ao banco para montar um dicionário."""
+    try:
+        cursor = _colecao().find({"chave": {"$in": list(chaves)}})
+        docs = await cursor.to_list(length=len(chaves))
+    except Exception:
+        return {}
+    return {d.get("chave"): d.get("valor") for d in docs if d.get("chave")}
 
 
 async def _configs() -> Dict[str, Dict[str, Any]]:
@@ -140,9 +163,11 @@ async def provedor_vigente() -> Dict[str, Any]:
     Nunca levanta: sem configuração, cai na NVIDIA com o `.env` — o mesmo comportamento de antes de
     existirem provedores.
     """
-    pid = await id_ativo()
-    base = CATALOGO.get(pid) or CATALOGO[NVIDIA]
-    salvo = (await _configs()).get(pid) or {}
+    lidas = await _ler_muitas(CHAVE_ATIVO, CHAVE_PROVEDORES, CHAVE_MODELO_LEGADO)
+    pid = lidas.get(CHAVE_ATIVO) if lidas.get(CHAVE_ATIVO) in CATALOGO else NVIDIA
+    base = CATALOGO[pid]
+    configs = lidas.get(CHAVE_PROVEDORES)
+    salvo = (configs.get(pid) if isinstance(configs, dict) else None) or {}
 
     api_key = ""
     if base["env_chave"]:
@@ -153,7 +178,7 @@ async def provedor_vigente() -> Dict[str, Any]:
     modelo = (salvo.get("modelo") or "").strip()
     if not modelo and pid == NVIDIA:
         # Legado: antes de existirem provedores, o modelo ativo vivia em `llm_model`.
-        modelo = ((await _ler(CHAVE_MODELO_LEGADO)) or base["modelo_padrao"] or "").strip()
+        modelo = (lidas.get(CHAVE_MODELO_LEGADO) or base["modelo_padrao"] or "").strip()
 
     return {
         "id": pid,
@@ -162,6 +187,7 @@ async def provedor_vigente() -> Dict[str, Any]:
         "api_key": api_key,
         "modelo": modelo,
         "todos_gratuitos": base["todos_gratuitos"],
+        "exige_chave": base["exige_chave"],
     }
 
 
@@ -192,7 +218,10 @@ async def listar_para_tela() -> Dict[str, Any]:
             "chave_fonte": "banco" if chave_banco else ("env" if chave_env else "ausente"),
             "chave_mascarada": mascarar(chave_banco or chave_env),
             "env_chave": base["env_chave"] or None,
-            "configurado": bool((salvo.get("base_url") or base["base_url"]) and (chave_banco or chave_env)),
+            # Pronto para ser ativado: URL base sempre; chave só quando o provedor a exige.
+            "configurado": bool((salvo.get("base_url") or base["base_url"])
+                                and (not base["exige_chave"] or chave_banco or chave_env)),
+            "exige_chave": base["exige_chave"],
         })
     return {"ativo": ativo, "provedores": provedores}
 
@@ -238,23 +267,19 @@ async def salvar_provedor(pid: str, dados: Dict[str, Any], usuario_id: str = "")
 async def definir_ativo(pid: str, usuario_id: str = "") -> None:
     if pid not in CATALOGO:
         raise ProvedorInvalido("Provedor desconhecido.")
-    vigente = await provedor_vigente()
     salvos = await _configs()
     salvo = salvos.get(pid) or {}
     base = CATALOGO[pid]
-    tem_chave = bool((salvo.get("api_key") or "").strip()
-                     or (os.getenv(base["env_chave"], "") if base["env_chave"] else ""))
-    if not tem_chave:
-        raise ProvedorInvalido(
-            f"{salvo.get('nome') or base['nome']} ainda não tem chave de API configurada.")
     if not (salvo.get("base_url") or base["base_url"]):
         raise ProvedorInvalido("Configure a URL base antes de ativar este provedor.")
+    if base["exige_chave"] and not tem_chave(pid, salvo):
+        raise ProvedorInvalido(
+            f"{salvo.get('nome') or base['nome']} ainda não tem chave de API configurada.")
     await _colecao().update_one(
         {"chave": CHAVE_ATIVO},
         {"$set": {"chave": CHAVE_ATIVO, "valor": pid, "atualizado_por": usuario_id}},
         upsert=True,
     )
-    del vigente  # só para deixar claro que a troca não migra o modelo: cada provedor tem o seu
 
 
 async def definir_modelo(pid: str, modelo: str, usuario_id: str = "") -> None:
@@ -301,8 +326,12 @@ def eh_gratuito(modelo: Dict[str, Any], provedor: Dict[str, Any]) -> Optional[bo
 
 def cabecalhos(provedor: Dict[str, Any]) -> Dict[str, str]:
     """Cabeçalhos da chamada. O OpenRouter usa `X-Title`/`HTTP-Referer` para atribuir o uso."""
-    h = {"Authorization": f"Bearer {provedor['api_key']}", "Accept": "application/json"}
+    h = {"Accept": "application/json"}
+    # Sem chave (endpoint local), não manda `Authorization` vazio: alguns servidores recusam o
+    # cabeçalho malformado em vez de ignorá-lo.
+    if provedor.get("api_key"):
+        h["Authorization"] = f"Bearer {provedor['api_key']}"
     if provedor["id"] == OPENROUTER:
         h["X-Title"] = "H2IA Tutor"
-        h["HTTP-Referer"] = "https://absapt.tk/h2ia/tutor/"
+        h["HTTP-Referer"] = os.getenv("FRONTEND_URL", "https://absapt.tk/h2ia/tutor")
     return h

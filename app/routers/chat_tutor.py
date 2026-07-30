@@ -39,7 +39,11 @@ from app.schemas.chat import (
     ChatMensagem,
     ChatTutorRequest,
 )
-from app.schemas.tutor import DefinirSystemPromptRequest
+from app.schemas.tutor import (
+    DefinirProvedorAtivoRequest,
+    DefinirSystemPromptRequest,
+    SalvarProvedorRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +140,14 @@ def max_tokens_resposta(contexto) -> int:
 # CONFIGURAÇÃO DO MODELO LLM
 # ============================================================
 
+def _exigir_chave(provedor: dict, prefixo: str = "") -> None:
+    """503 quando falta a chave — **só para quem exige chave**. Um endpoint self-hosted (Ollama,
+    vLLM) não tem chave nenhuma, e era justamente o caso de uso dos campos de URL base e porta."""
+    if provedor.get("exige_chave") and not provedor.get("api_key"):
+        detalhe = f"{provedor['nome']} está sem chave de API configurada."
+        raise HTTPException(status_code=503, detail=f"{prefixo} ({detalhe})" if prefixo else detalhe)
+
+
 async def _buscar_modelos(provedor: dict) -> list[dict]:
     """Modelos do provedor vigente, com `gratuito` resolvido e os gratuitos na frente.
 
@@ -178,14 +190,14 @@ async def _buscar_modelos(provedor: dict) -> list[dict]:
 
 
 @router.get("/modelos")
-async def listar_modelos(usuario=Depends(get_usuario_atual)):
-    """Modelos disponíveis no provedor ativo (NVIDIA NIM, OpenRouter ou customizado)."""
+async def listar_modelos(usuario=Depends(exigir_admin_ou_professor)):
+    """Modelos disponíveis no provedor ativo (NVIDIA NIM, OpenRouter ou customizado).
+
+    Gate de papel: só a tela de configuração usa isto, e listar modelos é um passo para trocar o
+    que responde aos alunos.
+    """
     provedor = await prov.provedor_vigente()
-    if not provedor["api_key"]:
-        raise HTTPException(
-            status_code=503,
-            detail=f"{provedor['nome']} está sem chave de API configurada.",
-        )
+    _exigir_chave(provedor)
     modelos = await _buscar_modelos(provedor)
     return {
         "modelos": modelos,
@@ -274,15 +286,18 @@ def _modelos_a_testar(modelos: list[dict], modelo_atual: str) -> list[str]:
 
 
 @router.get("/modelos/saude")
-async def saude_modelos(usuario=Depends(get_usuario_atual), forcar: bool = Query(False),
+async def saude_modelos(usuario=Depends(exigir_admin_ou_professor), forcar: bool = Query(False),
                         modelo: Optional[str] = Query(None)):
     """Status de resposta dos modelos. Devolve o cache de imediato e dispara o teste em segundo
     plano quando ele está velho (ou `forcar=True`). Com `modelo=<id>`, testa só aquele — é o
-    "testar este" dos modelos pagos, que ficam fora do teste automático."""
+    "testar este" dos modelos pagos, que ficam fora do teste automático.
+
+    **Gate de papel obrigatório:** cada teste é uma chamada real de completion no provedor, e o
+    parâmetro `modelo` é um id arbitrário — sem gate, um aluno autenticado dispararia chamadas
+    (possivelmente pagas) escolhendo o modelo mais caro que quisesse.
+    """
     provedor = await prov.provedor_vigente()
-    if not provedor["api_key"]:
-        raise HTTPException(status_code=503,
-                            detail=f"{provedor['nome']} está sem chave de API configurada.")
+    _exigir_chave(provedor)
 
     if modelo:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -501,7 +516,8 @@ async def listar_provedores(usuario=Depends(exigir_admin_ou_professor)):
 
 
 @router.put("/provedores/{pid}")
-async def salvar_provedor(pid: str, body: dict, usuario=Depends(get_usuario_atual)):
+async def salvar_provedor(pid: str, body: SalvarProvedorRequest,
+                          usuario=Depends(get_usuario_atual)):
     """Grava URL base, porta, nome e chave de um provedor editável.
 
     Campo `api_key` vazio mantém a chave atual — assim o admin corrige a URL sem redigitar o
@@ -511,7 +527,8 @@ async def salvar_provedor(pid: str, body: dict, usuario=Depends(get_usuario_atua
         raise HTTPException(status_code=403,
                             detail="Apenas admins podem configurar provedores de LLM.")
     try:
-        await prov.salvar_provedor(pid, body or {}, str(usuario.get("_id", "")))
+        await prov.salvar_provedor(pid, body.model_dump(exclude_unset=True),
+                                   str(usuario.get("_id", "")))
     except prov.ProvedorInvalido as e:
         raise HTTPException(status_code=400, detail=str(e))
     # A chave em si nunca entra na auditoria; o que se registra é que houve mudança e onde.
@@ -520,12 +537,13 @@ async def salvar_provedor(pid: str, body: dict, usuario=Depends(get_usuario_atua
 
 
 @router.put("/provedor-ativo")
-async def definir_provedor_ativo(body: dict, usuario=Depends(get_usuario_atual)):
+async def definir_provedor_ativo(body: DefinirProvedorAtivoRequest,
+                                 usuario=Depends(get_usuario_atual)):
     """Troca o provedor que atende o chat."""
     if usuario.get("role") != "admin":
         raise HTTPException(status_code=403,
                             detail="Apenas admins podem trocar o provedor de LLM.")
-    pid = (body or {}).get("provedor")
+    pid = body.provedor
     try:
         await prov.definir_ativo(str(pid or ""), str(usuario.get("_id", "")))
     except prov.ProvedorInvalido as e:
@@ -614,12 +632,7 @@ async def chat_tutor(request: ChatTutorRequest, usuario: dict = Depends(get_usua
     _check_rate_limit(user_id)
 
     provedor = await prov.provedor_vigente()
-    if not provedor["api_key"]:
-        raise HTTPException(
-            status_code=503,
-            detail=("O tutor por chat não está configurado no servidor "
-                    f"({provedor['nome']} sem chave de API)."),
-        )
+    _exigir_chave(provedor, "O tutor por chat não está configurado no servidor")
     if not provedor["modelo"]:
         raise HTTPException(
             status_code=503,
@@ -778,12 +791,7 @@ async def chat_tutor_stream(request: ChatTutorRequest, usuario: dict = Depends(g
     _check_rate_limit(user_id)
 
     provedor = await prov.provedor_vigente()
-    if not provedor["api_key"]:
-        raise HTTPException(
-            status_code=503,
-            detail=("O tutor por chat não está configurado no servidor "
-                    f"({provedor['nome']} sem chave de API)."),
-        )
+    _exigir_chave(provedor, "O tutor por chat não está configurado no servidor")
     if not provedor["modelo"]:
         raise HTTPException(
             status_code=503,

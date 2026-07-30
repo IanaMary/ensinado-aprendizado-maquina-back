@@ -129,3 +129,19 @@ class DefinirSystemPromptRequest(BaseModel):
     # 422 genérico e perderia a mensagem que explica ao admin por que o teto existe (o contexto
     # do pipeline e a base de conhecimento disputam a mesma janela).
     texto: Optional[str] = None
+
+
+class SalvarProvedorRequest(BaseModel):
+    # `PUT /tutor/provedores/{id}`. Todos opcionais porque a tela grava campo a campo — e
+    # `api_key` vazio/ausente tem significado: **manter a chave atual** (a tela não conhece o
+    # segredo, então não teria como reenviá-lo).
+    nome: Optional[str] = None
+    base_url: Optional[str] = None
+    porta: Optional[int] = None
+    api_key: Optional[str] = None
+
+
+class DefinirProvedorAtivoRequest(BaseModel):
+    # `PUT /tutor/provedor-ativo`. A validação de qual provedor existe fica em
+    # `app/tutor_provedores.py`, que é quem conhece o catálogo.
+    provedor: str
