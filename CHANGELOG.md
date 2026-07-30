@@ -8,6 +8,38 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-07-30 (correções da revisão: gate dos endpoints de modelo, provedor local)
+
+> Backend `master` **`<pendente>`**. Frontend: ver changelog do repo do frontend.
+
+### Corrigido — segurança
+- **`GET /tutor/modelos` e `GET /tutor/modelos/saude` exigiam apenas estar logado.** O segundo aceita
+  `?modelo=<id>` e faz uma chamada **real** de completion no provedor: um aluno autenticado podia
+  escolher o modelo mais caro e o servidor pagava. Ambas passam a exigir **admin/professor** (só a
+  tela de configuração as consome). Estava no ar desde 29/07c.
+
+### Corrigido
+- **Provedor sem chave não ativava.** `exige_chave` no catálogo: um endpoint self-hosted (Ollama,
+  vLLM, LM Studio) não tem chave — e era o caso de uso dos campos de URL base e porta. Sem chave, a
+  chamada também não manda `Authorization: Bearer ` vazio.
+- `PUT /tutor/provedores/{id}` e `PUT /tutor/provedor-ativo` ganham schema Pydantic (eram
+  `body: dict`, o outlier do projeto — e o `/system-prompt` fora corrigido no mesmo ciclo).
+- `HTTP-Referer` do OpenRouter vem de `FRONTEND_URL` em vez de hardcode.
+- `provedor_vigente()` resolve em **uma** consulta (eram três `find_one` por pergunta do chat);
+  leitura morta (`del vigente`) removida.
+- `.env.example` documenta `OPENROUTER_API_KEY`, `HEALTHCHECK_TIMEOUT`, os tetos do chat e o MLflow —
+  nomes apenas.
+- Documentação normativa que ficou falsa: `CLAUDE.md` afirmava "chave NVIDIA APENAS no `.env`" e
+  "conf-tutor só tem Início e LLM". Corrigido, e a decisão sobre chave no banco + URL base privada
+  virou **`docs/adr/0003-provedores-de-llm-e-chave-no-banco.md`**.
+
+### Verificação
+**623 passed, 1 skipped** (8 novos: os três 403, provedor local sem chave, cabeçalho sem
+`Authorization`, referer por env, leitura em uma consulta). Exercitado contra a API local: aluno 403
+nas três rotas, provedor local ativando sem chave, corpo inválido 422.
+
+---
+
 ## 2026-07-29c (provedores de LLM: OpenRouter, endpoint customizado, selo de gratuito)
 
 > **Implantado em 29/07/2026 17h53.** Backend `master` **`6778c20`**.
