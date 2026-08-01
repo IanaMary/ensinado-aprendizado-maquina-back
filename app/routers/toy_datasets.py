@@ -192,6 +192,7 @@ async def carregar_dataset(
             "dados_rotulados": target_col is not None,
             "fonte": "toy_dataset",
             "dataset_nome": ds.nome,
+            "usuario_id": str(current_user.get("_id", "")),
         }
         result_config = await configuracoes_treinamento.insert_one(doc_config)
         id_configuracoes_treinamento = str(result_config.inserted_id)

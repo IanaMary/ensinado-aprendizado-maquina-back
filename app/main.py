@@ -300,8 +300,12 @@ async def healthcheck(response: Response):
             "detalhe": f"o MongoDB não respondeu em {HEALTHCHECK_TIMEOUT}s",
         }
     except Exception as e:
+        # Não devolve a exceção crua do driver: ela embute host:porta do Mongo,
+        # descrição da topologia e detalhes de auth — vazamento numa rota anônima.
+        import logging
+        logging.getLogger(__name__).warning(f"healthcheck falhou: {e}")
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {
             "status": "erro",
-            "detalhe": str(e),
+            "detalhe": "serviço indisponível",
         }

@@ -25,7 +25,9 @@ if _RAIZ not in sys.path:
     sys.path.insert(0, _RAIZ)
 
 MARCA = "banca"
-SENHA = os.getenv("SENHA_DEMO", "h2ia-banca-2026")
+# Sem default: a senha das contas de demonstração NÃO é mais fixa no repositório
+# (era `h2ia-banca-2026`, commitada aqui e na doc). Passe SENHA_DEMO ao criar.
+SENHA = os.getenv("SENHA_DEMO")
 
 CONTAS = [
     ("admin.banca@h2ia.demo", "Banca (Admin)", "admin"),
@@ -101,6 +103,8 @@ async def _semear_usuarios() -> dict:
             )
         existentes[email] = atual
 
+    if not SENHA:
+        raise SystemExit("Defina SENHA_DEMO (sem default) para criar as contas de demonstração.")
     senha_hash = get_senha_hash(SENHA)
     ids = {}
     for email, nome, papel in CONTAS:
@@ -297,9 +301,9 @@ async def _main(remover: bool) -> None:
     ativs = await _semear_atividades(turma_id, ids)
     await _semear_submissoes(ativs["desafio_feito"], turma_id, ids["aluno"])
     await _semear_pipelines(ativs["pipeline"], turma_id, ids["aluno"])
-    print("\nContas (senha única):")
+    print("\nContas (a senha é a que você passou em SENHA_DEMO — não é impressa):")
     for email, _nome, papel in CONTAS:
-        print(f"  {papel:<9} {email}   senha: {SENHA}")
+        print(f"  {papel:<9} {email}")
     print(f"\nTurma '{TURMA_NOME}' — código {TURMA_CODIGO}")
     print("Depois da defesa, rode com --remover.")
 

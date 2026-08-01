@@ -57,10 +57,14 @@ echo "=== [3/6] Configurando .env ==="
 if [ ! -f "$PROJECT_DIR/.env" ]; then
     if [ -f "$PROJECT_DIR/.env.example" ]; then
         cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
+        # Restringe o modo ANTES de escrever segredos: o .env guarda SECRET_KEY (JWT),
+        # SMTP_PASSWORD e chaves de LLM; com o umask padrão ele nascia 0644 (legível por
+        # qualquer conta local da VM, que poderia forjar tokens de admin).
+        chmod 600 "$PROJECT_DIR/.env"
         # Gerar SECRET_KEY
         SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
         sed -i "s/CHANGE_ME/$SECRET_KEY/" "$PROJECT_DIR/.env"
-        echo "  .env criado com SECRET_KEY gerada automaticamente."
+        echo "  .env criado (modo 600) com SECRET_KEY gerada automaticamente."
     else
         echo "  AVISO: .env.example não encontrado. Crie o .env manualmente."
     fi

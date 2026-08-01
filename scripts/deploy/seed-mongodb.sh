@@ -1,7 +1,17 @@
 #!/bin/bash
 # seed-mongodb.sh - Popula as coleções iniciais do MongoDB
-# IMPORTANTE: Execute este script apenas uma vez, após a primeira instalação do MongoDB
+# IMPORTANTE: Execute este script apenas uma vez, após a primeira instalação do MongoDB.
+# DESTRUTIVO: faz deleteMany({}) em coleta_dados/modelos/metricas/tutor/pre_processamento,
+# apagando customizações do admin (habilitado, texto_pipe, conteudo). Por isso exige
+# confirmação explícita — nunca deve rodar sem querer num deploy.
 set -e
+
+if [ "${SEED_CONFIRM:-}" != "yes" ]; then
+    echo "RECUSADO: este seed é DESTRUTIVO (deleteMany nas coleções de catálogo/tutor)."
+    echo "Para prosseguir, rode com: SEED_CONFIRM=yes $0"
+    echo "Faça um backup do banco antes."
+    exit 1
+fi
 
 echo "=== Populando coleções do MongoDB ==="
 

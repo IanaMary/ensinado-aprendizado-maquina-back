@@ -10,6 +10,7 @@ from app.database import arquivos, configuracoes_treinamento
 from app.schemas.schemas import ReDivisaoColetaRequest
 from app.funcoes_genericas.funcoes_genericas import gerar_colunas_detalhes, df_para_base64, decode_excel_base64_df, converter_numpy
 from app.funcoes_genericas.validacao import validar_object_id
+from app.security import id_usuario_atual
 
 router = APIRouter()
 
@@ -106,15 +107,19 @@ async def upload_csv(
 
     if tipo == "teste" and id_coleta:
         coleta_oid = validar_object_id(id_coleta, "id_coleta")
-        await arquivos.update_one(
-            {"_id": coleta_oid},
+        # Escopo por dono (IDOR): só escreve/lê a própria coleta.
+        _dono = id_usuario_atual()
+        res_upd = await arquivos.update_one(
+            {"_id": coleta_oid, "usuario_id": _dono},
             {"$set": {
                 "arquivo_nome_teste": file.filename,
                 "content_teste_base64": content_b64,
             }}
         )
+        if res_upd.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Coleta não encontrada.")
 
-        doc = await arquivos.find_one({"_id": coleta_oid})
+        doc = await arquivos.find_one({"_id": coleta_oid, "usuario_id": _dono})
         if not doc:
             raise HTTPException(status_code=404, detail="Coleta não encontrada.")
         config = await configuracoes_treinamento.find_one({"id_coleta": coleta_oid})
@@ -179,6 +184,7 @@ async def upload_csv(
         "num_colunas": df.shape[1],
         "atributos": atributos,
         "colunas_detalhes": colunas_detalhes,
+        "usuario_id": id_usuario_atual(),
     }
 
     result = await arquivos.insert_one(doc_arquivo)
@@ -194,6 +200,7 @@ async def upload_csv(
         "target": None,
         "prever_categoria": False,
         "dados_rotulados": False,
+        "usuario_id": id_usuario_atual(),
     }
 
     result_config = await configuracoes_treinamento.insert_one(doc_config)

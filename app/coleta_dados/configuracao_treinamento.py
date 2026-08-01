@@ -9,6 +9,7 @@ from app.funcoes_genericas.funcoes_genericas import df_para_base64, converter_nu
 from app.schemas.schemas import ConfiguracaoColetaRequest, ReDivisaoColetaRequest
 from app.utils.seed import get_sklearn_random_state
 from app.funcoes_genericas.validacao import validar_object_id
+from app.security import id_usuario_atual
 import pandas as pd
 import base64
 from io import BytesIO, StringIO
@@ -90,7 +91,7 @@ def dividir_dataframe(df: pd.DataFrame, config: ReDivisaoColetaRequest,
 @router.put("/{tipo}/{configurar_treinamento_id}")
 async def configurar_treinamento(configurar_treinamento_id: str, config: ConfiguracaoColetaRequest):
     config_oid = validar_object_id(configurar_treinamento_id)
-    config_doc = await configuracoes_treinamento.find_one({"_id": config_oid})
+    config_doc = await configuracoes_treinamento.find_one({"_id": config_oid, "usuario_id": id_usuario_atual()})
 
     if not config_doc:
         raise HTTPException(status_code=404, detail="Configuração não encontrada.")
@@ -136,7 +137,7 @@ async def configurar_treinamento(configurar_treinamento_id: str, config: Configu
 @router.get("/{tipo}/{configurar_treinamento_id}")
 async def get_configuracoe(configurar_treinamento_id: str):
     config_oid = validar_object_id(configurar_treinamento_id)
-    config_doc = await configuracoes_treinamento.find_one({"_id": config_oid})
+    config_doc = await configuracoes_treinamento.find_one({"_id": config_oid, "usuario_id": id_usuario_atual()})
 
     if not config_doc:
         raise HTTPException(status_code=404, detail="Configuração de treinamento não encontrada.")
@@ -146,7 +147,7 @@ async def get_configuracoe(configurar_treinamento_id: str):
         raise HTTPException(status_code=400, detail="Campo 'id_coleta' não encontrado na configuração.")
 
     try:
-        coleta_doc = await arquivos.find_one({"_id": ObjectId(id_coleta)})
+        coleta_doc = await arquivos.find_one({"_id": ObjectId(id_coleta), "usuario_id": id_usuario_atual()})
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erro ao buscar coleta: {str(e)}")
 
@@ -192,12 +193,12 @@ async def redividir_coleta(configurar_treinamento_id: str, config: ReDivisaoCole
         raise HTTPException(status_code=400, detail="test_size deve estar entre 0 e 1.")
 
     config_oid = validar_object_id(configurar_treinamento_id)
-    config_doc = await configuracoes_treinamento.find_one({"_id": config_oid})
+    config_doc = await configuracoes_treinamento.find_one({"_id": config_oid, "usuario_id": id_usuario_atual()})
     if not config_doc:
         raise HTTPException(status_code=404, detail="Configuração não encontrada.")
 
     id_coleta = config_doc.get("id_coleta")
-    coleta_doc = await arquivos.find_one({"_id": ObjectId(id_coleta)})
+    coleta_doc = await arquivos.find_one({"_id": ObjectId(id_coleta), "usuario_id": id_usuario_atual()})
     if not coleta_doc:
         raise HTTPException(status_code=404, detail="Documento de coleta não encontrado.")
 
@@ -217,7 +218,7 @@ async def redividir_coleta(configurar_treinamento_id: str, config: ReDivisaoCole
     content_teste_b64 = df_para_base64(df_teste)
 
     await arquivos.update_one(
-        {"_id": ObjectId(id_coleta)},
+        {"_id": ObjectId(id_coleta), "usuario_id": id_usuario_atual()},
         {"$set": {
             "content_treino_base64": content_treino_b64,
             "content_teste_base64": content_teste_b64,

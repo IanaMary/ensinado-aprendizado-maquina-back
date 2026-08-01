@@ -9,6 +9,7 @@
 Escritas de professor: `exigir_admin_ou_professor`. O router é montado com o
 `auth_dependency` global (todo mundo autenticado).
 """
+import os
 import secrets
 from datetime import datetime, timezone
 
@@ -40,6 +41,10 @@ _ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # sem 0/O/1/I ambíguos
 # `montagem` é o desafio de quebra-cabeça, corrigido por rubrica sem executar nada.
 TIPO_PIPELINE = "pipeline"
 TIPO_MONTAGEM = "montagem"
+# Teto de tentativas por aluno num desafio de montagem: sem cap, o aluno podia
+# sondar a rubrica de graça (cada tentativa devolve feedback por regra) e só a
+# melhor nota é mantida.
+MAX_TENTATIVAS_MONTAGEM = int(os.getenv("MAX_TENTATIVAS_MONTAGEM", "10"))
 
 
 def _gerar_codigo(n: int = 6) -> str:
@@ -361,7 +366,10 @@ async def atualizar_atividade(turma_id: str, atividade_id: str, body: AtividadeU
         campos["gabarito"] = _gabarito_com_dataset(body.gabarito)
     if campos:
         await atividades.update_one({"_id": aoid, "turma_id": turma_id}, {"$set": campos})
-    a = await atividades.find_one({"_id": aoid})
+    # Releitura escopada à mesma turma da atualização: sem o filtro por turma_id o
+    # professor podia informar a PRÓPRIA turma e o atividade_id de OUTRA turma e
+    # receber o gabarito dela (a atualização era no-op, mas a releitura vazava).
+    a = await atividades.find_one({"_id": aoid, "turma_id": turma_id})
     if not a:
         raise HTTPException(status_code=404, detail="Atividade não encontrada.")
     return _atividade_doc(a, incluir_gabarito=True)
@@ -452,6 +460,11 @@ async def submeter_montagem(turma_id: str, atividade_id: str, body: SubmeterMont
     _t, a = await _atividade_de_montagem(turma_id, atividade_id, usuario)
     user_id = str(usuario["_id"])
     hist = await _historico_montagem(atividade_id, user_id)
+    if hist["tentativas"] >= MAX_TENTATIVAS_MONTAGEM:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Limite de {MAX_TENTATIVAS_MONTAGEM} tentativas neste desafio atingido.",
+        )
     tentativa = hist["tentativas"] + 1
 
     pecas = await carregar_pecas()

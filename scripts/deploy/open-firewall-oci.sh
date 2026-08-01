@@ -53,11 +53,27 @@ if echo "$EXISTING_RULES" | grep -q '"tcp-options".*8000'; then
     exit 0
 fi
 
-# Adicionar regra para porta 8000
-echo "Adicionando regra para porta 8000/TCP..."
+# Origem e porta parametrizadas. Em produção o backend fica ATRÁS do nginx (443/TLS),
+# que fala com ele em 127.0.0.1 — NÃO exponha a porta do backend à internet. Por isso
+# não há mais default 0.0.0.0/0: é preciso declarar ALLOWED_SOURCE explicitamente, e
+# a porta segue a que o serviço realmente usa (8002).
+ALLOWED_SOURCE="${ALLOWED_SOURCE:-}"
+BACKEND_PORT="${BACKEND_PORT:-8002}"
+if [ -z "$ALLOWED_SOURCE" ]; then
+    echo "RECUSADO: defina ALLOWED_SOURCE (CIDR) — ex.: ALLOWED_SOURCE=10.0.0.0/16 $0"
+    echo "Não abrimos a porta do backend para 0.0.0.0/0: ela deve ficar atrás do nginx."
+    exit 1
+fi
+if [ "$ALLOWED_SOURCE" = "0.0.0.0/0" ] && [ "${FORCE_PUBLIC:-}" != "yes" ]; then
+    echo "RECUSADO: ALLOWED_SOURCE=0.0.0.0/0 expõe o backend em texto puro à internet."
+    echo "Se realmente for intencional, rode com FORCE_PUBLIC=yes."
+    exit 1
+fi
+
+echo "Adicionando regra para porta ${BACKEND_PORT}/TCP (origem ${ALLOWED_SOURCE})..."
 
 # Construir nova regra como JSON
-NEW_RULE='[{"source": "0.0.0.0/0", "protocol": "6", "tcpOptions": {"destinationPortRange": {"min": 8000, "max": 8000}}, "description": "H2IA Backend API"}]'
+NEW_RULE="[{\"source\": \"${ALLOWED_SOURCE}\", \"protocol\": \"6\", \"tcpOptions\": {\"destinationPortRange\": {\"min\": ${BACKEND_PORT}, \"max\": ${BACKEND_PORT}}}, \"description\": \"H2IA Backend API\"}]"
 
 # Merge com regras existentes
 if [ "$EXISTING_RULES" = "null" ] || [ -z "$EXISTING_RULES" ]; then
@@ -75,4 +91,4 @@ oci network security-list update \
     --force
 
 echo ""
-echo "=== Security List atualizado. Porta 8002/TCP aberta para 0.0.0.0/0 ==="
+echo "=== Security List atualizado. Porta ${BACKEND_PORT}/TCP liberada para ${ALLOWED_SOURCE} ==="

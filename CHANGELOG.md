@@ -8,6 +8,70 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-08-01 (auditoria de segurança Mantis — 26 correções + 3 cadeias quebradas)
+
+> Campanha defensiva completa (plan → research → review → critic → calibrate → reproduce →
+> chain → report → patch). 52 achados brutos → 26 confirmados (24 falsos-positivos filtrados,
+> incluindo um oráculo de enumeração de login **medido** falso e um XSS neutralizado pelo
+> sanitizador do Angular). **Todos os 26 corrigidos.** Suíte: backend 623 / frontend 217, build ok.
+
+### ⚠️ Pré-requisito de deploy — backfill obrigatório
+- As correções de IDOR passaram a escopar leituras por dono (**fail-closed**). Documentos antigos de
+  `arquivos`/`configuracoes_treinamento`/`modelos_treinados` não têm `usuario_id` e ficam
+  inacessíveis até o backfill. Rode **`scripts/deploy/backfill_usuario_id.py --apply`** (recupera o
+  dono dos modelos via `mlflow_runs`, cria índices, relata órfãos). Datasets órfãos precisam ser
+  recoletados pelos donos.
+
+### Corrigido — segurança (crítico/alto)
+- **Escalada não-autenticada → RCE (cadeia CRÍTICA, quebrada).** Três elos, todos fechados:
+  - **Senha de admin fixa no repositório** (`seed_usuarios_demo.py`): removido o default
+    `h2ia-banca-2026` (também retirado da doc); a senha agora vem só de `SENHA_DEMO` e nunca é
+    impressa. **`login` passou a recusar contas não-ativas** (`status != 'ativo'`) — antes ignorava
+    `status`, então desativar a conta não bloqueava o login.
+  - **Allowlist do sandbox só validava o módulo** (`sandbox/child.py`): o nome da classe ia direto ao
+    `getattr`, aceitando funções utilitárias (ex.: `sklearn.utils._testing.check_output`) que
+    executam comando. Agora exige **classe de estimador com `fit`** e nome público simples.
+  - **Bytes do modelo do filho desserializados no processo pai** (`treinamento_base.py`,
+    `metricas.py`): `prever` passou a **verificar o checksum antes do `joblib.load`**.
+- **Família de IDOR — coleções sem campo de dono.** `arquivos`, `configuracoes_treinamento` e
+  `modelos_treinados` eram lidos só por `_id`. Agora todo insert grava `usuario_id` e toda
+  leitura/escrita filtra pelo dono do JWT: coleta CSV/XLSX/URL, configuração de treino, pairplot
+  (`visualizacao`), treino (`treinamento_base`) e previsão/download/avaliação (`metricas`).
+- **Gabarito de outra turma vazava** (`turmas.py:atualizar_atividade`): releitura escopada por
+  `turma_id` (verificado ponta-a-ponta em stack ao vivo).
+- **Telemetria de qualquer aluno por `usuario_id`** (`atividade.py`): escopada aos alunos das turmas
+  do professor (espelha `_autorizar_ver_aluno`); admin mantém visão global.
+- **Injeção de prompt no tutor** (`chat_tutor.py`): o papel de quem pergunta passou a ser decidido
+  pelo **servidor** (JWT), não pelo `contexto` do cliente; contexto e base de conhecimento cercados
+  no system prompt como **dados, não instruções** (fecha também a injeção via conteúdo de catálogo
+  editável por professor).
+- **SSRF por reresolução de DNS** (`coleta_dados_url.py`): o IP validado é **fixado** na conexão
+  (transport httpx com SNI preservado), fechando a janela de rebinding.
+- **`base_url` de provedor redirecionava a chave** (`tutor_provedores.py`): URL livre só no provedor
+  `custom`; hospedados usam a URL do catálogo; a chave é descartada se a URL muda sem rechave.
+
+### Corrigido — segurança (médio/baixo)
+- **Vazamento do gabarito por submissão vazia** (`desafios/avaliacao.py`): montagem vazia não recebe
+  o detalhamento das regras (várias tinham aplicabilidade decidida só pelo gabarito) + **cap de
+  tentativas** (`turmas.py`).
+- **Tabuleiro reconstruível offline** (`desafios/sorteio.py`): segredo do servidor na semente
+  (mitigação — fechamento total exige não expor metadados de correção no catálogo semi-público).
+- **Cópia de pipeline herdava vínculo de atividade/turma** (`pipelines.py`): descartado na cópia.
+- **Healthcheck vazava a exceção crua do driver** (`main.py`): mensagem genérica; detalhe só no log.
+
+### Corrigido — scripts de deploy
+- **MongoDB sem autenticação** (`setup-mongodb.sh`): bloco de auth guardado por `MONGO_APP_PASSWORD`.
+- **`.env` legível por todos** (`deploy.sh`): `chmod 600` antes de escrever segredos.
+- **Seed destrutivo sem guarda** (`seed-mongodb.sh`): exige `SEED_CONFIRM=yes` (faz `deleteMany`).
+- **Firewall aberto para `0.0.0.0/0`** (`open-firewall-oci.sh`): sem default público, porta corrigida
+  para 8002, origem parametrizada por `ALLOWED_SOURCE`.
+
+### Corrigido — frontend
+- **Token de convite no log de erros** (`error.interceptor.ts`): a URL enviada ao `/sistema/erro` é
+  sanitizada (sem query string; token do path `/convite/…` redigido).
+
+---
+
 ## 2026-07-30 (correções da revisão: gate dos endpoints de modelo, provedor local)
 
 > **Implantado em 30/07/2026 12h10.** Backend `master` **`fafb7ac`**.

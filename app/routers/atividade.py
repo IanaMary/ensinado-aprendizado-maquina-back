@@ -19,10 +19,20 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.database import atividade_usuario
+from app.database import atividade_usuario, turmas
 from app.funcoes_genericas.funcoes_genericas import converter_numpy, serialize_doc
 from app.schemas.atividade import EventoAtividade, EventoLote, MAX_EVENTOS_LOTE
 from app.security import get_usuario_atual, exigir_admin_ou_professor
+
+
+async def _alunos_do_professor(usuario: dict) -> list[str]:
+    """Ids dos alunos das turmas do professor (LGPD/menores). Espelha
+    _autorizar_ver_aluno em chat_tutor: o professor só vê a telemetria dos alunos
+    das SUAS turmas; admin vê todos (retorna None para 'sem restrição')."""
+    ids: set[str] = set()
+    async for t in turmas.find({"professor_id": str(usuario["_id"])}, {"alunos": 1}):
+        ids.update(t.get("alunos", []) or [])
+    return sorted(ids)
 
 logger = logging.getLogger(__name__)
 
@@ -218,14 +228,23 @@ async def listar_atividades(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     incluir_total: bool = Query(True),
-    _: dict = Depends(exigir_admin_ou_professor),
+    usuario: dict = Depends(exigir_admin_ou_professor),
 ):
     """Lista atividades com filtros e paginação (admin/professor).
 
     `incluir_total=false` pula a contagem — o front pede o total só ao (re)filtrar e
     o reaproveita ao paginar, evitando um scan de contagem a cada página."""
     filtro: dict[str, Any] = {}
-    if usuario_id:
+    # LGPD (menores): sem escopo, qualquer professor lia a telemetria (incl. prévias
+    # de chat) de QUALQUER usuário por usuario_id. O professor só vê alunos das SUAS
+    # turmas; admin vê todos.
+    if (usuario or {}).get("role") != "admin":
+        alunos = await _alunos_do_professor(usuario)
+        if usuario_id and usuario_id not in alunos:
+            raise HTTPException(status_code=403, detail="Aluno não pertence a nenhuma turma sua.")
+        # restringe ao conjunto de alunos do professor (mesmo sem usuario_id explícito)
+        filtro["usuario_id"] = usuario_id if usuario_id else {"$in": alunos}
+    elif usuario_id:
         filtro["usuario_id"] = usuario_id
     if tipo:
         filtro["tipo"] = tipo

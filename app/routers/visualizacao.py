@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from app.database import arquivos, configuracoes_treinamento
 from app.funcoes_genericas.validacao import validar_object_id, MAX_ARQUIVO_BASE64
+from app.security import id_usuario_atual
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +35,13 @@ async def gerar_pairplot(request: PairplotRequest):
     arquivo_oid = validar_object_id(request.arquivo_id, "arquivo_id")
     configuracao_oid = validar_object_id(request.configuracao_id, "configuracao_id")
     
-    # Buscar arquivo
-    arquivo_doc = await arquivos.find_one({"_id": arquivo_oid})
+    # Escopo por dono (IDOR): só plota o próprio arquivo/configuração.
+    _dono = id_usuario_atual()
+    arquivo_doc = await arquivos.find_one({"_id": arquivo_oid, "usuario_id": _dono})
     if not arquivo_doc:
         raise HTTPException(status_code=404, detail="Arquivo não encontrado.")
-    
-    # Buscar configuração
-    conf_doc = await configuracoes_treinamento.find_one({"_id": configuracao_oid})
+
+    conf_doc = await configuracoes_treinamento.find_one({"_id": configuracao_oid, "usuario_id": _dono})
     if not conf_doc:
         raise HTTPException(status_code=404, detail="Configuração não encontrada.")
     

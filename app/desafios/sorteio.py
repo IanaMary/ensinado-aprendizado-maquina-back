@@ -21,6 +21,7 @@ pré-processamento que este problema não pede), não de uma lista fixa.
 from __future__ import annotations
 
 import hashlib
+import os
 import random
 from typing import Any, Dict, List, Optional
 
@@ -32,8 +33,17 @@ DISTRATORES_POR_DIFICULDADE = {"facil": 2, "medio": 4, "dificil": 6}
 DIFICULDADE_PADRAO = "medio"
 
 
+def _segredo_tabuleiro() -> str:
+    """Segredo do servidor misturado na semente do tabuleiro. Sem ele, a semente
+    usava só (atividade, aluno, tentativa) — valores que o cliente conhece — então
+    o aluno reproduzia o tabuleiro offline e, cruzando os `valor` com o catálogo
+    público, deduzia quais peças são úteis/distratoras. Deriva do SECRET_KEY do
+    servidor (já obrigatório); um valor dedicado (DESAFIO_SEED_SECRET) tem prioridade."""
+    return os.getenv("DESAFIO_SEED_SECRET") or os.getenv("SECRET_KEY") or ""
+
+
 def _semente(atividade_id: str, user_id: str, tentativa: int) -> int:
-    bruto = f"{atividade_id}:{user_id}:{tentativa}".encode("utf-8")
+    bruto = f"{_segredo_tabuleiro()}:{atividade_id}:{user_id}:{tentativa}".encode("utf-8")
     return int.from_bytes(hashlib.sha256(bruto).digest()[:8], "big")
 
 
