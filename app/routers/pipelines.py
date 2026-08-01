@@ -226,6 +226,12 @@ async def copiar_pipeline(
     novo_doc["is_public"] = False
     novo_doc["dataCriacao"] = agora
     novo_doc["dataModificacao"] = agora
+    # Não herda o vínculo de atividade/turma do pipeline de origem (que pode ser
+    # público, de outro professor): copiar um pipeline público carregava
+    # atividade_id/turma_id/professor_id e registrava submissão numa turma/atividade
+    # em que o aluno não está matriculado, driblando _validar_vinculo_atividade.
+    for campo in ("atividade_id", "turma_id", "professor_id"):
+        novo_doc.pop(campo, None)
 
     result = await pipelines.insert_one(novo_doc)
     novo_doc["_id"] = result.inserted_id

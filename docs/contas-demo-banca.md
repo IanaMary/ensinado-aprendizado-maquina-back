@@ -11,12 +11,14 @@ e-mail: o script grava direto, com `status: "ativo"` e a senha já com hash
 
 | Papel | E-mail | Senha |
 |---|---|---|
-| admin | `admin.banca@h2ia.demo` | `h2ia-banca-2026` |
-| professor | `professor.banca@h2ia.demo` | `h2ia-banca-2026` |
-| aluno | `aluno.banca@h2ia.demo` | `h2ia-banca-2026` |
+| admin | `admin.banca@h2ia.demo` | (definida em `SENHA_DEMO` na criação) |
+| professor | `professor.banca@h2ia.demo` | (definida em `SENHA_DEMO` na criação) |
+| aluno | `aluno.banca@h2ia.demo` | (definida em `SENHA_DEMO` na criação) |
 
-Senha única, combinada, para facilitar o repasse. Trocar por outra:
+A senha **não fica no repositório**. Ela é escolhida na hora de semear e repassada
+por canal seguro:
 `SENHA_DEMO='...' .venv/bin/python -m scripts.deploy.seed_usuarios_demo`.
+Depois da defesa, rode `--remover`.
 
 ## O que já vem pronto
 

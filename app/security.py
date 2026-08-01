@@ -114,6 +114,18 @@ async def definir_usuario_atual(usuario: dict = Depends(get_usuario_atual)) -> d
     return usuario
 
 
+def id_usuario_atual() -> str:
+    """Id (string) do usuário autenticado no request corrente, lido do ContextVar.
+
+    Usado por handlers que NÃO recebem `Depends` (a rota é montada com
+    `definir_usuario_atual`) para escopar coleções por dono: `arquivos`,
+    `configuracoes_treinamento` e `modelos_treinados` NÃO tinham campo de dono,
+    o que permitia IDOR por ObjectId. Retorna "" quando não há usuário (nunca
+    casa com um dono real, então nega o acesso — fail-closed)."""
+    u = usuario_atual_ctx.get() or {}
+    return str(u.get("_id") or u.get("id") or "")
+
+
 # =========================
 # AUTORIZAÇÃO POR PAPEL
 # =========================

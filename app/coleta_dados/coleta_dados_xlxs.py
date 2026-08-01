@@ -10,6 +10,7 @@ from app.coleta_dados.configuracao_treinamento import aviso_estratificacao, divi
 from app.database import arquivos, configuracoes_treinamento
 from app.schemas.schemas import ReDivisaoColetaRequest
 from app.funcoes_genericas.funcoes_genericas import validar_xlsx, ler_excel, df_para_base64, gerar_colunas_detalhes, montar_resposta_coleta, converter_numpy
+from app.security import id_usuario_atual
 
 
 router = APIRouter()
@@ -72,11 +73,12 @@ async def upload_xlsx(
             "num_colunas": df.shape[1],
             "atributos": atributos,  # salva no banco como dict
             "colunas_detalhes": colunas_detalhes,
+            "usuario_id": id_usuario_atual(),
         }
-        
+
         result = await arquivos.insert_one(doc_arquivo)
         id_coleta = str(result.inserted_id)
-        
+
         doc_configuracoes_treinamento = {
             "id_coleta" : ObjectId(result.inserted_id),
             "test_size": test_size,
@@ -84,7 +86,8 @@ async def upload_xlsx(
             "stratify": stratify,
             "atributos": atributos,
             "tipo_target": None,
-            "target": None
+            "target": None,
+            "usuario_id": id_usuario_atual(),
         }
 
         result = await configuracoes_treinamento.insert_one(doc_configuracoes_treinamento)
@@ -111,7 +114,7 @@ async def upload_xlsx(
             content_treino_b64 = base64.b64encode(content_treino).decode("utf-8")
             arquivo_nome_treino = file_treino.filename
         else:
-            doc_original = await arquivos.find_one({"_id": ObjectId(id_coleta)})
+            doc_original = await arquivos.find_one({"_id": ObjectId(id_coleta), "usuario_id": id_usuario_atual()})
             if not doc_original:
                 raise HTTPException(404, "Documento com id_coleta não encontrado")
 
@@ -127,7 +130,7 @@ async def upload_xlsx(
         colunas_detalhes = gerar_colunas_detalhes(df_treino)
 
         update_result = await arquivos.update_one(
-            {"_id": ObjectId(id_coleta)},
+            {"_id": ObjectId(id_coleta), "usuario_id": id_usuario_atual()},
             {
                 "$set": {
                     "arquivo_nome_treino": arquivo_nome_treino,
@@ -173,7 +176,8 @@ async def get_unique_values(
   if not ObjectId.is_valid(id_coleta):
     raise HTTPException(400, "ID da coleta inválido")
 
-  doc = await arquivos.find_one({"_id": ObjectId(id_coleta)})
+  # Escopo por dono (IDOR): só lê valores da própria coleta.
+  doc = await arquivos.find_one({"_id": ObjectId(id_coleta), "usuario_id": id_usuario_atual()})
   if not doc:
     raise HTTPException(404, "Coleta não encontrada")
 

@@ -43,12 +43,23 @@ def _instanciar(modulo: str, classe: str, hiper: dict):
     importlib, mesmo que o caminho de treino já valide. Bloqueia execução de
     código arbitrário caso um doc malicioso chegue ao spec por qualquer via.
     """
+    import inspect
+
     from app.pre_processamento.catalogo import modulo_permitido
 
     if not modulo_permitido(modulo):
         raise ValueError(f"Módulo '{modulo}' não está na lista permitida.")
+    # Validação do NOME DA CLASSE (não só do módulo): antes, `getattr(mod, classe)`
+    # aceitava qualquer atributo do módulo permitido — incluindo funções utilitárias
+    # (ex.: sklearn.utils._testing.check_output) que executam comandos na instanciação.
+    # O sandbox só instancia estimadores/transformers sklearn, então exigimos:
+    # nome público simples + ser uma CLASSE + ter `fit` (assinatura de estimador).
+    if not (classe.isidentifier() and not classe.startswith("_")):
+        raise ValueError(f"Classe '{classe}' inválida.")
     mod = importlib.import_module(modulo)
-    cls = getattr(mod, classe)
+    cls = getattr(mod, classe, None)
+    if not (inspect.isclass(cls) and hasattr(cls, "fit")):
+        raise ValueError(f"'{modulo}.{classe}' não é um estimador instanciável.")
     return cls(**(hiper or {}))
 
 

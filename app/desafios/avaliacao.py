@@ -41,6 +41,23 @@ def avaliar_montagem(
     ofertadas: Dict[str, str],
 ) -> Dict[str, Any]:
     montagem = normalizar_montagem(montagem_bruta)
+
+    # Submissão vazia não recebe o detalhamento das regras: várias regras têm
+    # aplicabilidade decidida SÓ pelo gabarito (ex.: "há faltantes?", "há texto?")
+    # e disparavam mesmo sem o aluno montar nada, vazando a forma do gabarito de
+    # graça. Sem peça posta, devolve nota 0 e uma orientação genérica.
+    if not any(valores for valores in montagem.values()):
+        return {
+            "nota": 0.0,
+            "nota_max": NOTA_MAXIMA,
+            "pontos": 0,
+            "pontos_max": 0,
+            "acertou_tudo": False,
+            "regras": [],
+            "montagem": montagem,
+            "mensagem": "Monte as peças no tabuleiro para receber a avaliação por etapa.",
+        }
+
     ctx = Contexto(montagem=montagem, gabarito=gabarito or {}, pecas=pecas, ofertadas=ofertadas or {})
 
     avaliadas: List[Dict[str, Any]] = []

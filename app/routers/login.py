@@ -92,6 +92,16 @@ async def login(request: LoginRequest, req: Request):
             detail="Credenciais inválidas."
         )
 
+    # Só contas ativas entram: antes o login ignorava `status`, então uma conta
+    # marcada como 'inativo' no painel (ou 'pendente', ainda não ativada) continuava
+    # autenticando — inclusive as contas de demonstração da banca. Contas legadas
+    # sem o campo assumem 'ativo'. Mesma mensagem genérica (sem enumeração).
+    if usuario.get("status", "ativo") != "ativo":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas."
+        )
+
     # Registra o último acesso (exibido em "Gerenciar Usuários").
     agora = datetime.now(timezone.utc)
     await colecao_usuario.update_one(

@@ -10,6 +10,7 @@ from app.schemas.schemas import AvaliacaoModelosRequest
 from app.funcoes_genericas.validacao import validar_object_id, MAX_ARQUIVO_BASE64
 from app.funcoes_genericas.funcoes_genericas import converter_numpy
 from app.mlflow_client import mlflow_enabled
+from app.security import id_usuario_atual
 from bson import ObjectId
 import importlib
 import joblib
@@ -481,7 +482,9 @@ async def prever(body: dict):
     modelo_oid = validar_object_id((body or {}).get("modelo_id"), "modelo_id")
     valores = (body or {}).get("valores") or {}
 
-    doc = await modelos_treinados.find_one({"_id": modelo_oid})
+    # Escopo por dono: modelos_treinados não tinha campo de dono e a busca só por
+    # _id permitia prever com o modelo de outro usuário (IDOR).
+    doc = await modelos_treinados.find_one({"_id": modelo_oid, "usuario_id": id_usuario_atual()})
     if not doc:
         raise HTTPException(status_code=404, detail="Modelo não encontrado.")
 
@@ -489,8 +492,14 @@ async def prever(body: dict):
     if not atributos:
         raise HTTPException(status_code=400, detail="Modelo sem atributos registrados.")
 
+    # Verifica o checksum antes de desserializar (mesma proteção de avaliar_modelos):
+    # joblib.load é um unpickle; um documento adulterado no banco não deve ser carregado.
+    modelo_bytes = bytes(doc["modelo_treinado"])
+    checksum_esperado = doc.get("checksum")
+    if checksum_esperado and hashlib.sha256(modelo_bytes).hexdigest() != checksum_esperado:
+        raise HTTPException(status_code=400, detail="Modelo treinado corrompido (checksum).")
     try:
-        modelo = joblib.load(io.BytesIO(bytes(doc["modelo_treinado"])))
+        modelo = joblib.load(io.BytesIO(modelo_bytes))
     except Exception:
         raise HTTPException(status_code=400, detail="Não foi possível carregar o modelo treinado.")
 
@@ -524,7 +533,8 @@ async def baixar_modelo_artefato(modelo_id: str):
     O front mescla o conteúdo do zip numa pasta `modelo/` do bundle exportado.
     """
     modelo_oid = validar_object_id(modelo_id, "modelo_id")
-    doc = await modelos_treinados.find_one({"_id": modelo_oid})
+    # Escopo por dono (IDOR): só o dono baixa o artefato do próprio modelo.
+    doc = await modelos_treinados.find_one({"_id": modelo_oid, "usuario_id": id_usuario_atual()})
     if not doc:
         raise HTTPException(status_code=404, detail="Modelo não encontrado.")
 
@@ -579,7 +589,8 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
         logger.debug(f"Processando modelo {nome_modelo} (id {id_modelo})")
 
         modelo_oid = validar_object_id(id_modelo, "id_modelo")
-        doc = await modelos_treinados.find_one({"_id": modelo_oid})
+        # Escopo por dono (IDOR): avaliar só modelos do próprio usuário.
+        doc = await modelos_treinados.find_one({"_id": modelo_oid, "usuario_id": id_usuario_atual()})
 
         if not doc:
             logger.warning(f"Modelo não encontrado: {id_modelo}")

@@ -12,7 +12,7 @@ from app.sandbox import SandboxError, executar_treinamento
 import joblib
 from app.mlflow_client import log_run, log_bytes_artifact, log_sklearn_model
 from app.routers.artefatos import registrar_run_usuario
-from app.security import usuario_atual_ctx
+from app.security import usuario_atual_ctx, id_usuario_atual
 from app.schemas.schemas import DatasetRequest
 from app.database import configuracoes_treinamento, arquivos, opcoes_modelos, modelos_treinados, opcoes_pre_processamento
 from app.utils.seed import get_sklearn_random_state
@@ -47,11 +47,15 @@ async def treinar_modelo_generico(
     configuracao_oid = validar_object_id(request.configuracao_id, "configuracao_id")
     modelo_oid = validar_object_id(request.modelo_id, "modelo_id")
 
-    arquivo_doc = await arquivos.find_one({"_id": arquivo_oid})
+    # Escopo por dono (IDOR): treinar só com o próprio arquivo/configuração — sem
+    # isto o aluno treinava com o dataset de outro e o split do outro era copiado
+    # para um modelo registrado em nome do atacante.
+    _dono = id_usuario_atual()
+    arquivo_doc = await arquivos.find_one({"_id": arquivo_oid, "usuario_id": _dono})
     if not arquivo_doc:
         raise HTTPException(status_code=404, detail="Arquivo não encontrado.")
 
-    conf_doc = await configuracoes_treinamento.find_one({"_id": configuracao_oid})
+    conf_doc = await configuracoes_treinamento.find_one({"_id": configuracao_oid, "usuario_id": _dono})
     if not conf_doc:
         raise HTTPException(status_code=404, detail="Configuração de treino não encontrada.")
 
@@ -226,6 +230,8 @@ async def treinar_modelo_generico(
                 "modelo": modelo_doc.get('valor'),
                 "pre_processamento": pre_proc_specs,
                 "mlflow_run_id": mlflow_run_id,
+                # Dono do modelo — escopa as leituras em metricas.py (prever/baixar/avaliar).
+                "usuario_id": _dono,
             })
 
             id_result = str(result.inserted_id)

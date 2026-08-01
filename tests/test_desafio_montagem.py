@@ -448,13 +448,17 @@ class TestRotasDesafio:
         body = r.json()
         assert body["nota"] == 0.0                      # montagem vazia
         assert body["tentativa"] == 1
-        assert any(not x["ok"] for x in body["regras"])
+        # Submissão VAZIA não recebe o detalhamento das regras (várias têm
+        # aplicabilidade decidida só pelo gabarito e vazavam a forma da resposta):
+        # nota 0, sem regras e com orientação genérica.
+        assert body["regras"] == []
+        assert "mensagem" in body
         assert "montagem" not in body                   # eco desnecessário fica de fora
         assert subm.insert_one.await_count == 1
         gravado = subm.insert_one.await_args[0][0]
         assert gravado["atividade_id"] == str(atividade["_id"])
         assert gravado["tentativa"] == 1
-        assert gravado["regras"], "a explicação precisa ficar gravada para o tutor usar depois"
+        assert gravado["regras"] == []                  # nada a explicar numa montagem vazia
 
     @pytest.mark.asyncio
     async def test_submeter_incrementa_tentativa(self, client, mock_db, auth_headers, mock_user):

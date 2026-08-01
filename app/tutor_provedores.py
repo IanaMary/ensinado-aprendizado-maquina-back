@@ -237,20 +237,31 @@ async def salvar_provedor(pid: str, dados: Dict[str, Any], usuario_id: str = "")
 
     salvos = await _configs()
     atual = dict(salvos.get(pid) or {})
+    url_antiga = atual.get("base_url")
 
-    if "base_url" in dados or "porta" in dados:
-        atual["base_url"] = normalizar_base_url(
-            dados.get("base_url") or atual.get("base_url") or base["base_url"],
-            dados.get("porta"),
-        )
+    # base_url livre SÓ no provedor customizado (self-hosted). Provedores hospedados
+    # (ex.: openrouter) têm URL fixa do catálogo — antes, mudar a base_url deles
+    # redirecionava a chave já armazenada para um host arbitrário (exfiltração).
+    if pid == CUSTOM:
+        if "base_url" in dados or "porta" in dados:
+            atual["base_url"] = normalizar_base_url(
+                dados.get("base_url") or atual.get("base_url") or base["base_url"],
+                dados.get("porta"),
+            )
+    else:
+        atual["base_url"] = base["base_url"]
     if dados.get("nome"):
         atual["nome"] = str(dados["nome"])[:80]
     if dados.get("modelo") is not None:
         atual["modelo"] = str(dados["modelo"] or "")[:200]
     chave = (dados.get("api_key") or "").strip()
     if chave:
-        # Só sobrescreve quando o admin digita algo: assim ele edita a URL sem redigitar a chave.
+        # Só sobrescreve quando o admin digita algo: assim ele edita outros campos sem redigitar a chave.
         atual["api_key"] = chave
+    elif url_antiga is not None and atual.get("base_url") != url_antiga:
+        # base_url mudou e não veio chave nova: NÃO manda a chave antiga para o novo
+        # host — exige que o admin redigite a chave para o endereço novo.
+        atual.pop("api_key", None)
 
     if pid == CUSTOM and not atual.get("base_url"):
         raise ProvedorInvalido("Informe a URL base do provedor customizado.")
