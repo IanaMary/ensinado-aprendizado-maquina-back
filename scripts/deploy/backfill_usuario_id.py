@@ -83,8 +83,11 @@ async def main(apply: bool) -> int:
     ):
         dono = str(p["user_id"])
         rt = p.get("resultadoTreinamento") or {}
+        if not isinstance(rt, dict):
+            continue
         for k in rt:
-            mid = (rt.get(k) or {}).get("id")
+            v = rt.get(k)
+            mid = v.get("id") if isinstance(v, dict) else None
             if mid and str(mid) not in donos:
                 donos[str(mid)] = dono
     via_pipeline = len(donos) - via_mlflow
