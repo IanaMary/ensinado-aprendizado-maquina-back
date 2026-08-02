@@ -203,7 +203,10 @@ db.modelos.insertMany([
         hiperparametros: [
             { nomeHiperparametro: "n_components", valorPadrao: 2 }
         ],
-        metricas: ["silhouette_score", "calinski_harabasz_score", "davies_bouldin_score"]
+        // Sem métricas compatíveis: o PCA transforma os dados (tem `transform`, não
+        // `predict`), então não produz rótulo de cluster. As métricas de agrupamento
+        // estavam listadas aqui por engano e quebravam a avaliação.
+        metricas: []
     },
     {
         label: "SVM Linear",

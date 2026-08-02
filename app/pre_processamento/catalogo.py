@@ -17,6 +17,8 @@ Campos de cada entrada:
   ou "colunas_escolhidas" (só roda se o aluno indicar colunas — ex.: encoders).
 - trata_ausentes: True quando o transformer preenche NaN (libera a checagem dura
   de valores ausentes no treino).
+- codifica_categoricas: True quando o transformer converte texto em número (libera
+  a checagem de coluna não-numérica em X, ver `colunas_codificadas`).
 """
 from __future__ import annotations
 
@@ -78,6 +80,7 @@ PRE_PROCESSAMENTO_CATALOGO: Dict[str, Dict[str, Any]] = {
         "hiperparametros": {"sparse_output": False, "handle_unknown": "ignore"},
         "escopo": "transform_X",
         "aplica_em": "colunas_escolhidas",
+        "codifica_categoricas": True,
     },
     "ordinal_encoder": {
         "modulo": "sklearn.preprocessing",
@@ -85,6 +88,7 @@ PRE_PROCESSAMENTO_CATALOGO: Dict[str, Dict[str, Any]] = {
         "hiperparametros": {"handle_unknown": "use_encoded_value", "unknown_value": -1},
         "escopo": "transform_X",
         "aplica_em": "colunas_escolhidas",
+        "codifica_categoricas": True,
     },
     "label_encoder": {
         "modulo": "sklearn.preprocessing",
@@ -115,6 +119,17 @@ PRE_PROCESSAMENTO_CATALOGO: Dict[str, Dict[str, Any]] = {
         "modulo": "sklearn.preprocessing",
         "classe": "PowerTransformer",
         "hiperparametros": {"method": "yeo-johnson"},
+        "escopo": "transform_X",
+        "aplica_em": "todas",
+    },
+    # PCA vive hoje na raia de MODELOS, como aprendizado não supervisionado. Esta
+    # entrada é o preparo para ele também ser oferecido como redução de
+    # dimensionalidade antes do estimador: o seed a insere com `habilitado: false`,
+    # então nada muda na tela do aluno até o admin ligar no conf-pipeline.
+    "pca": {
+        "modulo": "sklearn.decomposition",
+        "classe": "PCA",
+        "hiperparametros": {"n_components": 2},
         "escopo": "transform_X",
         "aplica_em": "todas",
     },
@@ -229,3 +244,25 @@ def tem_imputer(
         if base and base.get("trata_ausentes"):
             return True
     return False
+
+
+def colunas_codificadas(
+    itens: Optional[List[Dict[str, Any]]],
+    catalogo: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> set:
+    """Colunas que algum encoder escolhido vai converter de texto para número.
+
+    Serve à checagem de X não-numérico no treino: uma coluna de texto só chega ao
+    estimador se NINGUÉM a codificar antes. Espelha `tem_imputer`, que faz o mesmo
+    para valores ausentes.
+
+    Os encoders são todos `aplica_em: "colunas_escolhidas"`, então a cobertura é
+    sempre explícita — não existe "codifica tudo".
+    """
+    catalogo = catalogo if catalogo is not None else PRE_PROCESSAMENTO_CATALOGO
+    cobertas: set = set()
+    for item in itens or []:
+        base = catalogo.get((item or {}).get("valor"))
+        if base and base.get("codifica_categoricas"):
+            cobertas.update(c for c in ((item or {}).get("colunas") or []) if c)
+    return cobertas

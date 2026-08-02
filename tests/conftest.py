@@ -160,6 +160,10 @@ def mock_db(mock_user):
         patch("app.routers.treinamento_base.configuracoes_treinamento", mock_config),
         patch("app.routers.treinamento_base.opcoes_modelos", mock_modelos),
         patch("app.routers.treinamento_base.modelos_treinados", mock_modelos),
+        # Sem este patch, todo teste que envia `pre_processamento` no payload buscava
+        # os overrides no Mongo REAL (o treino consulta a coleção só quando há itens),
+        # e a suíte tentava conectar em localhost:27017.
+        patch("app.routers.treinamento_base.opcoes_pre_processamento", mock_pipeline),
         patch("app.routers.toy_datasets.arquivos", mock_arquivos),
         patch("app.routers.toy_datasets.configuracoes_treinamento", mock_config),
         patch("app.routers.chat_tutor.configuracoes_tutor", _make_mock_collection()),

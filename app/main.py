@@ -23,6 +23,7 @@ from app.routers import naive_bayes
 from app.routers import mlp
 from app.routers import qda
 from app.routers import kmeans
+from app.routers import pca
 from app.routers import ridge
 from app.routers import regressao_polinomial
 from app.routers import quantile
@@ -108,6 +109,7 @@ app.include_router(naive_bayes.router, prefix="/classificador/treinamento", depe
 app.include_router(mlp.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(qda.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(kmeans.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
+app.include_router(pca.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(ridge.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(regressao_polinomial.router, prefix="/classificador/treinamento", dependencies=auth_dependency)
 app.include_router(quantile.router, prefix="/classificador/treinamento", dependencies=auth_dependency)

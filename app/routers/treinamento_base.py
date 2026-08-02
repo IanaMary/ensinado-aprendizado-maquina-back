@@ -21,6 +21,7 @@ from app.funcoes_genericas.validacao import validar_object_id, MAX_ARQUIVO_BASE6
 from app.pre_processamento import (
     PRE_PROCESSAMENTO_CATALOGO,
     catalogo_com_overrides,
+    colunas_codificadas,
     modulo_permitido,
     montar_specs_pre_processamento,
     tem_imputer,
@@ -30,6 +31,41 @@ from app.pre_processamento.catalogo import _hiper_para_dict
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+
+def _ajustar_colunas_pre_processamento(
+    specs: List[dict], colunas_de_X: List[str]
+) -> tuple[List[dict], List[str]]:
+    """Descarta, de cada etapa, as colunas que não existem em X, e a etapa que ficar
+    sem nenhuma. Devolve ``(specs, avisos)``.
+
+    Só o router pode fazer isso: `montar_specs_pre_processamento` é pura e não conhece
+    o dataframe. Uma etapa sem `colunas` atua sobre todas as features e passa intacta.
+    """
+    disponiveis = set(colunas_de_X)
+    ajustados: List[dict] = []
+    avisos: List[str] = []
+    for spec in specs:
+        colunas = spec.get("colunas") or []
+        if not colunas:
+            ajustados.append(spec)
+            continue
+        mantidas = [c for c in colunas if c in disponiveis]
+        perdidas = [c for c in colunas if c not in disponiveis]
+        nome = spec.get("valor") or spec.get("classe") or "pré-processamento"
+        if perdidas:
+            fora = ", ".join(f"'{c}'" for c in perdidas)
+            if mantidas:
+                avisos.append(
+                    f"{nome}: {fora} não está entre os atributos do treino e foi ignorada."
+                )
+            else:
+                avisos.append(
+                    f"{nome} foi ignorado: {fora} não está entre os atributos do treino."
+                )
+        if mantidas:
+            ajustados.append({**spec, "colunas": mantidas})
+    return ajustados, avisos
 
 
 async def treinar_modelo_generico(
@@ -108,8 +144,13 @@ async def treinar_modelo_generico(
     atributos: List[str] = [k for k, v in conf_doc.get("atributos", {}).items() if v]
     target: str = conf_doc.get("target")
 
-    # Verificar se é clustering (sem target)
-    is_clustering = target is None or target == ""
+    # Não supervisionado quando não há alvo OU quando o MODELO é não supervisionado.
+    # Só olhar o alvo não bastava: escolhendo K-Means/PCA sobre uma base rotulada, o
+    # treino ia pelo caminho supervisionado e passava um y que esses estimadores não
+    # usam. O catálogo já declara isso em `dados_rotulados` (false p/ k_means e pca);
+    # ausente = supervisionado, que é o padrão dos outros 22.
+    modelo_nao_supervisionado = modelo_doc.get("dados_rotulados") is False
+    is_clustering = target is None or target == "" or modelo_nao_supervisionado
 
     # Pré-processamento escolhido no pipeline gráfico. Resolvido contra o catálogo
     # canônico (com overrides de execucao vindos de db.pre_processamento, p/ que
@@ -156,6 +197,35 @@ async def treinar_modelo_generico(
             raise HTTPException(status_code=400, detail=f"Coluna '{col}' não encontrada nos dados de treino.")
     
     X_train = df[atributos]
+
+    # Pré-processador apontando para coluna que não está em X: acontece quando o aluno
+    # configura a etapa e depois desmarca o atributo (ou escolhe o alvo, que não entra
+    # em X). Antes isso virava 500 do sklearn ("A given column is not a column of the
+    # dataframe") lá dentro do sandbox. Agora descartamos a coluna, pulamos a etapa que
+    # ficar vazia e AVISAMOS — mesmo contrato do `aviso_estratificacao` da divisão.
+    pre_proc_specs, avisos_pre_proc = _ajustar_colunas_pre_processamento(
+        pre_proc_specs, list(X_train.columns)
+    )
+
+    # Coluna de texto chegando ao estimador: sem alvo (modo exploratório) TODAS as
+    # colunas marcadas viram atributos, inclusive as categóricas, e o sklearn quebra
+    # com "could not convert string to float". Só é problema se ninguém a codificar.
+    codificadas = colunas_codificadas(pre_proc_itens, pre_proc_catalogo)
+    nao_numericas = [
+        c for c in X_train.columns
+        if not pd.api.types.is_numeric_dtype(X_train[c]) and c not in codificadas
+    ]
+    if nao_numericas:
+        nomes = ", ".join(f"'{c}'" for c in nao_numericas)
+        plural = "s" if len(nao_numericas) > 1 else ""
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"A{plural} coluna{plural} {nomes} contém texto, e o modelo só aceita números. "
+                "Desmarque-a nos atributos ou aplique um codificador "
+                "(OneHotEncoder ou OrdinalEncoder) sobre ela no pré-processamento."
+            ),
+        )
 
     # Verificar valores ausentes — liberado quando há um imputer no pipeline,
     # que justamente preenche esses valores durante o fit.
@@ -294,6 +364,8 @@ async def treinar_modelo_generico(
         "nome_modelo": modelo_doc.get('label'),
         "id": id_result,
         "mlflow_run_id": mlflow_run_id,
+        # O que o servidor teve de ignorar no pré-processamento (vazio = nada).
+        "aviso_pre_processamento": avisos_pre_proc,
     })
 
 

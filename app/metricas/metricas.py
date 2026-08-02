@@ -667,6 +667,19 @@ async def avaliar_modelos(request: AvaliacaoModelosRequest):
         is_clustering = not target or target == ""
 
         if is_clustering:
+            # Nem todo não supervisionado agrupa: o PCA transforma os dados (tem
+            # `transform`, não `predict`), então não há rótulo de cluster para medir.
+            # Sem esta guarda o `predict` abaixo estourava AttributeError → 500.
+            if not hasattr(modelo_treinado, "predict"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"O modelo {nome_modelo} transforma os dados em vez de agrupá-los, "
+                        "então não produz rótulos e as métricas de agrupamento não se aplicam. "
+                        "Use o modelo treinado para reduzir a dimensionalidade dos dados."
+                    ),
+                )
+
             # Avaliação de clustering
             labels = modelo_treinado.predict(X_test)
 

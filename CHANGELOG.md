@@ -8,6 +8,56 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-08-02b (treinamento: K-Means, KNN, Árvore e PCA voltam a treinar)
+
+> Imagem 9 da revisão da banca: "só o AdaBoost executa". Não era impressão — os logs de produção
+> de 01/08 (18:20–18:36) registram as falhas. São **três defeitos distintos**, e os três foram
+> reproduzidos localmente com o Wine, no mesmo caminho de código, antes de qualquer correção.
+> Suíte 628 passed, 1 skipped (5 casos novos).
+>
+> **Não são regressão da auditoria de segurança:** as falhas são das 18h e aquele deploy foi às
+> 20h35. São defeitos antigos que a banca encontrou por testar caminhos que a suíte não cobria.
+
+### Corrigido — coluna de texto chegando ao estimador (era 500)
+`ValueError: could not convert string to float: 'class_2'`, no K-Means. Sem alvo (modo
+exploratório) **todas** as colunas marcadas viram atributos, inclusive a coluna categórica.
+Agora `treinamento_base` recusa com **400 que ensina**: nomeia a coluna e dá as duas saídas
+(desmarcar o atributo ou aplicar OneHot/Ordinal sobre ela). A checagem consulta o novo
+`colunas_codificadas` (`app/pre_processamento/catalogo.py`), que espelha o `tem_imputer`: só é
+problema se **ninguém** codificar a coluna.
+
+### Corrigido — pré-processador apontando para coluna fora de X (era 500)
+`ValueError: A given column is not a column of the dataframe`, no KNN e na Árvore. Acontece quando
+o aluno configura a etapa e depois desmarca o atributo, ou escolhe o alvo (que não entra em X).
+Agora o servidor descarta a coluna, pula a etapa que ficar vazia, **treina** e devolve
+`aviso_pre_processamento` — mesmo contrato do `aviso_estratificacao` da divisão. No front, o alvo
+deixou de ser ofertado nos **dois** ramos de `carregarColunas` (antes só um filtrava).
+
+### Corrigido — PCA sem caminho de execução (era 400)
+Único dos 24 modelos sem router literal: caía na rota genérica, que exige o bloco `execucao` no
+documento — ausente nos modelos semeados em produção. Novo `app/routers/pca.py`, no formato do
+`kmeans.py`. Router em código, e **não** backfill de `execucao` no banco: é determinístico e não
+depende do estado do Mongo (o `CLAUDE.md` já adverte contra backfillar `execucao` às cegas).
+
+### Corrigido — modelo não supervisionado sobre base rotulada
+`is_clustering` era derivado só da ausência de alvo. Escolher K-Means ou PCA sobre uma base com
+alvo levava o treino pelo caminho supervisionado. Agora também considera o modelo: o catálogo já
+declara `dados_rotulados: false` para os dois. Ausente = supervisionado (o padrão dos outros 22).
+
+### Corrigido — avaliação do PCA (seria o próximo 500)
+O PCA tem `transform`, não `predict`: as métricas de agrupamento que o catálogo oferecia a ele
+quebrariam logo depois do treino. Guarda em `metricas.py` devolve **400 explicando** que o modelo
+transforma em vez de agrupar, e o seed passou a dar ao PCA `metricas: []`.
+
+### Preparo (sem efeito hoje)
+Entrada de PCA no catálogo canônico de pré-processamento (`sklearn.decomposition.PCA`, escopo
+`transform_X`), para no futuro ser oferecido como redução de dimensionalidade antes do estimador.
+
+### Testes — lacuna do harness fechada
+`tests/conftest.py` não mockava `treinamento_base.opcoes_pre_processamento`: **todo** teste que
+enviasse `pre_processamento` no payload consultava o Mongo **real** e a suíte tentava conectar em
+`localhost:27017`. Por isso não havia teste de rota com pré-processamento.
+
 ## 2026-08-02 (acentuação de mensagens visíveis ao usuário)
 
 > Continuação da varredura ortográfica pedida na revisão da banca (ver changelog do frontend).
