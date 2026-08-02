@@ -8,6 +8,20 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-08-02 (acentuação de mensagens visíveis ao usuário)
+
+> Continuação da varredura ortográfica pedida na revisão da banca (ver changelog do frontend).
+> Suíte 623 passed, 1 skipped.
+
+### Corrigido
+- **4 mensagens de erro sem acento** em `app/routers/toy_datasets.py`: `"Dataset '…' nao
+  encontrado"` (3×, HTTP 404) e `"Biblioteca nao instalada"` (HTTP 500) → **`não`**. O `detail`
+  destas exceções chega ao aluno como toast pelo `ErrorInterceptor`, então é texto de interface.
+- **Não** foram tocadas as mensagens que citam nomes de campo do contrato JSON — `execucao`,
+  `execucao.modulo`, `funcao`, `hiperparametros` em `conf_pipeline.py` e `treinamento_base.py`.
+  Ali a palavra sem acento **é o nome da chave** que o cliente precisa enviar; acentuar tornaria a
+  mensagem errada.
+
 ## 2026-08-01 (auditoria de segurança Mantis — 26 correções + 3 cadeias quebradas)
 
 > Campanha defensiva completa (plan → research → review → critic → calibrate → reproduce →

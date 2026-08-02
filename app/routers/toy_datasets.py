@@ -53,7 +53,7 @@ async def conteudo_dataset(dataset_name: str):
     """
     ds = get_dataset_config(dataset_name)
     if ds is None:
-        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' nao encontrado")
+        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' não encontrado")
     return ds.conteudo_card()
 
 
@@ -69,7 +69,7 @@ async def perfil_desafio_dataset(
     """
     perfil = perfil_do_dataset(dataset_name)
     if perfil is None:
-        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' nao encontrado")
+        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' não encontrado")
     return perfil
 
 
@@ -87,7 +87,7 @@ async def carregar_dataset(
     """Carrega um dataset e retorna no formato esperado pelo frontend."""
     ds = get_dataset_config(dataset_name)
     if ds is None:
-        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' nao encontrado")
+        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' não encontrado")
 
     # Aplicar seed se fornecido
     if seed is not None:
@@ -232,6 +232,6 @@ async def carregar_dataset(
         # extraído preserva esse status (o except genérico abaixo devolveria 500).
         raise HTTPException(status_code=400, detail=str(e))
     except ImportError as e:
-        raise HTTPException(status_code=500, detail=f"Biblioteca nao instalada: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Biblioteca não instalada: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao carregar dataset: {str(e)}")
