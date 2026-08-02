@@ -210,11 +210,15 @@ async def turmas_do_aluno(usuario: dict = Depends(get_usuario_atual)):
 
 @router.get("/minhas/desafios")
 async def desafios_do_aluno(usuario: dict = Depends(get_usuario_atual)):
-    """Desafios de montagem de TODAS as turmas do aluno, com o histórico dele em cada um.
+    """Atividades de TODAS as turmas do aluno — montagem **e pipeline** —, com o histórico dele.
 
-    Existe para o aluno descobrir os desafios sem procurar turma por turma: uma chamada só,
+    Existe para o aluno descobrir as atividades sem procurar turma por turma: uma chamada só,
     porque quem consome é a Área de Trabalho (a tela mais crítica do sistema) — 1+N
     requisições ali atrasariam o carregamento do pipeline.
+
+    **Passou a incluir `tipo: 'pipeline'`** (antes só montagem): o pipeline sugerido pelo professor
+    não aparecia no aviso do topo, e o aluno só o achava pelo avatar → Turmas (apontado pela banca,
+    Imagem 14). O campo `tipo` na resposta diz ao front para onde levar cada um.
 
     Nunca inclui `gabarito` (ele resolveria o desafio).
     """
@@ -224,15 +228,23 @@ async def desafios_do_aluno(usuario: dict = Depends(get_usuario_atual)):
         return []
     nome_por_turma = {str(t["_id"]): t.get("nome") for t in minhas}
     cur = atividades.find(
-        {"turma_id": {"$in": list(nome_por_turma.keys())}, "tipo": TIPO_MONTAGEM}
+        {
+            "turma_id": {"$in": list(nome_por_turma.keys())},
+            "tipo": {"$in": [TIPO_MONTAGEM, TIPO_PIPELINE]},
+        }
     ).sort("criado_em", -1)
     resultado = []
     async for a in cur:
-        hist = await _historico_montagem(str(a["_id"]), uid)
+        aid = str(a["_id"])
+        tipo = a.get("tipo") or TIPO_MONTAGEM
+        hist = (await _historico_montagem(aid, uid) if tipo == TIPO_MONTAGEM
+                else await _historico_pipeline(aid, uid))
         resultado.append({
-            "atividade_id": str(a["_id"]),
+            "atividade_id": aid,
+            "tipo": tipo,
             "titulo": a.get("titulo"),
             "descricao": a.get("descricao"),
+            "dataset": a.get("dataset"),
             "turma_id": a.get("turma_id"),
             "turma_nome": nome_por_turma.get(a.get("turma_id")),
             **hist,
@@ -404,6 +416,21 @@ async def _atividade_de_montagem(turma_id: str, atividade_id: str, usuario: dict
     if not a or (a.get("tipo") or TIPO_PIPELINE) != TIPO_MONTAGEM:
         raise HTTPException(status_code=404, detail="Desafio não encontrado.")
     return t, a
+
+
+async def _historico_pipeline(atividade_id: str, user_id: str) -> dict:
+    """Entregas do aluno numa atividade de pipeline: a submissão é o próprio pipeline salvo.
+
+    Devolve as MESMAS chaves do histórico de montagem (`tentativas`/`melhor_nota`) para o front
+    tratar os dois tipos igual; pipeline não tem nota automática, então `melhor_nota` é sempre None.
+    """
+    try:
+        total = await pipelines.count_documents(
+            {"atividade_id": atividade_id, "user_id": user_id}
+        )
+    except Exception:
+        total = 0
+    return {"tentativas": total, "melhor_nota": None}
 
 
 async def _historico_montagem(atividade_id: str, user_id: str) -> dict:

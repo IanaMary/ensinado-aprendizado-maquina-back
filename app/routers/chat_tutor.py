@@ -208,6 +208,57 @@ async def listar_modelos(usuario=Depends(exigir_admin_ou_professor)):
 
 
 # ============================================================
+# CADEIA DE MODELOS (fallback quando o escolhido não atende)
+# ============================================================
+# O catálogo `/models` do provedor lista modelos que a CONTA pode não ter liberado: a listagem
+# passa, mas a inferência devolve `404 ... Not found for account`. Foi o que derrubou o tutor em
+# 01/08 com o `moonshotai/kimi-k2.6` — toda pergunta virava "O tutor retornou erro".
+#
+# Só trocamos de modelo em falha de DISPONIBILIDADE (404 / 5xx / timeout / rede). Em 401/403 não
+# adianta: a chave é a mesma para todos, e cair para o próximo só esconderia o problema real.
+_FALLBACK_TTL = 600  # 10 min sem re-tentar um modelo que acabou de falhar
+_modelos_ruins: dict = {}   # { (base_url, model_id): timestamp_da_falha }
+
+
+def _marcar_ruim(base_url: str, modelo: str) -> None:
+    _modelos_ruins[(base_url, modelo)] = time.time()
+
+
+def _esta_ruim(base_url: str, modelo: str) -> bool:
+    quando = _modelos_ruins.get((base_url, modelo))
+    if quando is None:
+        return False
+    if time.time() - quando > _FALLBACK_TTL:
+        _modelos_ruins.pop((base_url, modelo), None)
+        return False
+    return True
+
+
+def cadeia_de_modelos(provedor: dict) -> list:
+    """Ordem de tentativa: o modelo escolhido primeiro, depois os fallbacks do provedor.
+
+    Um modelo que falhou há pouco vai para o FIM em vez de sair da lista: se todos estiverem
+    marcados, ainda tentamos — melhor uma tentativa a mais que recusar sem tentar.
+    """
+    vistos, ordenados = set(), []
+    for m in [provedor.get("modelo"), *(provedor.get("fallbacks") or [])]:
+        m = (m or "").strip()
+        if m and m not in vistos:
+            vistos.add(m)
+            ordenados.append(m)
+    base_url = provedor.get("base_url") or ""
+    saudaveis = [m for m in ordenados if not _esta_ruim(base_url, m)]
+    suspeitos = [m for m in ordenados if _esta_ruim(base_url, m)]
+    return saudaveis + suspeitos
+
+
+def _vale_tentar_outro(status: int) -> bool:
+    """404 = modelo não existe/não liberado; 5xx = provedor instável. Ambos mudam com o modelo.
+    401/403 (chave) e 429 (limite de taxa) não mudam — trocar de modelo não resolveria."""
+    return status == 404 or status >= 500
+
+
+# ============================================================
 # HEALTH-CHECK DOS MODELOS LLM (testa em segundo plano + cache)
 # ============================================================
 _SAUDE_TTL = 1800  # 30 min: evita re-testar a cada abertura da tela
@@ -668,8 +719,7 @@ async def chat_tutor(request: ChatTutorRequest, usuario: dict = Depends(get_usua
     if len(mensagens) == 1:
         raise HTTPException(status_code=400, detail="Envie ao menos uma mensagem do usuário.")
 
-    payload = {
-        "model": modelo,
+    payload_base = {
         "messages": mensagens,
         "temperature": TEMPERATURA,
         "max_tokens": max_tokens_resposta(request.contexto),
@@ -691,26 +741,54 @@ async def chat_tutor(request: ChatTutorRequest, usuario: dict = Depends(get_usua
             erro=erro,
         )
 
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{provedor['base_url']}/chat/completions",
-                headers=prov.cabecalhos(provedor),
-                json=payload,
-            )
-    except httpx.TimeoutException:
-        await _logar("erro", erro="timeout")
-        raise HTTPException(status_code=504, detail="O tutor demorou demais para responder. Tente de novo.")
-    except httpx.HTTPError as e:
-        logger.warning("Falha de rede ao chamar o provedor de LLM: %s", type(e).__name__)
-        await _logar("erro", erro=f"rede: {type(e).__name__}")
-        raise HTTPException(status_code=502, detail="Não consegui falar com o tutor agora. Tente novamente.")
+    cadeia = cadeia_de_modelos(provedor)
+    resp = None
+    ultimo_erro = "sem modelos configurados"
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for candidato in cadeia:
+            try:
+                r = await client.post(
+                    f"{provedor['base_url']}/chat/completions",
+                    headers=prov.cabecalhos(provedor),
+                    json={**payload_base, "model": candidato},
+                )
+            except httpx.TimeoutException:
+                _marcar_ruim(provedor["base_url"], candidato)
+                ultimo_erro = "timeout"
+                continue
+            except httpx.HTTPError as e:
+                logger.warning("Falha de rede ao chamar o provedor de LLM: %s", type(e).__name__)
+                _marcar_ruim(provedor["base_url"], candidato)
+                ultimo_erro = f"rede: {type(e).__name__}"
+                continue
+
+            if r.status_code == 200:
+                resp, modelo = r, candidato
+                break
+
+            ultimo_erro = f"http {r.status_code}"
+            # Nao propagar corpo bruto do provedor (pode conter detalhes sensiveis).
+            logger.warning("Modelo %s respondeu %s", candidato, r.status_code)
+            if not _vale_tentar_outro(r.status_code):
+                resp = r
+                break
+            _marcar_ruim(provedor["base_url"], candidato)
+
+    if resp is None:
+        await _logar("erro", erro=f"cadeia esgotada ({ultimo_erro})")
+        raise HTTPException(
+            status_code=502,
+            detail="Nenhum modelo do tutor respondeu agora. Tente novamente em instantes.",
+        )
 
     if resp.status_code != 200:
-        # Nao propagar corpo bruto do provedor (pode conter detalhes sensiveis).
-        logger.warning("Provedor de LLM respondeu %s", resp.status_code)
-        await _logar("erro", erro=f"http {resp.status_code}")
+        await _logar("erro", erro=ultimo_erro)
         raise HTTPException(status_code=502, detail="O tutor retornou um erro. Tente novamente em instantes.")
+
+    if modelo != provedor["modelo"]:
+        logger.warning(
+            "Modelo configurado (%s) indisponível; respondido por %s", provedor["modelo"], modelo
+        )
 
     try:
         data = resp.json()
@@ -724,11 +802,15 @@ async def chat_tutor(request: ChatTutorRequest, usuario: dict = Depends(get_usua
         logger.warning("Resposta do tutor cortada no teto de tokens (modelo=%s, %d chars)",
                        modelo, len(resposta))
     await _logar("sucesso", resposta=resposta, finish_reason=finish_reason)
-    return {"resposta": resposta}
+    # `modelo` é o que de fato respondeu — pode não ser o configurado, se a cadeia caiu.
+    return {"resposta": resposta, "modelo": modelo}
 
 
-async def _stream_llm(provedor: dict, payload: dict, *, usuario=None, modelo="", request=None):
+async def _stream_llm(provedor: dict, payload: dict, *, cadeia: list, usuario=None,
+                      modelo="", request=None):
     """Gera tokens SSE a partir do streaming do provedor ativo.
+
+    `payload` NÃO traz "model": ele é escolhido aqui, percorrendo `cadeia`.
 
     Acumula a resposta para registrar a atividade (fire-and-forget) ao final,
     com sucesso (resposta completa) ou erro (motivo)."""
@@ -739,43 +821,77 @@ async def _stream_llm(provedor: dict, payload: dict, *, usuario=None, modelo="",
     completou = False  # vira True só quando o stream termina normalmente
     inicio = time.perf_counter()
     try:
+        # A troca de modelo só é possível ANTES do primeiro byte: depois de começar a emitir tokens,
+        # recomeçar com outro modelo daria uma resposta remendada. Por sorte a falha que nos interessa
+        # (404 do modelo não liberado) vem no status, antes de qualquer chunk.
+        emitiu = False
         async with httpx.AsyncClient(timeout=120.0) as client:
-            async with client.stream(
-                "POST",
-                f"{provedor['base_url']}/chat/completions",
-                headers=prov.cabecalhos(provedor),
-                json=payload,
-            ) as resp:
-                if resp.status_code != 200:
-                    logger.warning("Stream do provedor de LLM respondeu %s", resp.status_code)
-                    status_final, erro_final = "erro", f"http {resp.status_code}"
-                    yield f"data: {json.dumps({'error': 'O tutor retornou um erro.'})}\n\n"
-                    return
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data: "):
-                        continue
-                    data_str = line[6:]
-                    if data_str.strip() == "[DONE]":
-                        completou = True
-                        yield "data: [DONE]\n\n"
+            for candidato in cadeia:
+                if emitiu:
+                    break
+                try:
+                    async with client.stream(
+                        "POST",
+                        f"{provedor['base_url']}/chat/completions",
+                        headers=prov.cabecalhos(provedor),
+                        json={**payload, "model": candidato},
+                    ) as resp:
+                        if resp.status_code != 200:
+                            logger.warning("Stream do modelo %s respondeu %s", candidato, resp.status_code)
+                            status_final, erro_final = "erro", f"http {resp.status_code}"
+                            if _vale_tentar_outro(resp.status_code):
+                                _marcar_ruim(provedor["base_url"], candidato)
+                                continue  # tenta o próximo da cadeia
+                            yield f"data: {json.dumps({'error': 'O tutor retornou um erro.'})}\n\n"
+                            return
+
+                        if candidato != modelo:
+                            logger.warning(
+                                "Modelo configurado (%s) indisponível; stream por %s", modelo, candidato
+                            )
+                            modelo = candidato
+                        # A partir daqui não há volta: os tokens começam a sair.
+                        emitiu = True
+                        status_final, erro_final = "sucesso", None
+
+                        async for line in resp.aiter_lines():
+                            if not line.startswith("data: "):
+                                continue
+                            data_str = line[6:]
+                            if data_str.strip() == "[DONE]":
+                                completou = True
+                                yield "data: [DONE]\n\n"
+                                return
+                            try:
+                                chunk = json.loads(data_str)
+                                finish_reason = chunk["choices"][0].get("finish_reason") or finish_reason
+                                delta = chunk["choices"][0].get("delta", {})
+                                token = delta.get("content", "")
+                                if token:
+                                    acumulado.append(token)
+                                    yield f"data: {json.dumps({'token': token})}\n\n"
+                            except (json.JSONDecodeError, KeyError, IndexError):
+                                continue
+                        completou = True  # o stream terminou sem [DONE] explícito
                         return
-                    try:
-                        chunk = json.loads(data_str)
-                        finish_reason = chunk["choices"][0].get("finish_reason") or finish_reason
-                        delta = chunk["choices"][0].get("delta", {})
-                        token = delta.get("content", "")
-                        if token:
-                            acumulado.append(token)
-                            yield f"data: {json.dumps({'token': token})}\n\n"
-                    except (json.JSONDecodeError, KeyError, IndexError):
-                        continue
-                completou = True  # o stream terminou sem [DONE] explícito
-    except httpx.TimeoutException:
-        status_final, erro_final = "erro", "timeout"
-        yield f"data: {json.dumps({'error': 'O tutor demorou demais para responder.'})}\n\n"
-    except httpx.HTTPError as e:
-        status_final, erro_final = "erro", f"rede: {type(e).__name__}"
-        yield f"data: {json.dumps({'error': 'Não consegui falar com o tutor agora.'})}\n\n"
+                except httpx.TimeoutException:
+                    status_final, erro_final = "erro", "timeout"
+                    if emitiu:
+                        yield f"data: {json.dumps({'error': 'O tutor demorou demais para responder.'})}\n\n"
+                        return
+                    _marcar_ruim(provedor["base_url"], candidato)
+                    continue
+                except httpx.HTTPError as e:
+                    status_final, erro_final = "erro", f"rede: {type(e).__name__}"
+                    if emitiu:
+                        yield f"data: {json.dumps({'error': 'Não consegui falar com o tutor agora.'})}\n\n"
+                        return
+                    _marcar_ruim(provedor["base_url"], candidato)
+                    continue
+
+        # Nenhum modelo da cadeia respondeu.
+        if not emitiu:
+            yield f"data: {json.dumps({'error': 'Nenhum modelo do tutor respondeu agora.'})}\n\n"
     finally:
         # Cliente desconectou no meio do stream (GeneratorExit): não foi sucesso.
         if status_final == "sucesso" and not completou:
@@ -828,7 +944,6 @@ async def chat_tutor_stream(request: ChatTutorRequest, usuario: dict = Depends(g
         raise HTTPException(status_code=400, detail="Envie ao menos uma mensagem do usuário.")
 
     payload = {
-        "model": modelo,
         "messages": mensagens,
         "temperature": TEMPERATURA,
         "max_tokens": max_tokens_resposta(request.contexto),
@@ -836,7 +951,8 @@ async def chat_tutor_stream(request: ChatTutorRequest, usuario: dict = Depends(g
     }
 
     return StreamingResponse(
-        _stream_llm(provedor, payload, usuario=usuario, modelo=modelo, request=request),
+        _stream_llm(provedor, payload, cadeia=cadeia_de_modelos(provedor),
+                    usuario=usuario, modelo=modelo, request=request),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

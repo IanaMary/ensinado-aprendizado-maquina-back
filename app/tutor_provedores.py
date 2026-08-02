@@ -47,6 +47,14 @@ CATALOGO: Dict[str, Dict[str, Any]] = {
         "base_url": os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
         "env_chave": "NVIDIA_API_KEY",
         "modelo_padrao": os.getenv("NVIDIA_MODEL", "meta/llama-3.3-70b-instruct"),
+        # Rede de segurança quando o modelo escolhido não atende: o catálogo `/models` da NVIDIA
+        # lista modelos que a CONTA pode não ter liberado, e aí a inferência devolve
+        # `404 Function ... Not found for account` — foi o que derrubou o tutor em 01/08 com o
+        # `moonshotai/kimi-k2.6`. Estes dois foram medidos respondendo 200 nesta conta.
+        "fallbacks": [
+            "deepseek-ai/deepseek-v4-flash",
+            "meta/llama-3.1-8b-instruct",
+        ],
         "todos_gratuitos": True,
         "editavel": False,      # base_url e chave vêm do .env
         "exige_chave": True,
@@ -186,6 +194,8 @@ async def provedor_vigente() -> Dict[str, Any]:
         "base_url": (salvo.get("base_url") or base["base_url"] or "").rstrip("/"),
         "api_key": api_key,
         "modelo": modelo,
+        # Modelos a tentar se o escolhido não atender (ver `fallbacks` no CATALOGO).
+        "fallbacks": list(base.get("fallbacks") or []),
         "todos_gratuitos": base["todos_gratuitos"],
         "exige_chave": base["exige_chave"],
     }

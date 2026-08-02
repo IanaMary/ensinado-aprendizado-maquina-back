@@ -238,3 +238,117 @@ class TestSaudeModelos:
         out = await _testar_modelo(cliente, _PROVEDOR, "minimaxai/minimax-m3")
         assert out["responde"] is False
         assert "DEGRADED" in out["erro"]
+
+
+def _fixar_modelo_nvidia(monkeypatch, modelo: str):
+    """Fixa o modelo ATIVO da NVIDIA. Não dá para usar `setenv("NVIDIA_MODEL", ...)`: o catálogo
+    resolve o `modelo_padrao` na importação do módulo."""
+    from app import tutor_provedores as prov
+    base = dict(prov.CATALOGO[prov.NVIDIA])
+    base["modelo_padrao"] = modelo
+    monkeypatch.setitem(prov.CATALOGO, prov.NVIDIA, base)
+
+
+def _mock_client_por_modelo(respostas: dict, registro: list):
+    """AsyncClient falso que responde conforme o modelo pedido.
+
+    `respostas` mapeia model_id -> (status, corpo). Cada chamada anota o modelo em `registro`,
+    para o teste afirmar a ORDEM em que a cadeia foi tentada.
+    """
+    async def _post(url, headers=None, json=None, **kw):
+        modelo = (json or {}).get("model")
+        registro.append(modelo)
+        status, corpo = respostas.get(modelo, (404, {"detail": "Not found for account"}))
+        resp = MagicMock()
+        resp.status_code = status
+        resp.json = MagicMock(return_value=corpo)
+        return resp
+
+    client = MagicMock()
+    client.post = _post
+
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=client)
+    cm.__aexit__ = AsyncMock(return_value=False)
+    return MagicMock(return_value=cm)
+
+
+class TestCadeiaDeFallback:
+    """O modelo escolhido pode não estar liberado para a conta: a listagem `/models` passa, mas a
+    inferência devolve 404. Foi o que derrubou o tutor em 01/08 (Imagem 13 da revisão)."""
+
+    def setup_method(self):
+        from app.routers import chat_tutor
+        chat_tutor._modelos_ruins.clear()   # o cache de 10 min não pode vazar entre testes
+
+    @pytest.mark.asyncio
+    async def test_cai_para_o_proximo_quando_o_modelo_nao_esta_liberado(
+            self, client, mock_db, auth_headers, monkeypatch):
+        monkeypatch.setenv("NVIDIA_API_KEY", "chave-de-teste")
+        _fixar_modelo_nvidia(monkeypatch, "moonshotai/kimi-k2.6")
+        tentados: list = []
+        factory = _mock_client_por_modelo(
+            {
+                "moonshotai/kimi-k2.6": (404, {"detail": "Not found for account"}),
+                "deepseek-ai/deepseek-v4-flash": (200, {"choices": [{"message": {"content": "olá"}}]}),
+            },
+            tentados,
+        )
+
+        with patch("app.routers.chat_tutor.httpx.AsyncClient", factory):
+            r = await client.post("/tutor/chat", headers=auth_headers,
+                                  json={"mensagens": [{"role": "user", "content": "oi"}]})
+
+        assert r.status_code == 200
+        assert r.json()["resposta"] == "olá"
+        # respondeu, e diz QUEM respondeu — não é o configurado
+        assert r.json()["modelo"] == "deepseek-ai/deepseek-v4-flash"
+        assert tentados[0] == "moonshotai/kimi-k2.6"          # tenta o escolhido primeiro
+        assert tentados[1] == "deepseek-ai/deepseek-v4-flash"
+
+    @pytest.mark.asyncio
+    async def test_chave_invalida_nao_percorre_a_cadeia(
+            self, client, mock_db, auth_headers, monkeypatch):
+        # 401 é da CHAVE, e a chave é a mesma para todos: tentar outro modelo só esconderia o
+        # problema real e gastaria o tempo do aluno.
+        monkeypatch.setenv("NVIDIA_API_KEY", "chave-de-teste")
+        _fixar_modelo_nvidia(monkeypatch, "moonshotai/kimi-k2.6")
+        tentados: list = []
+        factory = _mock_client_por_modelo(
+            {"moonshotai/kimi-k2.6": (401, {"detail": "Unauthorized"})}, tentados
+        )
+
+        with patch("app.routers.chat_tutor.httpx.AsyncClient", factory):
+            r = await client.post("/tutor/chat", headers=auth_headers,
+                                  json={"mensagens": [{"role": "user", "content": "oi"}]})
+
+        assert r.status_code == 502
+        assert tentados == ["moonshotai/kimi-k2.6"]
+
+    @pytest.mark.asyncio
+    async def test_cadeia_esgotada_devolve_erro_claro(
+            self, client, mock_db, auth_headers, monkeypatch):
+        monkeypatch.setenv("NVIDIA_API_KEY", "chave-de-teste")
+        _fixar_modelo_nvidia(monkeypatch, "moonshotai/kimi-k2.6")
+        tentados: list = []
+        factory = _mock_client_por_modelo({}, tentados)   # tudo 404
+
+        with patch("app.routers.chat_tutor.httpx.AsyncClient", factory):
+            r = await client.post("/tutor/chat", headers=auth_headers,
+                                  json={"mensagens": [{"role": "user", "content": "oi"}]})
+
+        assert r.status_code == 502
+        assert "Nenhum modelo" in r.json()["detail"]
+        assert len(tentados) == 3   # o escolhido + os dois fallbacks da NVIDIA
+
+    def test_cadeia_poe_o_escolhido_primeiro_e_nao_repete(self):
+        from app.routers.chat_tutor import cadeia_de_modelos
+        prov = {"base_url": "http://x", "modelo": "a", "fallbacks": ["a", "b", "c"]}
+        assert cadeia_de_modelos(prov) == ["a", "b", "c"]
+
+    def test_modelo_que_acabou_de_falhar_vai_para_o_fim_mas_nao_some(self):
+        from app.routers import chat_tutor
+        prov = {"base_url": "http://x", "modelo": "a", "fallbacks": ["b"]}
+        chat_tutor._marcar_ruim("http://x", "a")
+        # 'a' continua na lista: se 'b' também estiver ruim, ainda vale tentar alguma coisa.
+        assert chat_tutor.cadeia_de_modelos(prov) == ["b", "a"]

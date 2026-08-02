@@ -98,3 +98,45 @@ class TestRotaProtegida:
             headers={"Authorization": "Bearer token-invalido"}
         )
         assert response.status_code == 401
+
+
+class TestRenovacaoDeSessao:
+    """O token dura 60 min e não era renovado: o aluno caía no meio da atividade (Imagem 10)."""
+
+    @pytest.mark.asyncio
+    async def test_renova_com_token_valido(self, client, mock_db, auth_headers):
+        r = await client.post("/login/renovar", headers=auth_headers)
+        assert r.status_code == 200
+        novo = r.json()["access_token"]
+        assert novo and r.json()["token_type"] == "bearer"
+
+        # O token novo vale de verdade e aponta para o mesmo usuário.
+        import jwt
+        from app.security import SECRET_KEY, ALGORITHM
+        atual = jwt.decode(auth_headers["Authorization"].split()[1], SECRET_KEY,
+                           algorithms=[ALGORITHM], options={"verify_exp": False})
+        renovado = jwt.decode(novo, SECRET_KEY, algorithms=[ALGORITHM])
+        assert renovado["sub"] == atual["sub"]
+        # Expira no futuro, pela regra do login. (Não comparo com o `exp` do fixture: ele usa uma
+        # data artificial lá no ano 2286, então a comparação não diria nada.)
+        from datetime import datetime, timezone
+        assert renovado["exp"] > datetime.now(timezone.utc).timestamp()
+
+    @pytest.mark.asyncio
+    async def test_sem_token_recusa(self, client, mock_db):
+        r = await client.post("/login/renovar")
+        assert r.status_code in (401, 403)
+
+    @pytest.mark.asyncio
+    async def test_token_expirado_nao_renova(self, client, mock_db):
+        # A renovação exige um access token AINDA válido — senão seria um refresh token, e um
+        # token vazado se manteria vivo para sempre.
+        import jwt
+        from datetime import datetime, timedelta, timezone
+        from app.security import SECRET_KEY, ALGORITHM
+        vencido = jwt.encode(
+            {"sub": "teste@teste.com", "exp": datetime.now(timezone.utc) - timedelta(minutes=1)},
+            SECRET_KEY, algorithm=ALGORITHM,
+        )
+        r = await client.post("/login/renovar", headers={"Authorization": f"Bearer {vencido}"})
+        assert r.status_code == 401

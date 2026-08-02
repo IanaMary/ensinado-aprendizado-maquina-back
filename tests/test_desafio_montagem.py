@@ -674,10 +674,38 @@ class TestDesafiosDoAluno:
         assert body[1]["tentativas"] == 0
         # só as turmas em que ELE é aluno entram na consulta
         assert turmas_m.find.call_args[0][0] == {"alunos": uid}
-        # e só atividades de montagem dessas turmas
+        # e as atividades dessas turmas — montagem E pipeline (o pipeline sugerido pelo
+        # professor precisa chegar ao aviso da Área de Trabalho; ver Imagem 14 da revisão)
         filtro_ativ = ativ_m.find.call_args[0][0]
-        assert filtro_ativ["tipo"] == "montagem"
+        assert set(filtro_ativ["tipo"]["$in"]) == {"montagem", "pipeline"}
         assert set(filtro_ativ["turma_id"]["$in"]) == {str(t1), str(t2)}
+
+    @pytest.mark.asyncio
+    async def test_inclui_atividade_de_pipeline_com_o_tipo(
+            self, client, mock_db, auth_headers, mock_user):
+        """O pipeline sugerido tem de vir na mesma chamada, marcado, para o aviso saber o destino."""
+        t = ObjectId()
+        a_pipe = ObjectId()
+        turmas_m = MagicMock(find=MagicMock(return_value=AsyncCursor([{"_id": t, "nome": "T"}])))
+        ativ_m = MagicMock(find=MagicMock(return_value=AsyncCursor([
+            {"_id": a_pipe, "turma_id": str(t), "tipo": "pipeline", "titulo": "Classifique o Wine",
+             "dataset": "Wine"},
+        ])))
+        subm = MagicMock(count_documents=AsyncMock(return_value=0),
+                         find=MagicMock(return_value=AsyncCursor([])))
+        pipes = MagicMock(count_documents=AsyncMock(return_value=1))
+        with patch("app.routers.turmas.turmas", turmas_m), \
+             patch("app.routers.turmas.atividades", ativ_m), \
+             patch("app.routers.turmas.submissoes_montagem", subm), \
+             patch("app.routers.turmas.pipelines", pipes):
+            r = await client.get("/turmas/minhas/desafios", headers=auth_headers)
+
+        assert r.status_code == 200
+        item = r.json()[0]
+        assert item["tipo"] == "pipeline"
+        assert item["dataset"] == "Wine"       # o aviso mostra o dataset sugerido
+        assert item["tentativas"] == 1         # já entregou uma vez (pipeline salvo)
+        assert item["melhor_nota"] is None     # pipeline não tem nota automática
 
     @pytest.mark.asyncio
     async def test_nao_vaza_gabarito(self, client, mock_db, auth_headers):

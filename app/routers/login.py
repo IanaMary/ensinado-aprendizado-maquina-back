@@ -5,13 +5,13 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from starlette.requests import Request
 
 from app.database import colecao_usuario
 from app.schemas.login import LoginRequest
 from app.schemas.usuarios import UsuarioResponse
-from app.security import verificar_senha, SECRET_KEY, ALGORITHM
+from app.security import verificar_senha, get_usuario_atual, SECRET_KEY, ALGORITHM
 
 # Carrega o .env apenas em ambiente local
 if os.getenv("RENDER") is None:
@@ -66,6 +66,30 @@ router = APIRouter()
 # =========================
 # LOGIN
 # =========================
+def _emitir_token(email: str) -> str:
+    """Assina um JWT com a validade padrão. Fonte única da regra de expiração — o `/renovar`
+    precisa emitir exatamente como o login."""
+    expira = datetime.now(timezone.utc) + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
+    return jwt.encode({"sub": email, "exp": expira}, SECRET_KEY, algorithm=ALGORITHM)
+
+
+@router.post("/login/renovar")
+async def renovar_token(usuario: dict = Depends(get_usuario_atual)):
+    """Estende a sessão de quem está usando o sistema.
+
+    O token não era renovado: o aluno era deslogado no meio de uma atividade, sem aviso
+    (apontado pela banca, Imagem 10). Com isto o front renova enquanto há interação, e a sessão
+    só cai depois de inatividade de verdade.
+
+    NÃO é um refresh token: exige um access token AINDA válido, então não amplia a janela de um
+    token vazado — só evita a queda de quem está ativo.
+    """
+    email = usuario.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="Sessão inválida.")
+    return {"access_token": _emitir_token(email), "token_type": "bearer"}
+
+
 @router.post("/login")
 async def login(request: LoginRequest, req: Request):
     # Rate limiting
@@ -110,22 +134,7 @@ async def login(request: LoginRequest, req: Request):
     )
     usuario["ultimo_acesso"] = agora
 
-    expira = datetime.now(
-        timezone.utc
-    ) + timedelta(
-        minutes=TOKEN_EXPIRE_MINUTES
-    )
-
-    payload = {
-        "sub": request.email,
-        "exp": expira
-    }
-
-    token = jwt.encode(
-        payload,
-        SECRET_KEY,
-        algorithm=ALGORITHM
-    )
+    token = _emitir_token(request.email)
 
     usuario["_id"] = str(usuario["_id"])
 

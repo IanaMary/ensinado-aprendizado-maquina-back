@@ -8,6 +8,39 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-08-02c (tutor com cadeia de fallback + renovação de sessão + pipeline do professor)
+
+> 2ª leva da revisão da banca (Imagens 10, 13 e 14). Suíte **637** passed, 1 skipped.
+
+### Corrigido — o tutor estava fora do ar (Imagem 13)
+Provedor NVIDIA com o modelo `moonshotai/kimi-k2.6`: ele **aparece** em `/models`, mas a inferência
+devolve **`404 Function … Not found for account`** — não liberado para a chave. Toda pergunta virava
+"O tutor retornou erro".
+
+Agora existe **cadeia de modelos**: `[modelo escolhido, *fallbacks do provedor]`, nos **dois**
+caminhos (stream e não-stream). NVIDIA → `deepseek-ai/deepseek-v4-flash` e
+`meta/llama-3.1-8b-instruct` (ambos medidos respondendo 200 nesta conta).
+- **Só troca de modelo em falha de disponibilidade** (404/5xx/timeout/rede). Em **401/403 não
+  troca**: a chave é a mesma para todos, e cair para o próximo esconderia o problema real.
+- No streaming a troca só é possível **antes do primeiro byte** — depois, recomeçar daria resposta
+  remendada. Dá certo porque o 404 vem no status, antes de qualquer chunk.
+- Cache de 10 min por modelo que falhou (não paga o timeout a cada pergunta). Um modelo marcado vai
+  para o **fim** da fila, não sai dela: se todos falharam, ainda vale tentar.
+- A resposta passa a dizer **qual modelo atendeu** (`{"resposta", "modelo"}`).
+
+### Adicionado — renovação de sessão (Imagem 10)
+`POST /login/renovar`: com um access token **ainda válido**, emite outro com nova expiração. O token
+durava 60 min sem renovação e o aluno caía no meio da atividade. **Não é refresh token** — exige
+token vivo, então não amplia a janela de um token vazado. A regra de expiração virou função única
+(`_emitir_token`), para o `/renovar` não divergir do `/login`.
+
+### Alterado — pipeline sugerido chega ao aviso do aluno (Imagem 14)
+`GET /turmas/minhas/desafios` filtrava `tipo: montagem`, então a **atividade de pipeline** do
+professor nunca aparecia no aviso da Área de Trabalho — o aluno só a achava pelo avatar → Turmas.
+Agora traz `{"$in": [montagem, pipeline]}`, com `tipo` e `dataset` na resposta e histórico por tipo
+(`_historico_pipeline` conta os pipelines salvos do aluno na atividade). Continua **uma chamada só**:
+o endpoint serve a tela mais crítica e 1+N requisições ali atrasariam o pipeline.
+
 ## 2026-08-02b (treinamento: K-Means, KNN, Árvore e PCA voltam a treinar)
 
 > Imagem 9 da revisão da banca: "só o AdaBoost executa". Não era impressão — os logs de produção
