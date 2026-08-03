@@ -8,6 +8,21 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-08-02d (o aviso do aluno mostra o dataset sugerido de verdade)
+
+> Defeito encontrado **testando com conta de professor**: criei uma atividade de pipeline com o
+> Wine e o campo chegava vazio ao aviso. Suíte 637 passed, 1 skipped.
+
+### Corrigido
+`GET /turmas/minhas/desafios` devolvia `dataset` lendo `a["dataset"]` — **campo que não existe** nos
+documentos de atividade. O dataset sugerido mora em **`template.datasetNome`** (é de lá que o
+`entrar-turma` já lia ao abrir a atividade), então o aviso do aluno nunca mostraria a sugestão do
+professor. Agora lê `template.datasetNome` com fallback para `dataset`.
+
+O teste que eu havia escrito em 02c passava porque **eu mesmo montei o mock com o campo errado** —
+ele confirmava a minha suposição, não o formato real do documento. Corrigido para
+`template: {datasetNome: "Wine"}`.
+
 ## 2026-08-02c (tutor com cadeia de fallback + renovação de sessão + pipeline do professor)
 
 > 2ª leva da revisão da banca (Imagens 10, 13 e 14). Suíte **637** passed, 1 skipped.

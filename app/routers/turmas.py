@@ -244,7 +244,10 @@ async def desafios_do_aluno(usuario: dict = Depends(get_usuario_atual)):
             "tipo": tipo,
             "titulo": a.get("titulo"),
             "descricao": a.get("descricao"),
-            "dataset": a.get("dataset"),
+            # O dataset sugerido vive em `template.datasetNome` — é de lá que o `entrar-turma` lê
+            # ao abrir a atividade. Ler `a["dataset"]` (que não existe) devolvia sempre None, e o
+            # aviso do aluno nunca mostraria a sugestão do professor.
+            "dataset": (a.get("template") or {}).get("datasetNome") or a.get("dataset"),
             "turma_id": a.get("turma_id"),
             "turma_nome": nome_por_turma.get(a.get("turma_id")),
             **hist,

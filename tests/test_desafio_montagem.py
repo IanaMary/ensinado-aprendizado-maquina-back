@@ -688,8 +688,10 @@ class TestDesafiosDoAluno:
         a_pipe = ObjectId()
         turmas_m = MagicMock(find=MagicMock(return_value=AsyncCursor([{"_id": t, "nome": "T"}])))
         ativ_m = MagicMock(find=MagicMock(return_value=AsyncCursor([
+            # `template.datasetNome` é onde o dataset sugerido realmente mora (é de lá que o
+            # `entrar-turma` lê); um campo `dataset` na raiz nem existe nos documentos.
             {"_id": a_pipe, "turma_id": str(t), "tipo": "pipeline", "titulo": "Classifique o Wine",
-             "dataset": "Wine"},
+             "template": {"datasetNome": "Wine"}},
         ])))
         subm = MagicMock(count_documents=AsyncMock(return_value=0),
                          find=MagicMock(return_value=AsyncCursor([])))
