@@ -29,7 +29,6 @@ UCI_IDS = {
     "adult": 2,
     "wine_quality": 186,
     "heart_disease": 45,
-    "titanic": 597,
     "abalone": 1,
     "housing": 601,
     "car_evaluation": 19,
@@ -39,6 +38,32 @@ UCI_IDS = {
     "obesity_levels": 544,
     "online_shoppers": 468,
     "heart_failure": 519,
+}
+
+
+# Datasets vindos do OpenML pelo `fetch_openml` do sklearn.
+#
+# O Titanic estava mapeado para o UCI id=597, que **nao e o Titanic**: e o "Productivity
+# Prediction of Garment Employees" (1197 linhas, colunas date/quarter/department/...), sem
+# nenhuma coluna `Survived`. Quem escolhesse "Titanic" recebia dados de producao textil e um
+# alvo inexistente. O sklearn nao tem `load_titanic`; o caminho oficial e o `fetch_openml`.
+#
+# `colunas` e o recorte que a plataforma OFERECE, e existe por dois motivos:
+#  - `boat` e `body` sao VAZAMENTO (numero do bote salva-vidas / numero do corpo recuperado
+#    determinam a sobrevivencia). Com elas o aluno acerta ~100% e nao aprende nada.
+#  - `name`, `ticket`, `cabin` e `home.dest` sao texto de altissima cardinalidade, sem uso
+#    didatico direto neste momento do curso.
+# O que resta sao as 7 features classicas, exatamente as que o catalogo ja descrevia.
+# **Ao mexer aqui, ajuste `getToyDatasetLoader` no `script-generator.service.ts`** — o script
+# exportado precisa recortar as MESMAS colunas, senao ele treina com o vazamento e devolve
+# outra metrica.
+OPENML_SPECS = {
+    "titanic": {
+        "nome": "titanic",
+        "version": 1,
+        "colunas": ["pclass", "sex", "age", "sibsp", "parch", "fare", "embarked"],
+        "target": "survived",
+    },
 }
 
 
@@ -181,6 +206,41 @@ def carregar_uci(dataset_name: str, ds: DatasetConfig = None) -> pd.DataFrame:
     return df
 
 
+def carregar_openml(dataset_name: str) -> pd.DataFrame:
+    """Carrega um dataset do OpenML via `fetch_openml` do sklearn, com cache em disco.
+
+    Mesmo contrato do `carregar_uci`: devolve o dataframe COM a coluna alvo, porque e assim
+    que `carregar_dataframe` entrega para o resto do sistema.
+    """
+    spec = OPENML_SPECS.get(dataset_name)
+    if spec is None:
+        raise DatasetNaoConfigurado(f"Dataset OpenML '{dataset_name}' nao configurado")
+
+    cache_path = CACHE_DIR / f"{dataset_name}.pkl"
+    if cache_path.exists():
+        try:
+            return pd.read_pickle(cache_path)
+        except Exception:
+            # Cache corrompido: ignora e rebaixa abaixo.
+            pass
+
+    from sklearn.datasets import fetch_openml
+    dados = fetch_openml(spec["nome"], version=spec["version"], as_frame=True)
+
+    # So as colunas oferecidas (fora o vazamento) + o alvo, na ordem do spec.
+    df = dados.data[list(spec["colunas"])].copy()
+    df[spec["target"]] = dados.target
+
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        df.to_pickle(cache_path)
+    except Exception:
+        # Falha ao gravar cache nao deve quebrar o request.
+        pass
+
+    return df
+
+
 def prewarm_uci_cache():
     """Pre-baixa todos os datasets UCI para o cache em disco.
 
@@ -188,15 +248,17 @@ def prewarm_uci_cache():
     nos restarts seguintes vira no-op rapido (cache ja em disco). Failsafe: uma
     falha de rede em um dataset apenas registra log e segue para o proximo.
     """
-    for nome in UCI_IDS:
+    baixadores = [(nome, carregar_uci, "UCI") for nome in UCI_IDS]
+    baixadores += [(nome, carregar_openml, "OpenML") for nome in OPENML_SPECS]
+    for nome, baixar, rotulo in baixadores:
         cache_path = CACHE_DIR / f"{nome}.pkl"
         if cache_path.exists():
             continue
         try:
-            carregar_uci(nome)
-            logger.info("[cache UCI] dataset baixado para o cache: %s", nome)
+            baixar(nome)
+            logger.info("[cache %s] dataset baixado para o cache: %s", rotulo, nome)
         except Exception as exc:
-            logger.warning("[cache UCI] falha ao pre-baixar '%s': %s", nome, exc)
+            logger.warning("[cache %s] falha ao pre-baixar '%s': %s", rotulo, nome, exc)
 
 
 def carregar_dataframe(dataset_name: str, ds: DatasetConfig) -> Optional[pd.DataFrame]:
@@ -206,6 +268,8 @@ def carregar_dataframe(dataset_name: str, ds: DatasetConfig) -> Optional[pd.Data
         return df
     if ds.fonte == "uci":
         return carregar_uci(dataset_name, ds)
+    if ds.fonte == "openml":
+        return carregar_openml(dataset_name)
     if ds.fonte == "gerador":
         df, _ = carregar_gerador(dataset_name, ds)
         return df

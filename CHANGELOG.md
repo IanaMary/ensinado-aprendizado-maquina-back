@@ -8,6 +8,44 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-08-03b (o dataset "Titanic" não era o Titanic)
+
+> Suíte **642** passed, 1 skipped.
+
+### Corrigido
+- **`Titanic` apontava para o UCI `id=597`, que não é o Titanic**: é o _Productivity Prediction of
+  Garment Employees_ (1197 linhas, colunas `date`/`quarter`/`department`/`team`/…), sem nenhuma
+  coluna `Survived`. O aluno que escolhesse "Titanic" recebia dados de produção têxtil e um alvo
+  inexistente. Verificado carregando os dois: `fetch_ucirepo(id=597)` devolve `(1197, 15)` com
+  aquelas colunas.
+- Agora vem do **OpenML pelo `fetch_openml` do sklearn** (`fonte="openml"`, nova
+  `carregar_openml` com o mesmo cache em disco do `carregar_uci`, e `OPENML_SPECS` no
+  `dataset_loaders.py`). São **1309 linhas × 7 features + alvo**, batendo exatamente com o que o
+  catálogo já declarava (`n_amostras=1309`, `n_features=7`) — o catálogo estava certo, o
+  carregador não. O alvo passou a ser `survived` (o nome real da coluna), no lugar de `Survived`.
+- **As colunas de vazamento ficaram de fora, de propósito:** o OpenML entrega 13 colunas,
+  incluindo `boat` (número do bote salva-vidas) e `body` (número do corpo recuperado), que
+  **determinam** a sobrevivência — oferecidas ao aluno dariam acerto quase perfeito e nenhum
+  aprendizado. Junto saíram `name`, `ticket`, `cabin` e `home.dest` (texto de altíssima
+  cardinalidade). Sobram as 7 features clássicas: `pclass`, `sex`, `age`, `sibsp`, `parch`,
+  `fare`, `embarked`.
+- O `prewarm` do startup agora aquece o cache do OpenML também, não só o do UCI.
+
+### Notas
+- **`OPENML_SPECS` é espelho de `getToyDatasetLoader` no `script-generator.service.ts`** — o
+  script exportado precisa aplicar o MESMO recorte de colunas, senão treina com o vazamento e
+  devolve outra métrica. Verificado: o `X` do script e o dataframe da plataforma são
+  **idênticos** (`DataFrame.equals`), e o script roda até o fim (981/328 na divisão 75/25).
+- O teste que quebrou (`test_uci_datasets_have_correct_fonte`, um `assert fonte == "uci"` sobre o
+  grupo inteiro) foi trocado por um que **pega a classe do bug**: exige que a `fonte` tenha
+  carregador de fato e que o dataset esteja no registro dele. Mais um teste fixa o contrato do
+  Titanic (origem, alvo e ausência das colunas de vazamento). Igualdade de string não pegaria
+  um id apontando para o dataset errado — só conferir o conteúdo pega.
+- `age` tem **263** nulos, `fare` 1 e `embarked` 2: é um bom caso para o `SimpleImputer`, e
+  `sex`/`embarked` são categóricas (o treino ensina, com 400, que precisam de codificador).
+
+---
+
 ## 2026-08-03 (a resposta do dataset de exemplo conta a divisão que o servidor fez)
 
 > Achado testando o **código exportado**: o script baixado reproduzia uma divisão diferente da que

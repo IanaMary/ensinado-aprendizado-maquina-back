@@ -101,6 +101,8 @@ class DatasetConfig:
             link = "https://scikit-learn.org/stable/datasets/toy_dataset.html"
         elif self.fonte == "uci":
             link = "https://archive.ics.uci.edu/"
+        elif self.fonte == "openml":
+            link = "https://www.openml.org/search?type=data&status=active&id=40945"
         return {
             "titulo": self.nome,
             "descricao": self.descricao,
@@ -287,11 +289,13 @@ UCI_DATASETS: Dict[str, DatasetConfig] = {
         id="titanic",
         nome="Titanic",
         descricao="Prever sobrevivência no naufrágio do Titanic com base em dados dos passageiros.",
-        fonte="uci",
+        # OpenML pelo `fetch_openml` do sklearn. Estava como UCI id=597, que **nao e o
+        # Titanic** (era produtividade de fabrica textil, sem coluna `Survived`).
+        fonte="openml",
         tipo=DatasetType.CLASSIFICATION,
         n_amostras=1309,
         n_features=7,
-        target="Survived",
+        target="survived",
         pre_split=PreSplitStatus.SINGLE,
         dificuldade="iniciante",
         descricao_target="Sobreviveu (1) ou não (0)",

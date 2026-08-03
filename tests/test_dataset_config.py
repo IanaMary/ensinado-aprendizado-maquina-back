@@ -130,10 +130,37 @@ class TestUciDatasets:
         abalone = UCI_DATASETS["abalone"]
         assert abalone.tipo == DatasetType.REGRESSION
 
-    def test_uci_datasets_have_correct_fonte(self):
-        """All UCI datasets should have fonte='uci'."""
+    def test_uci_datasets_tem_carregador_configurado(self):
+        """Todo dataset do grupo (baixados da internet) precisa de carregador configurado.
+
+        O grupo era 100% UCI, mas o Titanic passou para o OpenML (`fetch_openml` do sklearn):
+        o id 597 que ele usava **nao e o Titanic**, e o "Productivity Prediction of Garment
+        Employees". Checar so a string `fonte` nao pegaria isso; o que pega e exigir que a
+        `fonte` tenha um carregador de fato e que o id/spec exista nele.
+        """
+        from app.models.dataset_loaders import OPENML_SPECS, UCI_IDS
+
+        registros = {"uci": UCI_IDS, "openml": OPENML_SPECS}
         for key, ds in UCI_DATASETS.items():
-            assert ds.fonte == "uci", f"{key} has wrong fonte: {ds.fonte}"
+            assert ds.fonte in registros, f"{key} tem fonte sem carregador: {ds.fonte}"
+            assert key in registros[ds.fonte], f"{key} nao esta no registro de {ds.fonte}"
+
+    def test_titanic_vem_do_openml_e_sem_vazamento(self):
+        """O Titanic e do OpenML, e as colunas oferecidas nao entregam a resposta.
+
+        `boat` (numero do bote salva-vidas) e `body` (numero do corpo recuperado) determinam a
+        sobrevivencia: oferecidas ao aluno, dariam acerto quase perfeito e nenhum aprendizado.
+        """
+        from app.models.dataset_loaders import OPENML_SPECS
+
+        ds = UCI_DATASETS["titanic"]
+        spec = OPENML_SPECS["titanic"]
+
+        assert ds.fonte == "openml"
+        assert ds.target == spec["target"] == "survived"
+        assert ds.n_features == len(spec["colunas"])
+        assert not ({"boat", "body", "name", "ticket", "cabin", "home.dest"}
+                    & set(spec["colunas"]))
 
 
 class TestGetAllDatasets:
