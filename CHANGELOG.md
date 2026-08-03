@@ -8,6 +8,37 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-08-03c (Titanic com as 13 colunas: o vazamento virou a lição)
+
+> Decisão do usuário. Suíte **649** passed, 1 skipped / frontend **269** + build.
+
+### Mudado
+- O Titanic passou a entregar **as 13 colunas** do OpenML (`OPENML_SPECS[...]["colunas"] = None`),
+  no lugar do recorte de 7 que escondia `boat`/`body`. `n_features` 7 → **13** e dificuldade
+  `iniciante` → **`intermediario`** (a base pede imputer e codificador para ser usada).
+- **`boat` e `body` são vazamento e ficam expostas de propósito.** Medido: árvore com
+  `pclass/age/sibsp/parch/fare` dá **0.6585**; acrescentando **`boat` vai a 0.9634**. Esconder
+  evita o susto e tira a chance de ensinar o erro; expor sem avisar seria uma pegadinha. Então o
+  texto do dataset passou a nomear as duas (`descricao_features`) e a `reflexao_final` explica o
+  que é data leakage e pede a comparação com e sem elas. **Um teste cobra esse aviso** — expor sem
+  explicar volta a ser defeito.
+- `pergunta_guia` preenchida ("Quem tinha mais chance de sobreviver ao naufrágio, e por quê?").
+
+### Notas
+- **Backend e frontend tiveram de subir juntos:** com o servidor oferecendo 13 e o script ainda
+  recortando 7, o aluno que marcasse `boat` receberia `KeyError` no código exportado. O gerador
+  perdeu o recorte do Titanic; quem recorta agora é a seleção de atributos do aluno.
+- Nulos das colunas novas: `cabin` 1014, `boat` 823, `body` 1188, `home.dest` 564. `body` é
+  numérica com quase tudo vazio (só quem teve o corpo recuperado).
+- **`home.dest` tem PONTO no nome.** Verificado em produção que o Mongo aceita o ponto na chave de
+  `atributos` e devolve igual, e que o código lê o dict inteiro
+  (`conf_doc["atributos"].items()`), nunca por caminho aninhado — que seria ambíguo. Um teste fixa
+  isso, porque é o tipo de coisa que quebra em silêncio.
+- Verificado no script exportado com `boat` marcado: carrega `(1309, 13)`, filtra pelos atributos
+  do aluno e devolve **0.9238** — o vazamento aparece no código exportado também, como deve.
+
+---
+
 ## 2026-08-03b (o dataset "Titanic" não era o Titanic)
 
 > Suíte **649** passed, 1 skipped.

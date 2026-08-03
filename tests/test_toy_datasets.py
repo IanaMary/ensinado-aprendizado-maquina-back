@@ -259,26 +259,34 @@ class TestCarregarDatasetPorFonte:
                 f"fonte '{fonte}' (dataset '{nome}') respondeu {resp.status_code}: {resp.text[:200]}"
             )
 
-    async def test_titanic_responde_e_nao_entrega_as_colunas_de_vazamento(self, client, mock_db, auth_headers, monkeypatch):
+    async def test_titanic_oferece_as_13_colunas_inclusive_o_vazamento(self, client, mock_db, auth_headers, monkeypatch):
+        """As colunas de vazamento chegam à tela de propósito — decisão do usuário (03/08).
+
+        `boat`/`body` revelam a resposta; ficam expostas para o aluno poder cair na armadilha e
+        aprender data leakage. Este teste garante que o endpoint não volte a escondê-las por
+        acidente, e que `home.dest` (com PONTO no nome) sobreviva ao caminho todo.
+        """
         import pandas as pd
         from app.models import dataset_loaders as dl
 
-        # O que o `carregar_openml` real devolve: só as 7 features + alvo.
         monkeypatch.setattr(dl, "carregar_openml", lambda nome: pd.DataFrame({
             "pclass": [1, 3, 2, 1], "sex": ["female", "male", "female", "male"],
             "age": [29.0, 25.0, 40.0, 50.0], "sibsp": [0, 1, 0, 1], "parch": [0, 0, 2, 0],
             "fare": [211.3, 7.9, 26.0, 52.0], "embarked": ["S", "S", "C", "S"],
+            "name": ["A", "B", "C", "D"], "ticket": ["1", "2", "3", "4"],
+            "cabin": ["B5", None, "C2", None], "boat": ["2", None, "4", None],
+            "body": [None, 135.0, None, 22.0], "home.dest": ["NY", "SP", "RJ", "LX"],
             "survived": ["1", "0", "1", "0"],
         }))
 
         resp = await client.get("/toy_datasets/titanic", headers=auth_headers)
 
         assert resp.status_code == 200, resp.text[:300]
-        d = resp.json()
-        colunas = d.get("colunas") or []
-        nomes = [c["nome"] if isinstance(c, dict) else c for c in colunas]
+        nomes = [c["nome"] if isinstance(c, dict) else c
+                 for c in (resp.json().get("colunas") or [])]
         assert "survived" in nomes
-        assert not ({"boat", "body", "name", "ticket", "cabin", "home.dest"} & set(nomes))
+        assert {"boat", "body", "name", "ticket", "cabin", "home.dest"} <= set(nomes)
+        assert "home.dest" in nomes, "o ponto no nome da coluna não sobreviveu"
 
     async def test_dataset_com_celula_vazia_serializa(self, client, mock_db, auth_headers, monkeypatch):
         """Base do mundo real tem lacuna, e a resposta tem de sair como JSON válido.

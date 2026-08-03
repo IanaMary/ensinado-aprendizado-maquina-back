@@ -294,12 +294,27 @@ UCI_DATASETS: Dict[str, DatasetConfig] = {
         fonte="openml",
         tipo=DatasetType.CLASSIFICATION,
         n_amostras=1309,
-        n_features=7,
+        n_features=13,
         target="survived",
         pre_split=PreSplitStatus.SINGLE,
-        dificuldade="iniciante",
+        dificuldade="intermediario",
         descricao_target="Sobreviveu (1) ou não (0)",
-        descricao_features="Classe social, sexo, idade, tarifa, número de irmãos/cônjuge a bordo, número de pais/filhos a bordo, porto de embarque",
+        descricao_features=(
+            "Classe social (pclass), sexo, idade, número de irmãos/cônjuge a bordo (sibsp), "
+            "número de pais/filhos a bordo (parch), tarifa (fare), porto de embarque (embarked), "
+            "nome, número da passagem (ticket), cabine, cidade de destino (home.dest) — e mais "
+            "duas que você deve olhar com desconfiança: bote salva-vidas (boat) e número do corpo "
+            "recuperado (body)."
+        ),
+        pergunta_guia="Quem tinha mais chance de sobreviver ao naufrágio, e por quê?",
+        reflexao_final=(
+            "Experimente treinar usando 'boat' ou 'body' como atributo: o acerto vai para perto "
+            "de 100%. Isso não é um modelo bom, é um modelo que está trapaceando — só se sabe o "
+            "bote de alguém DEPOIS de saber que a pessoa foi salva, e só há número de corpo para "
+            "quem morreu. Usar informação que só existe depois da resposta chama-se vazamento de "
+            "dados (data leakage), e é um dos erros mais comuns em aprendizado de máquina. "
+            "Compare a acurácia com e sem essas duas colunas: a diferença é o tamanho da armadilha."
+        ),
     ),
     "abalone": DatasetConfig(
         id="abalone",

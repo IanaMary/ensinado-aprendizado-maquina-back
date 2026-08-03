@@ -145,11 +145,13 @@ class TestUciDatasets:
             assert ds.fonte in registros, f"{key} tem fonte sem carregador: {ds.fonte}"
             assert key in registros[ds.fonte], f"{key} nao esta no registro de {ds.fonte}"
 
-    def test_titanic_vem_do_openml_e_sem_vazamento(self):
-        """O Titanic e do OpenML, e as colunas oferecidas nao entregam a resposta.
+    def test_titanic_vem_do_openml_com_as_13_colunas(self):
+        """O Titanic e do OpenML e entrega o dataset INTEIRO — decisao do usuario (03/08).
 
-        `boat` (numero do bote salva-vidas) e `body` (numero do corpo recuperado) determinam a
-        sobrevivencia: oferecidas ao aluno, dariam acerto quase perfeito e nenhum aprendizado.
+        `boat` (numero do bote salva-vidas) e `body` (numero do corpo recuperado) sao vazamento:
+        praticamente determinam a sobrevivencia. Ficam expostas de proposito, para que o aluno
+        possa cair na armadilha e aprender o que e data leakage — e o texto do dataset tem de
+        avisar, senao a armadilha nao ensina, so engana.
         """
         from app.models.dataset_loaders import OPENML_SPECS
 
@@ -158,9 +160,13 @@ class TestUciDatasets:
 
         assert ds.fonte == "openml"
         assert ds.target == spec["target"] == "survived"
-        assert ds.n_features == len(spec["colunas"])
-        assert not ({"boat", "body", "name", "ticket", "cabin", "home.dest"}
-                    & set(spec["colunas"]))
+        # `colunas: None` = sem recorte, as 13 do OpenML
+        assert spec.get("colunas") is None
+        assert ds.n_features == 13
+        # o aviso e parte do contrato: expor sem explicar seria so uma pegadinha
+        texto = (ds.descricao_features + " " + ds.reflexao_final).lower()
+        for termo in ("boat", "body", "vazamento"):
+            assert termo in texto, f"o texto do dataset nao menciona '{termo}'"
 
 
 class TestGetAllDatasets:
@@ -243,9 +249,9 @@ class TestCacheDoOpenml:
 
         assert chamou["openml"], "leu o cache do UCI em vez de baixar do OpenML"
         assert "survived" in df.columns
+        # veio do OpenML, nao do pickle textil
         assert "quarter" not in df.columns
-        # e o vazamento nao entra nem vindo do fetch
-        assert not ({"boat", "body", "name", "ticket", "cabin", "home.dest"} & set(df.columns))
+        assert "pclass" in df.columns
 
     def test_cache_sem_o_alvo_esperado_e_descartado(self, tmp_path, monkeypatch):
         """Cache com o nome certo mas sem o alvo (spec mudou) tambem e rebaixado."""

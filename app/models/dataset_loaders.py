@@ -48,20 +48,31 @@ UCI_IDS = {
 # nenhuma coluna `Survived`. Quem escolhesse "Titanic" recebia dados de producao textil e um
 # alvo inexistente. O sklearn nao tem `load_titanic`; o caminho oficial e o `fetch_openml`.
 #
-# `colunas` e o recorte que a plataforma OFERECE, e existe por dois motivos:
-#  - `boat` e `body` sao VAZAMENTO (numero do bote salva-vidas / numero do corpo recuperado
-#    determinam a sobrevivencia). Com elas o aluno acerta ~100% e nao aprende nada.
-#  - `name`, `ticket`, `cabin` e `home.dest` sao texto de altissima cardinalidade, sem uso
-#    didatico direto neste momento do curso.
-# O que resta sao as 7 features classicas, exatamente as que o catalogo ja descrevia.
-# **Ao mexer aqui, ajuste `getToyDatasetLoader` no `script-generator.service.ts`** — o script
-# exportado precisa recortar as MESMAS colunas, senao ele treina com o vazamento e devolve
-# outra metrica.
+# `colunas` recorta o que a plataforma oferece; `None` entrega o dataset INTEIRO.
+#
+# **Decisao do usuario (03/08): o Titanic entrega as 13 colunas.** Uma versao anterior escondia
+# `boat` e `body` porque elas sao VAZAMENTO — o numero do bote salva-vidas e o numero do corpo
+# recuperado praticamente determinam a sobrevivencia, e treinar com elas da acerto quase perfeito.
+# Esconde-las evita o susto, mas tambem tira a chance de ENSINAR vazamento, que e um dos erros
+# mais comuns de quem comeca. Elas ficam expostas de proposito, e o texto do dataset
+# (`descricao_features` / `reflexao_final` em `dataset_config.py`) avisa o que sao e propoe a
+# comparacao com e sem elas.
+#
+# Consequencias praticas de expor tudo, todas ja tratadas pela plataforma:
+#  - `name`, `ticket`, `cabin`, `boat`, `home.dest` sao texto: marcadas como atributo, o treino
+#    devolve o 400 que ensina a aplicar um codificador.
+#  - `body` e numerico com quase tudo vazio (so quem teve o corpo recuperado): pede imputer.
+#  - `home.dest` tem PONTO no nome. O Mongo aceita o ponto na chave de `atributos` e devolve
+#    igual; o codigo le o dict inteiro (`conf_doc["atributos"].items()`), nunca por caminho
+#    aninhado, que seria ambiguo. Verificado em producao.
+#
+# **Ao mexer no recorte aqui, ajuste `getToyDatasetLoader` no `script-generator.service.ts`** — o
+# script exportado precisa ver as MESMAS colunas, senao ele treina outro X e devolve outra metrica.
 OPENML_SPECS = {
     "titanic": {
         "nome": "titanic",
         "version": 1,
-        "colunas": ["pclass", "sex", "age", "sibsp", "parch", "fare", "embarked"],
+        "colunas": None,        # todas as 13 — ver o bloco acima
         "target": "survived",
     },
 }
@@ -235,8 +246,9 @@ def carregar_openml(dataset_name: str) -> pd.DataFrame:
     from sklearn.datasets import fetch_openml
     dados = fetch_openml(spec["nome"], version=spec["version"], as_frame=True)
 
-    # So as colunas oferecidas (fora o vazamento) + o alvo, na ordem do spec.
-    df = dados.data[list(spec["colunas"])].copy()
+    # `colunas` recorta o que a plataforma oferece; `None` entrega o dataset inteiro.
+    colunas = spec.get("colunas")
+    df = (dados.data[list(colunas)] if colunas else dados.data).copy()
     df[spec["target"]] = dados.target
 
     try:
