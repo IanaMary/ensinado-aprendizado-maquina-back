@@ -60,6 +60,19 @@ if [ -d "$BACKEND_DIR/.git" ]; then
   git -C "$BACKEND_DIR" rev-parse HEAD > "$DESTINO/COMMIT-backend.txt" 2>/dev/null || true
 fi
 
+# As VERSÕES exatas do ambiente, já que a `venv` não entra no snapshot. Sem isto, restaurar
+# depende de resolver o `requirements.txt` de novo — e ali só 22 das 120 dependências têm versão
+# fixa, então o `pip install` traria versões mais novas. Custa alguns KB e é o que permite
+# reconstruir o mesmo ambiente (`pip install -r PIP-FREEZE-backend.txt`). O `scikit-learn` está
+# pinado no requirements, mas é só ele: os pickles dos modelos dependem dele, o resto do
+# comportamento depende dos outros 98.
+for PY in "$BACKEND_DIR/venv/bin/pip" "$BACKEND_DIR/.venv/bin/pip"; do
+  if [ -x "$PY" ]; then
+    "$PY" freeze > "$DESTINO/PIP-FREEZE-backend.txt" 2>/dev/null || true
+    break
+  fi
+done
+
 echo "  total:    $(du -sh "$DESTINO" | cut -f1)"
 echo "$DESTINO"
 
