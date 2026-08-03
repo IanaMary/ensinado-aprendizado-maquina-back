@@ -8,6 +8,24 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-08-03 (a resposta do dataset de exemplo conta a divisão que o servidor fez)
+
+> Achado testando o **código exportado**: o script baixado reproduzia uma divisão diferente da que
+> treinou o modelo. Suíte **638** passed, 1 skipped.
+
+### Corrigido — `GET /toy_datasets/{id}` não dizia como dividiu os dados
+
+O endpoint divide o dataset de exemplo em **75/25** (constante `TEST_SIZE_PADRAO`, antes literal
+repetido em dois pontos), mas a resposta não trazia essa informação. A tela, sem ter como saber,
+presumia 70/30 e anunciava `Total disponível: 442 | Treino: 442 (70%) | Teste: 0 (30%)` — três
+números errados de uma vez, para uma divisão que na verdade foi 331/111 (o que o próprio painel de
+treinamento confirmava). O script exportado herdava a mesma suposição e imprimia outra acurácia.
+
+A resposta passa a devolver `test_size`, `num_linhas_treino` e `num_linhas_teste` — os valores
+reais, os mesmos que já eram gravados em `db.arquivos`. Aditivo: nenhum campo mudou de significado.
+
+---
+
 ## 2026-08-02d (o aviso do aluno mostra o dataset sugerido de verdade)
 
 > Defeito encontrado **testando com conta de professor**: criei uma atividade de pipeline com o

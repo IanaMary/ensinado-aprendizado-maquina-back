@@ -23,6 +23,11 @@ logger = logging.getLogger("uvicorn")
 
 router = APIRouter(prefix="/toy_datasets", tags=["Toy Datasets"])
 
+# Proporção da divisão inicial de um dataset de exemplo. Vai na RESPOSTA porque a tela
+# não tem como adivinhá-la: ela assumia 70/30 enquanto o treino rodava com 75/25, e o
+# script exportado saía com a divisão errada — acurácia diferente da que o aluno viu.
+TEST_SIZE_PADRAO = 0.25
+
 
 @router.get("/")
 async def listar_datasets(
@@ -148,7 +153,7 @@ async def carregar_dataset(
         e_classificacao = ds.tipo == DatasetType.CLASSIFICATION
         df_treino, df_teste, estratificou = dividir_dataframe(
             df,
-            ReDivisaoColetaRequest(test_size=0.25, shuffle=True,
+            ReDivisaoColetaRequest(test_size=TEST_SIZE_PADRAO, shuffle=True,
                                    stratify=e_classificacao, target=target_col),
         )
         content_completo_b64 = df_para_base64(df)
@@ -182,7 +187,7 @@ async def carregar_dataset(
 
         doc_config = {
             "id_coleta": result_arquivo.inserted_id,
-            "test_size": 0.25,
+            "test_size": TEST_SIZE_PADRAO,
             "shuffle": True,
             "stratify": estratificou,
             "atributos": atributos_iniciais,
@@ -212,6 +217,11 @@ async def carregar_dataset(
             "prever_categoria": ds.tipo == DatasetType.CLASSIFICATION,
             "dados_rotulados": target_col is not None,
             "stratify": estratificou,
+            "test_size": TEST_SIZE_PADRAO,
+            # Tamanhos REAIS dos dois conjuntos. Sem eles a tela exibia o dataset inteiro
+            # como treino e "Teste: 0" — a divisão que o servidor fez ficava invisível.
+            "num_linhas_treino": len(df_treino),
+            "num_linhas_teste": len(df_teste),
             "aviso_estratificacao": aviso_estratificacao(e_classificacao, estratificou),
             "n_amostras": ds.n_amostras,
             "n_features": ds.n_features,

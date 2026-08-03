@@ -158,6 +158,25 @@ class TestVazamentoDatasetExemplo:
         assert len(pd.merge(treino, teste, how="inner")) == 0
         assert r.json()["stratify"] is False
 
+    @pytest.mark.asyncio
+    async def test_resposta_conta_a_divisao_que_o_servidor_fez(self, client, mock_db, auth_headers):
+        """A divisão do dataset de exemplo é decidida AQUI (75/25 fixo), então a resposta tem de
+        dizer qual foi. Sem `test_size`/`num_linhas_*` a tela anunciava 70/30 e "Teste: 0", e o
+        script exportado reproduzia uma divisão diferente da que treinou o modelo."""
+        arq_m = MagicMock(insert_one=AsyncMock(return_value=MagicMock(inserted_id=ObjectId())))
+        cfg_m = MagicMock(insert_one=AsyncMock(return_value=MagicMock(inserted_id=ObjectId())))
+        with patch("app.routers.toy_datasets.arquivos", arq_m), \
+             patch("app.routers.toy_datasets.configuracoes_treinamento", cfg_m):
+            r = await client.get("/toy_datasets/iris", headers=auth_headers)
+        corpo = r.json()
+
+        assert corpo["test_size"] == 0.25
+        assert corpo["num_linhas_treino"] + corpo["num_linhas_teste"] == corpo["total_dados"] == 150
+        # e batem com o que foi realmente gravado
+        doc = arq_m.insert_one.await_args[0][0]
+        assert corpo["num_linhas_treino"] == doc["num_linhas_treino"] == len(_ler(doc["content_treino_base64"]))
+        assert corpo["num_linhas_teste"] == doc["num_linhas_teste"] == len(_ler(doc["content_teste_base64"]))
+
 
 # ------------------------------------------------------------------ integração
 class TestIntegracaoRedivisao:
