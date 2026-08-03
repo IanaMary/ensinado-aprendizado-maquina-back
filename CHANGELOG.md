@@ -44,10 +44,24 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
   exatamente o órfão que eu havia deixado — o `*` foi para antes do ponto. Um teste usa o arquivo
   real que estava na VM.
 
+### Limpeza executada (a pedido do usuário)
+- **De 147 para 10 `deploy-*`; disco 72% → 68%, 7G liberados.** `dataset_cache` em 7,3M com uma
+  geração por dataset.
+- **Antes de apagar, inventariei o que ia sair** — e dois diretórios `deploy-*` **não eram cópia
+  redundante de código**: `deploy-20260729-123615` continha o **store do MLflow** (`mlflow.db`,
+  snapshot deliberado de antes do rename do experimento, 45 runs) e
+  `deploy-epico-20260615-000543` continha um **`mongodump`**. A retenção os teria levado.
+  Movidos (não apagados) para **`backups/preservados/`**, que não casa com `deploy-*` e por isso
+  fica fora de qualquer retenção futura. **Snapshot de banco não volta de um `git pull`.**
+- Também conferi que nenhuma chave de `.env` existia só nos antigos (15 = 15, zero exclusivas) e
+  que o conjunto mantido tem ponto de rollback completo (`deploy-20260803-140111` com
+  `COMMIT-backend.txt`, `PIP-FREEZE-backend.txt`, backend, frontend, unit e nginx).
+- Os backups das outras ferramentas da VM seguem intactos (`auto-*`, `dbdump-*`,
+  `absapt.tk.bak.*`, `checker2-mysql`, `dev.db_*`…).
+
 ### Não fiz
-- **Não apaguei os 212 backups existentes** (~15G, 106 deles com mais de 30 dias somando 3,2G).
-  Apagar backup é destrutivo e a decisão é do usuário; a retenção passa a agir nos próximos
-  deploys. Para limpar de uma vez: `MANTER_BACKUPS=10 backup-producao.sh`.
+- Na primeira passada não apaguei nada: apagar backup é destrutivo e a decisão era do usuário.
+  Ele autorizou depois, e a limpeza está registrada acima.
 - O cache do Angular (`.angular/cache`, local) tem tratamento próprio num `package.json` que outro
   agente está mexendo — deixei para ele.
 

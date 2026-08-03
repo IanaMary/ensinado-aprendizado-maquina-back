@@ -34,6 +34,13 @@ remover() {  # remover <caminho> <rótulo>
 # ---- 1. Backups de deploy: mantém os N mais recentes ----
 # Só o padrão `deploy-*`, que é o que o backup-producao.sh cria. Os `auto-*`, `dbdump-*`,
 # `frontend-*` e `absapt.tk.bak.*` são de outras ferramentas e NÃO são nossos para apagar.
+#
+# **`preservados/` é intocável, e existe por um motivo concreto.** Na primeira limpeza (03/08)
+# dois diretórios `deploy-*` NÃO eram cópia redundante de código: `deploy-20260729-123615` tinha
+# o **store do MLflow** (`mlflow.db`, snapshot deliberado feito antes de renomear o experimento,
+# com 45 runs) e `deploy-epico-20260615-000543` tinha um **`mongodump`**. A retenção os teria
+# levado. Snapshot de BANCO não se recupera de um `git pull`: quando aparecer um, mova para
+# `preservados/` (que não casa com `deploy-*`) em vez de deixar a retenção decidir.
 if [ -d "$RAIZ_BACKUP" ] && [ "$MANTER_BACKUPS" -gt 0 ]; then
   # Ordena por MTIME, nao por nome: os nomes nao sao todos datados (`deploy-conf-tutor-audit`,
   # `deploy-chat-edu`, `deploy-busca-conf`...), e `sort` lexicografico punha essas letras acima de
