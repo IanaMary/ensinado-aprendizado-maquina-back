@@ -324,3 +324,31 @@ class TestCacheDoOpenml:
         # o que nao e meu continua no lugar
         assert "titanic.pkl" in restantes
         assert "adult.openml.aaaa1111.pkl" in restantes
+
+    def test_limpeza_tambem_no_cache_hit(self, tmp_path, monkeypatch):
+        """Limpar so na escrita nao converge: depois da troca de spec, tudo e hit.
+
+        Foi o que sobrou em producao — o `titanic.openml.pkl` do formato antigo ficou no disco
+        porque a geracao nova ja estava em cache e nada mais era gravado.
+        """
+        import pandas as pd
+        from app.models import dataset_loaders as dl
+
+        monkeypatch.setattr(dl, "CACHE_DIR", tmp_path)
+        spec = dl.OPENML_SPECS["titanic"]
+        # geracao VIGENTE ja em cache (entao nao havera escrita)
+        atual = dl._caminho_cache_openml("titanic", spec)
+        pd.DataFrame({"pclass": [1], "survived": ["1"]}).to_pickle(atual)
+        # e um orfao de formato antigo
+        orfao = tmp_path / "titanic.openml.pkl"
+        orfao.write_bytes(b"x")
+
+        def nao_deve_baixar(*a, **k):
+            raise AssertionError("baixou em vez de usar o cache")
+        monkeypatch.setattr("sklearn.datasets.fetch_openml", nao_deve_baixar)
+
+        df = dl.carregar_openml("titanic")
+
+        assert "survived" in df.columns          # veio do cache
+        assert atual.exists()                    # a geracao vigente fica
+        assert not orfao.exists(), "o orfao sobreviveu ao cache hit"

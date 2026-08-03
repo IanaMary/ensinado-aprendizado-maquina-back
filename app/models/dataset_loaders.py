@@ -251,6 +251,11 @@ def carregar_openml(dataset_name: str) -> pd.DataFrame:
         try:
             df_cache = pd.read_pickle(cache_path)
             if spec["target"] in df_cache.columns:
+                # Tambem no CACHE HIT: limpar so na escrita nao converge. Depois de uma troca de
+                # spec, a geracao nova e gravada uma vez e dali em diante todo acesso e hit —
+                # o pickle da geracao anterior ficaria no disco ate a proxima troca. Foi o que
+                # aconteceu com o titanic: sobrou o arquivo sem assinatura, do formato antigo.
+                _limpar_geracoes_antigas(dataset_name, cache_path)
                 return df_cache
         except Exception:
             # Cache corrompido: ignora e rebaixa abaixo.
@@ -283,10 +288,14 @@ def _limpar_geracoes_antigas(dataset_name: str, atual: Path) -> None:
     geracao nova, as anteriores saem — o cache fica com **um arquivo por dataset**, limitado por
     construcao em vez de depender de faxina manual.
 
-    Escopo estreito de proposito: so `<dataset>.openml.*.pkl`, nunca o `<dataset>.pkl` do UCI nem
+    Escopo estreito de proposito: so `<dataset>.openml*.pkl`, nunca o `<dataset>.pkl` do UCI nem
     o cache de outro dataset.
+
+    O `*` vem ANTES do ponto porque existe um formato legado **sem** assinatura
+    (`titanic.openml.pkl`, do primeiro dia): `"...openml.*.pkl"` nao casa com ele, e o orfao
+    sobreviveria — foi o que o teste pegou, com o arquivo real que eu tinha deixado na VM.
     """
-    for antigo in CACHE_DIR.glob(f"{dataset_name}.openml.*.pkl"):
+    for antigo in CACHE_DIR.glob(f"{dataset_name}.openml*.pkl"):
         if antigo != atual:
             try:
                 antigo.unlink()

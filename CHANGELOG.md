@@ -33,9 +33,16 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 - **Cache de dataset com limpeza de geração.** A assinatura do spec no nome (`03c`) resolveu
   servir dado velho, mas **acumulava**: cada mudança de spec deixava um pickle órfão para sempre —
   e já havia dois do titanic no disco. Agora, ao gravar a geração nova, as anteriores do MESMO
-  dataset saem (`_limpar_geracoes_antigas`), com escopo estreito: só `<dataset>.openml.*.pkl`,
+  dataset saem (`_limpar_geracoes_antigas`), com escopo estreito: só `<dataset>.openml*.pkl`,
   nunca o `<dataset>.pkl` do UCI nem o cache de outro dataset. **Um arquivo por dataset, limitado
   por construção** em vez de depender de faxina manual.
+- **A limpeza roda também no CACHE HIT, e o glob cobre o formato legado.** Duas correções que só
+  apareceram porque testei contra o estado real da VM: (1) limpar apenas na escrita **não
+  converge** — depois de uma troca de spec, a geração nova é gravada uma vez e dali em diante tudo
+  é hit, então o pickle anterior ficaria no disco até a próxima troca; (2) o glob
+  `...openml.*.pkl` **não casa** com o nome legado `titanic.openml.pkl` (sem assinatura), que era
+  exatamente o órfão que eu havia deixado — o `*` foi para antes do ponto. Um teste usa o arquivo
+  real que estava na VM.
 
 ### Não fiz
 - **Não apaguei os 212 backups existentes** (~15G, 106 deles com mais de 30 dias somando 3,2G).
