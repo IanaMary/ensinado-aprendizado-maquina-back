@@ -119,7 +119,13 @@ async def carregar_dataset(
         # O target real no dataframe e sempre "target" para sklearn datasets
         target_col = "target" if "target" in df.columns else ds.target
         
-        if target_names is not None and target_col in df.columns:
+        # Só em CLASSIFICAÇÃO: em regressão o `target_names` do sklearn é o nome da coluna, não
+        # uma lista de rótulos. No california_housing (`target_names == ['MedHouseVal']`) o
+        # `else str(x)` transformava a coluna contínua inteira em texto — a tela então deduzia
+        # "Exploratório" para um dataset de regressão, e o script exportado (que usa o alvo
+        # numérico) media outra coisa.
+        e_classificacao_alvo = ds.tipo == DatasetType.CLASSIFICATION
+        if target_names is not None and target_col in df.columns and e_classificacao_alvo:
             if df[target_col].dtype in ['int64', 'float64']:
                 # Mapear inteiros para labels de texto
                 df[target_col] = df[target_col].apply(lambda x: target_names[int(x)] if int(x) < len(target_names) else str(x))

@@ -246,3 +246,62 @@ class TestAvaliarModelos:
         matriz = data["Matriz"]["KNN"]
         assert isinstance(matriz["total"], int)
         assert all(isinstance(v, int) for linha in matriz["matriz"] for v in linha)
+
+
+class TestSaneamentoDoArtefato:
+    """O zip do modelo vai para o aluno, então não leva metadados do servidor de treino.
+
+    O `MLmodel` do MLflow trazia a lista `env_vars` (com `NVIDIA_API_KEY` — só o nome, nunca o
+    valor) e um `artifact_path` apontando para `/home/ubuntu/mlflow/...`, e o `environment_
+    variables.txt` era exatamente essa lista. Nenhum dos `usar_modelo_*.py` lê variável de
+    ambiente. Saneamento conservador: o arquivo tem de continuar carregável.
+    """
+
+    MLMODEL = """artifact_path: file:///home/ubuntu/mlflow/artifacts/models/m-abc/artifacts
+flavors:
+  python_function:
+    env_vars:
+    - NVIDIA_API_KEY
+    loader_module: mlflow.sklearn
+    pickled_model: model.pkl
+  sklearn:
+    pickled_model: model.pkl
+    sklearn_version: 1.4.2
+env_vars:
+- NVIDIA_API_KEY
+- OUTRA_VAR
+model_uuid: abc123
+run_id: def456
+saved_input_example_info:
+  artifact_path: input_example.json
+  type: dataframe
+"""
+
+    def test_remove_o_bloco_env_vars_de_nivel_superior_e_o_caminho_do_servidor(self):
+        from app.metricas.metricas import _sanear_mlmodel
+
+        saneado = _sanear_mlmodel(self.MLMODEL)
+
+        assert "NVIDIA_API_KEY" not in saneado.split("flavors:")[0]
+        assert "/home/ubuntu" not in saneado
+        assert "OUTRA_VAR" not in saneado
+
+    def test_preserva_o_que_o_load_model_precisa(self):
+        """Inclusive o `artifact_path` ANINHADO, que aponta para dentro do próprio zip."""
+        import yaml
+        from app.metricas.metricas import _sanear_mlmodel
+
+        doc = yaml.safe_load(_sanear_mlmodel(self.MLMODEL))
+
+        assert doc["flavors"]["python_function"]["loader_module"] == "mlflow.sklearn"
+        assert doc["flavors"]["sklearn"]["pickled_model"] == "model.pkl"
+        assert doc["model_uuid"] == "abc123"
+        assert doc["run_id"] == "def456"
+        # sem ele o MLflow não acha o exemplo de entrada
+        assert doc["saved_input_example_info"]["artifact_path"] == "input_example.json"
+        assert "artifact_path" not in doc
+
+    def test_o_arquivo_de_variaveis_de_ambiente_nao_entra_no_zip(self):
+        from app.metricas.metricas import _ARQUIVOS_MLFLOW_OMITIDOS
+
+        assert "environment_variables.txt" in _ARQUIVOS_MLFLOW_OMITIDOS

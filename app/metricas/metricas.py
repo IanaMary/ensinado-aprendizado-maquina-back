@@ -522,6 +522,41 @@ _REQUIREMENTS_MODELO = (
 )
 
 
+# O zip do modelo vai para o aluno (público menor de idade), então não leva metadados do servidor
+# de treino. Só o NOME das variáveis aparecia, nunca o valor — mas `NVIDIA_API_KEY` num download
+# não tem por que existir, e nenhum dos `usar_modelo_*.py` lê variável de ambiente.
+_ARQUIVOS_MLFLOW_OMITIDOS = {"environment_variables.txt"}
+
+
+def _sanear_mlmodel(texto: str) -> str:
+    """Remove do `MLmodel` o bloco `env_vars` e o caminho absoluto do servidor.
+
+    O arquivo é obrigatório para `mlflow.sklearn.load_model`, então o saneamento é conservador:
+    tira apenas a lista `env_vars:` (com os itens `- NOME` que a seguem) e o `artifact_path`, que
+    aponta para `/home/ubuntu/mlflow/...`. Nada disso é usado no carregamento.
+    """
+    saida: list[str] = []
+    dentro_env_vars = False
+    for linha in texto.splitlines():
+        if dentro_env_vars:
+            # itens da lista vêm indentados; a primeira linha não indentada encerra o bloco
+            if linha.strip().startswith("-") or not linha.strip():
+                continue
+            dentro_env_vars = False
+        indentada = linha[:1].isspace()
+        chave = linha.split(":", 1)[0].strip()
+        if chave == "env_vars" and not indentada:
+            dentro_env_vars = True
+            continue
+        # Só o `artifact_path` de nível superior (o caminho no servidor). O aninhado, dentro de
+        # `saved_input_example_info`, aponta para `input_example.json` DENTRO do zip e é o que o
+        # MLflow usa para achar o exemplo — removê-lo quebraria o `load_model`.
+        if chave == "artifact_path" and not indentada:
+            continue
+        saida.append(linha)
+    return "\n".join(saida) + "\n"
+
+
 @router.get("/modelo/{modelo_id}/artefato")
 async def baixar_modelo_artefato(modelo_id: str):
     """Baixa o modelo treinado como .zip, para reutilizar fora do sistema.
@@ -553,8 +588,15 @@ async def baixar_modelo_artefato(modelo_id: str):
                 ))
                 with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
                     for p in local.rglob("*"):
-                        if p.is_file():
-                            zf.write(p, arcname=str(p.relative_to(local)))
+                        if not p.is_file():
+                            continue
+                        arcname = str(p.relative_to(local))
+                        if p.name in _ARQUIVOS_MLFLOW_OMITIDOS:
+                            continue
+                        if p.name == "MLmodel":
+                            zf.writestr(arcname, _sanear_mlmodel(p.read_text()))
+                            continue
+                        zf.write(p, arcname=arcname)
                 escreveu_mlflow = True
         except Exception as e:
             logger.warning(f"download do modelo MLflow falhou ({run_id}): {e}")

@@ -26,6 +26,34 @@ reais, os mesmos que já eram gravados em `db.arquivos`. Aditivo: nenhum campo m
 
 ---
 
+## 2026-08-03b (o zip do aluno não leva metadados do servidor + alvo contínuo virando texto)
+
+> Achados na varredura por agentes do código exportado. Suíte **641** passed, 1 skipped.
+
+### Corrigido — o download do modelo levava metadados do servidor de treino
+
+O zip de `GET /classificador/modelo/{id}/artefato` copiava o diretório do MLflow inteiro, e ali vêm
+`environment_variables.txt` (a lista de variáveis de ambiente do servidor, com `NVIDIA_API_KEY` —
+só o nome, nunca o valor) e um `MLmodel` com `env_vars` e `artifact_path:
+file:///home/ubuntu/mlflow/...`. Isso vai para um aluno, que pode repassar o arquivo, e nenhum dos
+`usar_modelo_*.py` lê variável de ambiente.
+
+Agora o `environment_variables.txt` fica fora e o `MLmodel` é saneado (`_sanear_mlmodel`), de forma
+conservadora: só a lista `env_vars` de nível superior e o `artifact_path` do topo. O `artifact_path`
+**aninhado** em `saved_input_example_info` é preservado — ele aponta para dentro do próprio zip e é
+o que o MLflow usa para achar o exemplo. Verificado com o artefato real de produção: o modelo
+saneado carrega e devolve a mesma previsão.
+
+### Corrigido — `california_housing` tinha o alvo contínuo convertido em texto
+
+A troca do alvo numérico por rótulo de classe rodava sempre que o dataset tivesse `target_names`.
+Em regressão esse campo é o **nome da coluna**, não uma lista de rótulos: com
+`target_names == ['MedHouseVal']`, o `else str(x)` transformava a coluna inteira em strings. A tela
+então deduzia **"Exploratório"** para um dataset de regressão, e o script exportado (que usa o alvo
+numérico) media outra coisa. Agora a conversão só acontece em classificação.
+
+---
+
 ## 2026-08-02d (o aviso do aluno mostra o dataset sugerido de verdade)
 
 > Defeito encontrado **testando com conta de professor**: criei uma atividade de pipeline com o
