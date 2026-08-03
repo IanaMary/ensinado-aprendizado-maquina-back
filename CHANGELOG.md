@@ -10,7 +10,22 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ## 2026-08-03b (o dataset "Titanic" não era o Titanic)
 
-> Suíte **644** passed, 1 skipped.
+> Suíte **646** passed, 1 skipped.
+
+### O endpoint que abre o dataset caiu em 500 — segundo despacho por `fonte`
+- **Pego testando pela API com token de aluno de verdade:** `GET /toy_datasets/titanic` devolvia
+  **500 `{"detail":"Erro ao carregar dataset"}`** (o `wine` respondia 200). O router tinha o **seu
+  próprio `if/elif` sobre `ds.fonte`** — `sklearn`/`uci`/`gerador` — separado do dos carregadores.
+  Ao mudar o Titanic para `openml` eu atualizei só o `carregar_dataframe`; a lista do router ficou
+  para trás, `df` continuava `None` e o endpoint morria. **Carregador novo funcionando, suíte de
+  unidade verde, e a tela sem conseguir abrir o dataset.**
+- Corrigido tirando a duplicação: o despacho por `fonte` vive **só** em `carregar_com_rotulos`
+  (novo, devolve `(df, target_names)` e repassa os controles do gerador), e o router chama isso.
+  `carregar_dataframe` virou um atalho para quem não precisa dos rótulos.
+- **O teste que faltava passa PELO ENDPOINT:** um caso cobre **uma fonte de cada** do catálogo
+  (com a rede mockada) e falha nomeando a culpada — `fonte 'openml' (dataset 'titanic') respondeu
+  500` —, outro fixa o contrato do Titanic. Verificado que **falham** contra o código que foi para
+  produção. Teste de unidade no carregador não pegava: o bug estava no chamador.
 
 ### O cache em disco quase fez a correção não valer
 - **Pego na validação pós-deploy, no servidor:** com o código novo no ar, o backend continuava
