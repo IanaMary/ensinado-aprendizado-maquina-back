@@ -182,7 +182,16 @@ def catalogo_com_overrides(
 ) -> Dict[str, Dict[str, Any]]:
     """Mescla o catálogo estático com os blocos ``execucao`` de ``db.pre_processamento``.
     O DB tem prioridade, permitindo que um pré-processador editado/registrado pelo
-    admin seja de fato executado. Itens só no DB também entram."""
+    admin seja de fato executado. Itens só no DB também entram.
+
+    **Mescla CHAVE POR CHAVE, não substitui o item.** O bloco ``execucao`` do banco só carrega
+    o que é preciso para executar (modulo/classe/hiperparametros/aplica_em/escopo); metadado que
+    existe apenas aqui — hoje ``codifica_categoricas`` — não vem nele. Substituindo a entrada
+    inteira, esse metadado desaparecia sempre que o item tinha ``execucao`` no banco, que é o caso
+    dos 10 built-ins em produção. Efeito medido: ``colunas_codificadas`` devolvia ``set()``, então
+    o treino recusava coluna de texto **mesmo com o codificador aplicado** — e a mensagem de erro
+    manda justamente aplicar um codificador. O aluno seguia o conselho e batia no mesmo 400.
+    """
     catalogo = {k: dict(v) for k, v in PRE_PROCESSAMENTO_CATALOGO.items()}
     for doc in docs_db or []:
         valor = (doc or {}).get("valor")
@@ -190,7 +199,9 @@ def catalogo_com_overrides(
             continue
         norm = normalizar_execucao_db(doc.get("execucao"))
         if norm:
-            catalogo[valor] = norm
+            base = dict(catalogo.get(valor) or {})
+            base.update(norm)
+            catalogo[valor] = base
     return catalogo
 
 

@@ -10,7 +10,25 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ## 2026-08-03b (o dataset "Titanic" não era o Titanic)
 
-> Suíte **647** passed, 1 skipped.
+> Suíte **649** passed, 1 skipped.
+
+### Terceiro achado, PRÉ-EXISTENTE e o mais grave: o conselho do erro não funcionava
+- Com o Titanic finalmente abrindo, treinei de verdade pela API. O treino recusou as colunas de
+  texto com o **400 que ensina** ("`'sex'`, `'embarked'` contém texto… aplique um codificador
+  (OneHotEncoder ou OrdinalEncoder)"). Apliquei o `ordinal_encoder` sobre exatamente essas duas
+  colunas e **veio o mesmo 400** — o conselho da mensagem era impossível de seguir.
+- **Causa:** `catalogo_com_overrides` fazia `catalogo[valor] = norm`, **substituindo** a entrada
+  pelo bloco `execucao` do banco em vez de mesclar. O `execucao` só carrega o necessário para
+  executar; `codifica_categoricas` existe apenas no catálogo em código. Como os **10 built-ins têm
+  `execucao` em `db.pre_processamento`**, a flag desaparecia sempre. Medido em produção:
+  `codifica_categoricas` → `None` para os dois encoders e `colunas_codificadas` → `set()`.
+- **Não era do Titanic:** valia para **qualquer** dataset com coluna de texto. O Titanic só expôs,
+  por ser o único do catálogo com features categóricas — e antes dele ninguém chegava aqui, porque
+  a entrada carregava produção têxtil.
+- Corrigido mesclando chave por chave (o banco continua vencendo no que define). Dois testes
+  novos, verificados **falhando** contra o código anterior.
+- **Lição de método:** o erro que orienta o aluno tem de ser testado **seguindo a orientação**.
+  Ninguém tinha exercitado o caminho "recebi o 400, apliquei o encoder, treinei".
 
 ### Segundo 500: NaN não sobrevive à serialização
 - Depois de corrigir o despacho, `GET /toy_datasets/titanic` **continuava 500**. O handler
