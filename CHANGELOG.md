@@ -25,6 +25,12 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 - `pergunta_guia` preenchida ("Quem tinha mais chance de sobreviver ao naufrágio, e por quê?").
 
 ### Notas
+- **O cache quase desfez a mudança de novo.** O pickle em disco tinha 8 colunas (o recorte antigo)
+  e **passava** pela guarda, que só checava a presença do alvo — em produção só não voltou
+  recortado porque apaguei o arquivo na mão no deploy, o que ninguém vai lembrar de fazer na
+  próxima vez. Agora o nome do cache leva **a assinatura do spec** (`titanic.openml.<hash8>.pkl`):
+  mudar versão, recorte ou alvo gera outro arquivo sozinho. É a segunda vez que este cache engana
+  em um dia — antes pela fonte, agora pelo recorte.
 - **Backend e frontend tiveram de subir juntos:** com o servidor oferecendo 13 e o script ainda
   recortando 7, o aluno que marcasse `boat` receberia `KeyError` no código exportado. O gerador
   perdeu o recorte do Titanic; quem recorta agora é a seleção de atributos do aluno.

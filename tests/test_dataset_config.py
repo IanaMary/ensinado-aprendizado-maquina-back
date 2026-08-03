@@ -253,13 +253,26 @@ class TestCacheDoOpenml:
         assert "quarter" not in df.columns
         assert "pclass" in df.columns
 
-    def test_cache_sem_o_alvo_esperado_e_descartado(self, tmp_path, monkeypatch):
-        """Cache com o nome certo mas sem o alvo (spec mudou) tambem e rebaixado."""
+    def test_cache_de_outro_recorte_nao_e_reaproveitado(self, tmp_path, monkeypatch):
+        """Mudar o SPEC (recorte/versao/alvo) tem de gerar outro arquivo de cache.
+
+        Ao trocar o recorte de 7 colunas para as 13, o pickle de 8 colunas ainda tinha o alvo:
+        passava pela guarda e voltaria recortado. Em producao isso so nao aconteceu porque apaguei
+        o arquivo na mao no deploy — o que ninguem vai lembrar de fazer na proxima vez.
+        """
         import pandas as pd
         from app.models import dataset_loaders as dl
 
         monkeypatch.setattr(dl, "CACHE_DIR", tmp_path)
-        pd.DataFrame({"pclass": [1]}).to_pickle(tmp_path / "titanic.openml.pkl")
+        # cache do recorte ANTIGO (7 features + alvo), gravado sob a assinatura daquele spec
+        spec_antigo = {"nome": "titanic", "version": 1,
+                       "colunas": ["pclass", "sex", "age", "sibsp", "parch", "fare", "embarked"],
+                       "target": "survived"}
+        pd.DataFrame({c: [1] for c in spec_antigo["colunas"] + ["survived"]}).to_pickle(
+            dl._caminho_cache_openml("titanic", spec_antigo))
+        # o spec vigente (colunas: None) tem outra assinatura, então o arquivo acima é ignorado
+        assert dl._caminho_cache_openml("titanic", dl.OPENML_SPECS["titanic"]).name != \
+            dl._caminho_cache_openml("titanic", spec_antigo).name
 
         chamou = {"openml": False}
 
