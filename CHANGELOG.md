@@ -8,6 +8,44 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ---
 
+## 2026-08-03d (disco: backup de 838M → 65M e caches com limpeza)
+
+> Apontado pelo usuário: "a sua cache estava abusando do disco, tem que ter um termo de limpeza".
+> Ele estava certo, e a parte pior era minha. Suíte **650** passed, 1 skipped.
+
+### Medido na VM (disco em 72%, 139G de 193G)
+- `/home/ubuntu/backups`: **15G em 212 diretórios**, sem nenhuma retenção — todo deploy criava mais
+  um e nada saía. Três desses 212 foram meus, hoje.
+- Cada snapshot pesava **838M**, dos quais **751M eram `venv/`** — reinstalável a partir do
+  `requirements.txt`, e o próprio deploy a reinstala. O que se quer guardar (`app/`) são **2,2M**:
+  ~99% do espaço era desperdício.
+
+### Corrigido
+- Novo **`scripts/deploy/backup-producao.sh`**, no lugar do `cp -a` inline que estava documentado
+  no `CLAUDE.md`. Exclui o reinstalável (`venv`), o regenerável (`dataset_cache`, `__pycache__`),
+  o que já é rotacionado em outro lugar (`logs`) e o `.git` (que está no remoto). **Medido:
+  838M → 65M**, e o snapshot ficou rápido. Grava o commit em `COMMIT-backend.txt`, para não
+  depender do nome da pasta.
+- **Retenção: mantém os últimos 10** (`MANTER_BACKUPS=N`, `0` desliga). Só mexe em `deploy-*`, o
+  padrão que ele mesmo cria — `auto-*`, `dbdump-*` e `frontend-*` são de outras ferramentas e
+  **não são meus para apagar**. Verificado com pastas falsas: removeu 3, manteve 2, não tocou nas
+  alheias.
+- **Cache de dataset com limpeza de geração.** A assinatura do spec no nome (`03c`) resolveu
+  servir dado velho, mas **acumulava**: cada mudança de spec deixava um pickle órfão para sempre —
+  e já havia dois do titanic no disco. Agora, ao gravar a geração nova, as anteriores do MESMO
+  dataset saem (`_limpar_geracoes_antigas`), com escopo estreito: só `<dataset>.openml.*.pkl`,
+  nunca o `<dataset>.pkl` do UCI nem o cache de outro dataset. **Um arquivo por dataset, limitado
+  por construção** em vez de depender de faxina manual.
+
+### Não fiz
+- **Não apaguei os 212 backups existentes** (~15G, 106 deles com mais de 30 dias somando 3,2G).
+  Apagar backup é destrutivo e a decisão é do usuário; a retenção passa a agir nos próximos
+  deploys. Para limpar de uma vez: `MANTER_BACKUPS=10 backup-producao.sh`.
+- O cache do Angular (`.angular/cache`, local) tem tratamento próprio num `package.json` que outro
+  agente está mexendo — deixei para ele.
+
+---
+
 ## 2026-08-03c (Titanic com as 13 colunas: o vazamento virou a lição)
 
 > Decisão do usuário. Suíte **649** passed, 1 skipped / frontend **269** + build.

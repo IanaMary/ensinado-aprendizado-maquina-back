@@ -267,11 +267,32 @@ def carregar_openml(dataset_name: str) -> pd.DataFrame:
     try:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         df.to_pickle(cache_path)
+        _limpar_geracoes_antigas(dataset_name, cache_path)
     except Exception:
         # Falha ao gravar cache nao deve quebrar o request.
         pass
 
     return df
+
+
+def _limpar_geracoes_antigas(dataset_name: str, atual: Path) -> None:
+    """Apaga os caches ANTERIORES deste mesmo dataset.
+
+    A assinatura no nome resolve o cache velho ser servido, mas sozinha ela ACUMULA: cada mudanca
+    de spec deixa um pickle orfao no disco para sempre, e ninguem volta para limpar. Gravando a
+    geracao nova, as anteriores saem — o cache fica com **um arquivo por dataset**, limitado por
+    construcao em vez de depender de faxina manual.
+
+    Escopo estreito de proposito: so `<dataset>.openml.*.pkl`, nunca o `<dataset>.pkl` do UCI nem
+    o cache de outro dataset.
+    """
+    for antigo in CACHE_DIR.glob(f"{dataset_name}.openml.*.pkl"):
+        if antigo != atual:
+            try:
+                antigo.unlink()
+                logger.info("[cache OpenML] geracao antiga removida: %s", antigo.name)
+            except OSError:
+                pass
 
 
 def prewarm_uci_cache():

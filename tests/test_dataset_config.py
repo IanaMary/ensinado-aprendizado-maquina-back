@@ -291,3 +291,36 @@ class TestCacheDoOpenml:
 
         assert chamou["openml"]
         assert "survived" in df.columns
+
+    def test_geracao_nova_apaga_as_anteriores(self, tmp_path, monkeypatch):
+        """O cache fica com UM arquivo por dataset — a assinatura sozinha acumularia.
+
+        Sem isso, cada mudanca de spec deixa um pickle orfao para sempre: em 03/08 a VM estava com
+        `backups` em 15G e o `dataset_cache` ja com duas geracoes do titanic. Assinatura resolve
+        servir dado velho; limpeza resolve encher o disco. Sao coisas diferentes.
+        """
+        import pandas as pd
+        from app.models import dataset_loaders as dl
+
+        monkeypatch.setattr(dl, "CACHE_DIR", tmp_path)
+        # geracoes velhas + o cache do UCI (que NAO deve ser tocado) + outro dataset
+        (tmp_path / "titanic.openml.velho111.pkl").write_bytes(b"x")
+        (tmp_path / "titanic.openml.velho222.pkl").write_bytes(b"x")
+        (tmp_path / "titanic.pkl").write_bytes(b"x")
+        (tmp_path / "adult.openml.aaaa1111.pkl").write_bytes(b"x")
+
+        def fake_fetch_openml(nome, version=None, as_frame=None):
+            import types
+            data = pd.DataFrame({"pclass": [1, 2], "sex": ["f", "m"]})
+            return types.SimpleNamespace(data=data, target=pd.Series(["1", "0"], name="survived"))
+
+        monkeypatch.setattr("sklearn.datasets.fetch_openml", fake_fetch_openml)
+
+        dl.carregar_openml("titanic")
+
+        restantes = sorted(p.name for p in tmp_path.iterdir())
+        titanic_openml = [n for n in restantes if n.startswith("titanic.openml.")]
+        assert len(titanic_openml) == 1, f"deveria sobrar uma geracao, sobraram {titanic_openml}"
+        # o que nao e meu continua no lugar
+        assert "titanic.pkl" in restantes
+        assert "adult.openml.aaaa1111.pkl" in restantes
