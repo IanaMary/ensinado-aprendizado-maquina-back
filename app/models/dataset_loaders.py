@@ -216,10 +216,18 @@ def carregar_openml(dataset_name: str) -> pd.DataFrame:
     if spec is None:
         raise DatasetNaoConfigurado(f"Dataset OpenML '{dataset_name}' nao configurado")
 
-    cache_path = CACHE_DIR / f"{dataset_name}.pkl"
+    # O nome do arquivo carrega a FONTE. O cache do UCI grava `titanic.pkl`, e o Titanic mudou de
+    # fonte: sem o sufixo, este carregador leria o pickle antigo e serviria os dados de fabrica
+    # textil para sempre — foi o que aconteceu em producao no primeiro deploy desta mudanca, com
+    # um cache de 13/06 no disco. Trocar a fonte de um dataset precisa invalidar o cache dele.
+    cache_path = CACHE_DIR / f"{dataset_name}.openml.pkl"
     if cache_path.exists():
         try:
-            return pd.read_pickle(cache_path)
+            df_cache = pd.read_pickle(cache_path)
+            # Guarda de sanidade: cache que nao tem o alvo esperado nao serve (fonte trocada,
+            # recorte de colunas alterado, pickle de outra versao do spec).
+            if spec["target"] in df_cache.columns:
+                return df_cache
         except Exception:
             # Cache corrompido: ignora e rebaixa abaixo.
             pass
@@ -248,10 +256,10 @@ def prewarm_uci_cache():
     nos restarts seguintes vira no-op rapido (cache ja em disco). Failsafe: uma
     falha de rede em um dataset apenas registra log e segue para o proximo.
     """
-    baixadores = [(nome, carregar_uci, "UCI") for nome in UCI_IDS]
-    baixadores += [(nome, carregar_openml, "OpenML") for nome in OPENML_SPECS]
-    for nome, baixar, rotulo in baixadores:
-        cache_path = CACHE_DIR / f"{nome}.pkl"
+    baixadores = [(nome, carregar_uci, "UCI", f"{nome}.pkl") for nome in UCI_IDS]
+    baixadores += [(nome, carregar_openml, "OpenML", f"{nome}.openml.pkl") for nome in OPENML_SPECS]
+    for nome, baixar, rotulo, arquivo in baixadores:
+        cache_path = CACHE_DIR / arquivo
         if cache_path.exists():
             continue
         try:

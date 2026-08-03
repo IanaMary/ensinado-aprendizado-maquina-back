@@ -203,3 +203,72 @@ class TestGetDatasetConfig:
         ds = get_dataset_config("adult")
         assert ds is not None
         assert ds.fonte == "uci"
+
+
+class TestCacheDoOpenml:
+    """O cache em disco tem de invalidar quando a FONTE do dataset muda."""
+
+    def test_cache_do_uci_nao_e_lido_como_openml(self, tmp_path, monkeypatch):
+        """Pickle antigo do UCI nao pode ser servido pelo carregador do OpenML.
+
+        Foi o que aconteceu no primeiro deploy da troca do Titanic: o `carregar_uci` havia
+        gravado `titanic.pkl` (dados de fabrica textil) e o `carregar_openml`, lendo o mesmo
+        nome de arquivo, servia aquele pickle para sempre — a producao continuou entregando o
+        dataset errado mesmo com o codigo novo no ar.
+        """
+        import pandas as pd
+        from app.models import dataset_loaders as dl
+
+        monkeypatch.setattr(dl, "CACHE_DIR", tmp_path)
+        # O pickle "velho", do UCI: sem a coluna `survived`.
+        antigo = pd.DataFrame({"date": ["1/1/2015"], "quarter": ["Quarter1"], "team": [8]})
+        antigo.to_pickle(tmp_path / "titanic.pkl")
+
+        chamou = {"openml": False}
+
+        def fake_fetch_openml(nome, version=None, as_frame=None):
+            chamou["openml"] = True
+            import types
+            data = pd.DataFrame({
+                "pclass": [1], "sex": ["female"], "age": [29.0], "sibsp": [0],
+                "parch": [0], "fare": [211.3], "embarked": ["S"],
+                "boat": ["2"], "body": [None], "name": ["X"], "ticket": ["1"],
+                "cabin": ["B5"], "home.dest": ["Y"],
+            })
+            return types.SimpleNamespace(data=data, target=pd.Series(["1"], name="survived"))
+
+        monkeypatch.setattr("sklearn.datasets.fetch_openml", fake_fetch_openml)
+
+        df = dl.carregar_openml("titanic")
+
+        assert chamou["openml"], "leu o cache do UCI em vez de baixar do OpenML"
+        assert "survived" in df.columns
+        assert "quarter" not in df.columns
+        # e o vazamento nao entra nem vindo do fetch
+        assert not ({"boat", "body", "name", "ticket", "cabin", "home.dest"} & set(df.columns))
+
+    def test_cache_sem_o_alvo_esperado_e_descartado(self, tmp_path, monkeypatch):
+        """Cache com o nome certo mas sem o alvo (spec mudou) tambem e rebaixado."""
+        import pandas as pd
+        from app.models import dataset_loaders as dl
+
+        monkeypatch.setattr(dl, "CACHE_DIR", tmp_path)
+        pd.DataFrame({"pclass": [1]}).to_pickle(tmp_path / "titanic.openml.pkl")
+
+        chamou = {"openml": False}
+
+        def fake_fetch_openml(nome, version=None, as_frame=None):
+            chamou["openml"] = True
+            import types
+            data = pd.DataFrame({
+                "pclass": [1], "sex": ["female"], "age": [29.0], "sibsp": [0],
+                "parch": [0], "fare": [211.3], "embarked": ["S"],
+            })
+            return types.SimpleNamespace(data=data, target=pd.Series(["1"], name="survived"))
+
+        monkeypatch.setattr("sklearn.datasets.fetch_openml", fake_fetch_openml)
+
+        df = dl.carregar_openml("titanic")
+
+        assert chamou["openml"]
+        assert "survived" in df.columns

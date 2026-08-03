@@ -10,7 +10,18 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ## 2026-08-03b (o dataset "Titanic" não era o Titanic)
 
-> Suíte **642** passed, 1 skipped.
+> Suíte **644** passed, 1 skipped.
+
+### O cache em disco quase fez a correção não valer
+- **Pego na validação pós-deploy, no servidor:** com o código novo no ar, o backend continuava
+  servindo `(1197, 15)` com `date`/`quarter`/`department` — os dados de fábrica têxtil. O
+  `carregar_uci` havia gravado **`dataset_cache/titanic.pkl`** em 13/06, e o `carregar_openml`
+  lia **o mesmo nome de arquivo**: o pickle velho vencia o código novo, em silêncio e para sempre.
+- Corrigido na causa, não no arquivo: o cache do OpenML grava **`<nome>.openml.pkl`** (a fonte
+  entra no nome, então trocar a fonte invalida o cache) e há uma **guarda de sanidade** — cache
+  sem a coluna-alvo esperada é descartado e o dataset é rebaixado. Dois testes cobrem isso, e
+  foi verificado que eles **falham** contra o código anterior.
+- Apagar o pickle na mão resolveria só esta vez; a próxima troca de fonte cairia no mesmo buraco.
 
 ### Corrigido
 - **`Titanic` apontava para o UCI `id=597`, que não é o Titanic**: é o _Productivity Prediction of
