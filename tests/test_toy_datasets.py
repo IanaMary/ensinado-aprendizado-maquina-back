@@ -279,3 +279,34 @@ class TestCarregarDatasetPorFonte:
         nomes = [c["nome"] if isinstance(c, dict) else c for c in colunas]
         assert "survived" in nomes
         assert not ({"boat", "body", "name", "ticket", "cabin", "home.dest"} & set(nomes))
+
+    async def test_dataset_com_celula_vazia_serializa(self, client, mock_db, auth_headers, monkeypatch):
+        """Base do mundo real tem lacuna, e a resposta tem de sair como JSON válido.
+
+        O Starlette serializa com `allow_nan=False`: um único NaN na amostra de `dados` derruba a
+        resposta com **500**. Foi o segundo 500 do Titanic (`age` tem 263 nulos). O erro acontece
+        DEPOIS do handler retornar — chamar a função direto funciona e só a requisição HTTP falha,
+        o que faz o teste de unidade do handler passar batido.
+        """
+        import json
+        import numpy as np
+        import pandas as pd
+        from app.models import dataset_loaders as dl
+
+        monkeypatch.setattr(dl, "carregar_openml", lambda nome: pd.DataFrame({
+            "pclass": [1, 3, 2, 1, 3, 2],
+            "sex": ["female", "male", "female", "male", "female", "male"],
+            "age": [29.0, np.nan, 40.0, np.nan, 22.0, 33.0],   # a lacuna
+            "sibsp": [0, 1, 0, 1, 0, 1], "parch": [0, 0, 2, 0, 1, 0],
+            "fare": [211.3, 7.9, np.nan, 52.0, 8.05, 26.0],
+            "embarked": ["S", "S", "C", "S", None, "Q"],
+            "survived": ["1", "0", "1", "0", "1", "0"],
+        }))
+
+        resp = await client.get("/toy_datasets/titanic", headers=auth_headers)
+
+        assert resp.status_code == 200, resp.text[:300]
+        # o corpo tem de ser JSON estrito: sem NaN/Infinity, que o `json` do Python aceitaria
+        # de volta mas nenhum outro cliente aceita.
+        json.loads(resp.text, parse_constant=lambda c: (_ for _ in ()).throw(
+            AssertionError(f"resposta traz {c} literal, não é JSON válido")))

@@ -10,7 +10,22 @@ commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Histori
 
 ## 2026-08-03b (o dataset "Titanic" não era o Titanic)
 
-> Suíte **646** passed, 1 skipped.
+> Suíte **647** passed, 1 skipped.
+
+### Segundo 500: NaN não sobrevive à serialização
+- Depois de corrigir o despacho, `GET /toy_datasets/titanic` **continuava 500**. O handler
+  chamado direto funcionava (`OK ['id_coleta', …]`) — o erro acontece **depois de ele retornar**,
+  na serialização: o Starlette usa `allow_nan=False` e o Titanic tem **263 nulos em `age`**, 1 em
+  `fare` e 2 em `embarked`. Provado no servidor: `json.dumps(r, allow_nan=False)` →
+  `ValueError: Out of range float values are not JSON compliant: nan`.
+- O endpoint **não passava por `converter_numpy`** (nenhuma ocorrência no arquivo), o helper que o
+  projeto já usa para trocar NaN/Inf por `None`. Agora o `return` é sanitizado.
+- **Vale para qualquer base do mundo real com lacuna**, não só o Titanic: era um 500 esperando um
+  dataset com célula vazia. Teste novo passa pelo endpoint com NaN em duas colunas e exige **JSON
+  estrito** na resposta (`parse_constant` recusa `NaN`/`Infinity` literais) — verificado que falha
+  contra o código anterior.
+- **Lição de método:** chamar o handler direto **não** exercita a serialização. Erro de resposta
+  só aparece por requisição HTTP de verdade.
 
 ### O endpoint que abre o dataset caiu em 500 — segundo despacho por `fonte`
 - **Pego testando pela API com token de aluno de verdade:** `GET /toy_datasets/titanic` devolvia

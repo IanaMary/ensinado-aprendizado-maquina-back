@@ -18,7 +18,7 @@ from app.utils.seed import seed_everything, get_seed, get_sklearn_random_state
 from app.database import arquivos, configuracoes_treinamento
 from app.security import exigir_admin_ou_professor, get_usuario_atual
 from app.desafios.base_dados import perfil_do_dataset
-from app.funcoes_genericas.funcoes_genericas import df_para_base64
+from app.funcoes_genericas.funcoes_genericas import converter_numpy, df_para_base64
 
 logger = logging.getLogger("uvicorn")
 
@@ -206,7 +206,12 @@ async def carregar_dataset(
         result_config = await configuracoes_treinamento.insert_one(doc_config)
         id_configuracoes_treinamento = str(result_config.inserted_id)
 
-        return {
+        # `converter_numpy` NÃO é opcional aqui: ele troca NaN/Inf por None. O Starlette serializa
+        # com `allow_nan=False`, então uma única célula vazia na amostra de `dados` derruba a
+        # resposta inteira com 500 — e é o caso de qualquer base do mundo real (no Titanic, `age`
+        # tem 263 nulos). O erro acontece DEPOIS do handler retornar, o que engana: chamar a função
+        # direto funciona, e só a requisição HTTP falha.
+        return converter_numpy({
             "id_coleta": id_coleta,
             "id_configuracoes_treinamento": id_configuracoes_treinamento,
             "id": ds.id,
@@ -237,8 +242,8 @@ async def carregar_dataset(
             "descricao_features": ds.descricao_features,
             "missao": ds.to_dict().get("missao"),
             "seed": get_seed()
-        }
-    
+        })
+
     except HTTPException:
         raise
     except DatasetNaoConfigurado as e:
