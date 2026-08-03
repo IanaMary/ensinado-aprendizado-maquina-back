@@ -80,8 +80,12 @@ echo "$DESTINO"
 # Só toca em `deploy-*`, o padrão que ESTE script cria. Os `auto-*`, `dbdump-*`, `frontend-*` e
 # `absapt.tk.bak.*` são de outras ferramentas e não são meus para apagar.
 if [ "$MANTER_BACKUPS" -gt 0 ]; then
-  mapfile -t antigos < <(find "$RAIZ_BACKUP" -maxdepth 1 -type d -name 'deploy-*' -printf '%f\n' \
-                         | sort -r | tail -n "+$((MANTER_BACKUPS + 1))")
+  # Por MTIME, nao por nome: ha backups antigos de nome nao datado (`deploy-chat-edu`,
+  # `deploy-conf-pipeline`...) que o `sort` lexicografico punha ACIMA de `deploy-2026...`, fazendo
+  # a retencao apagar os mais novos e guardar os mais velhos.
+  mapfile -t antigos < <(find "$RAIZ_BACKUP" -maxdepth 1 -type d -name 'deploy-*' \
+                         -printf '%T@\t%f\n' | sort -rn | cut -f2 \
+                         | tail -n "+$((MANTER_BACKUPS + 1))")
   if [ "${#antigos[@]}" -gt 0 ]; then
     echo "  retenção: mantendo $MANTER_BACKUPS, removendo ${#antigos[@]}"
     for velho in "${antigos[@]}"; do
