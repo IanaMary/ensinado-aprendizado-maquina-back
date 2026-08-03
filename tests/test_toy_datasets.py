@@ -220,3 +220,62 @@ class TestLoadUciDataset:
         data = response.json()
         assert "n_treino" in data
         assert "n_teste" in data
+
+
+@pytest.mark.asyncio
+class TestCarregarDatasetPorFonte:
+    """O endpoint que a tela usa para ABRIR o dataset tem de atender toda `fonte` do catálogo.
+
+    O router tinha o seu próprio `if/elif` sobre `fonte`, separado do dos carregadores. Quando o
+    Titanic virou `openml`, a lista do router não foi atualizada: `df` ficava `None` e o endpoint
+    devolvia **500 "Erro ao carregar dataset"** — com o carregador novo funcionando e os testes de
+    unidade verdes. Só um teste que passe PELO ENDPOINT pega isso.
+    """
+
+    async def test_toda_fonte_do_catalogo_e_atendida(self, client, mock_db, auth_headers, monkeypatch):
+        import pandas as pd
+        from app.models.dataset_config import get_all_datasets
+        from app.models import dataset_loaders as dl
+
+        # Um representante por fonte, para não baixar 25 datasets no teste.
+        por_fonte = {}
+        for nome, ds in get_all_datasets().items():
+            por_fonte.setdefault(ds.fonte, nome)
+
+        # Rede fora: cada carregador externo devolve um dataframe mínimo e coerente.
+        monkeypatch.setattr(
+            dl, "carregar_uci",
+            lambda nome, ds=None: pd.DataFrame({"a": [1, 2, 3, 4], "target": [0, 1, 0, 1]}),
+        )
+        monkeypatch.setattr(
+            dl, "carregar_openml",
+            lambda nome: pd.DataFrame({"pclass": [1, 2, 3, 1], "survived": ["0", "1", "0", "1"]}),
+        )
+
+        assert "openml" in por_fonte, "o catálogo perdeu a fonte openml"
+        for fonte, nome in sorted(por_fonte.items()):
+            resp = await client.get(f"/toy_datasets/{nome}", headers=auth_headers)
+            assert resp.status_code == 200, (
+                f"fonte '{fonte}' (dataset '{nome}') respondeu {resp.status_code}: {resp.text[:200]}"
+            )
+
+    async def test_titanic_responde_e_nao_entrega_as_colunas_de_vazamento(self, client, mock_db, auth_headers, monkeypatch):
+        import pandas as pd
+        from app.models import dataset_loaders as dl
+
+        # O que o `carregar_openml` real devolve: só as 7 features + alvo.
+        monkeypatch.setattr(dl, "carregar_openml", lambda nome: pd.DataFrame({
+            "pclass": [1, 3, 2, 1], "sex": ["female", "male", "female", "male"],
+            "age": [29.0, 25.0, 40.0, 50.0], "sibsp": [0, 1, 0, 1], "parch": [0, 0, 2, 0],
+            "fare": [211.3, 7.9, 26.0, 52.0], "embarked": ["S", "S", "C", "S"],
+            "survived": ["1", "0", "1", "0"],
+        }))
+
+        resp = await client.get("/toy_datasets/titanic", headers=auth_headers)
+
+        assert resp.status_code == 200, resp.text[:300]
+        d = resp.json()
+        colunas = d.get("colunas") or []
+        nomes = [c["nome"] if isinstance(c, dict) else c for c in colunas]
+        assert "survived" in nomes
+        assert not ({"boat", "body", "name", "ticket", "cabin", "home.dest"} & set(nomes))

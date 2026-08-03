@@ -75,6 +75,29 @@ reais, os mesmos que já eram gravados em `db.arquivos`. Aditivo: nenhum campo m
 
 ---
 
+## 2026-08-03h (abrir o Titanic na tela dava 500 — duas listas de fontes)
+
+> Regressão introduzida pela própria troca de fonte do Titanic, e **invisível para os testes de
+> unidade**: o carregador novo funcionava. Suíte **646** passed, 1 skipped.
+
+### Corrigido — o endpoint que a tela usa para abrir o dataset não conhecia a fonte `openml`
+
+`GET /toy_datasets/{name}` tinha o **seu próprio `if/elif` sobre `ds.fonte`**, separado do despacho
+dos carregadores. Quando o Titanic passou a ser `fonte="openml"`, essa segunda lista não foi
+atualizada: `df` ficava `None` e o endpoint devolvia **500 "Erro ao carregar dataset"**. O aluno que
+escolhesse o Titanic não conseguia abri-lo.
+
+O despacho por fonte passou a viver **em um só lugar** (`carregar_com_rotulos`, em
+`dataset_loaders.py`), que já cobria `openml`; `carregar_dataframe` continua existindo como fachada
+(o desafio de montagem a usa). **Duas listas de fontes em arquivos diferentes garantem que a próxima
+fonte seja esquecida numa delas.**
+
+O teste novo passa **pelo endpoint** e cobre um representante de **cada fonte do catálogo**, com a
+rede mockada — verificado que falha contra o código anterior e passa com a correção. Testes de
+unidade do carregador não pegavam isso, porque o carregador estava certo.
+
+---
+
 ## 2026-08-03b (o zip do aluno não leva metadados do servidor + alvo contínuo virando texto)
 
 > Achados na varredura por agentes do código exportado. Suíte **641** passed, 1 skipped.

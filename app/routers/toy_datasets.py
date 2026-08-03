@@ -7,7 +7,8 @@ from app.models.dataset_config import (
     DatasetType, get_all_datasets, get_dataset_config
 )
 from app.models.dataset_loaders import (
-    DatasetNaoConfigurado, carregar_gerador, carregar_sklearn, carregar_uci,
+    DatasetNaoConfigurado, carregar_com_rotulos, carregar_gerador, carregar_sklearn,
+    carregar_uci,
     # Reexportado: o startup em app/main.py chama toy_datasets.prewarm_uci_cache.
     prewarm_uci_cache,
 )
@@ -99,19 +100,16 @@ async def carregar_dataset(
         seed_everything(seed)
 
     try:
-        df = None
-        target_names = None
+        # Despacho por `fonte` vive SÓ no `carregar_com_rotulos`. Aqui havia uma segunda lista de
+        # fontes, e quando o Titanic virou `openml` ela não foi atualizada: `df` ficava `None` e
+        # este endpoint — o que a tela chama para abrir o dataset — devolvia 500, com o carregador
+        # novo funcionando e os testes de unidade verdes.
+        df, target_names = carregar_com_rotulos(
+            dataset_name, ds,
+            n_amostras=n_amostras, n_features=n_features, ruido=ruido,
+            n_classes=n_classes, n_clusters=n_clusters,
+        )
 
-        # Carregar baseado na fonte
-        if ds.fonte == "sklearn":
-            df, target_names = carregar_sklearn(dataset_name)
-        elif ds.fonte == "uci":
-            df = carregar_uci(dataset_name, ds)
-        elif ds.fonte == "gerador":
-            df, target_names = carregar_gerador(
-                dataset_name, ds, n_amostras, n_features, ruido, n_classes, n_clusters
-            )
-        
         if df is None:
             raise HTTPException(status_code=500, detail="Erro ao carregar dataset")
         

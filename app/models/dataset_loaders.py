@@ -8,7 +8,7 @@ As três funções são puras: recebem o nome do dataset e devolvem o DataFrame.
 o router.
 """
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 import logging
 import os
 
@@ -269,16 +269,32 @@ def prewarm_uci_cache():
             logger.warning("[cache %s] falha ao pre-baixar '%s': %s", rotulo, nome, exc)
 
 
-def carregar_dataframe(dataset_name: str, ds: DatasetConfig) -> Optional[pd.DataFrame]:
-    """DataFrame de um dataset de exemplo, escolhendo o carregador pela `fonte`."""
+def carregar_com_rotulos(
+    dataset_name: str, ds: DatasetConfig, **params,
+) -> Tuple[Optional[pd.DataFrame], Optional[Any]]:
+    """`(df, target_names)` de um dataset de exemplo, escolhendo o carregador pela `fonte`.
+
+    **Despacho por `fonte` fica SÓ AQUI.** O router de toy datasets tinha o seu proprio `if/elif`
+    sobre `fonte`, e quando o Titanic virou `openml` a lista dele nao foi atualizada: `df` ficava
+    `None` e o endpoint que a tela usa para abrir o dataset devolvia **500 "Erro ao carregar
+    dataset"** — com o carregador novo funcionando e os testes de unidade passando. Duas listas
+    de fontes em lugares diferentes garantem que a proxima fonte seja esquecida numa delas.
+
+    `params` sao os controles do gerador sintetico (n_amostras, n_features, ruido, n_classes,
+    n_clusters), ignorados pelas outras fontes.
+    """
     if ds.fonte == "sklearn":
-        df, _ = carregar_sklearn(dataset_name)
-        return df
+        return carregar_sklearn(dataset_name)
     if ds.fonte == "uci":
-        return carregar_uci(dataset_name, ds)
+        return carregar_uci(dataset_name, ds), None
     if ds.fonte == "openml":
-        return carregar_openml(dataset_name)
+        return carregar_openml(dataset_name), None
     if ds.fonte == "gerador":
-        df, _ = carregar_gerador(dataset_name, ds)
-        return df
-    return None
+        return carregar_gerador(dataset_name, ds, **params)
+    return None, None
+
+
+def carregar_dataframe(dataset_name: str, ds: DatasetConfig) -> Optional[pd.DataFrame]:
+    """Só o DataFrame, para quem não precisa dos `target_names`."""
+    df, _ = carregar_com_rotulos(dataset_name, ds)
+    return df
