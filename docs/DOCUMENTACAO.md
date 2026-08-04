@@ -514,12 +514,12 @@ sequenceDiagram
 
 ## 8. Infraestrutura e deploy
 
-- **Produção:** Oracle VM, nginx servindo o SPA em `/var/www/h2ia/tutor` e fazendo proxy de `/h2ia/tutor/api` para o backend (`h2ia-backend.service`, uvicorn :8002). MongoDB local.
-- **Deploy backend:** `git pull` na VM + `systemctl restart h2ia-backend.service`.
-- **Deploy frontend:** `ng build --configuration production` → `tar | ssh` para `/var/www/h2ia/tutor` → `nginx reload`.
+- **Produção:** Oracle VM, nginx servindo o SPA em `/var/www/h2ia/tutor` e fazendo proxy de `/h2ia/tutor/api` para o backend (`h2ia-backend.service`, uvicorn em **`127.0.0.1:8002`** — nunca `0.0.0.0`, que exporia a API na internet em HTTP puro). MongoDB local.
+- **Deploy backend:** `git pull` na branch `master` em `/home/ubuntu/servers/Iana` + `systemctl restart h2ia-backend.service`.
+- **Deploy frontend:** publicado **por cima** do web root, sem `rm -rf` (os assets hasheados do build anterior mantêm as abas abertas funcionando).
 - **Backups:** antes de cada deploy, cópia de frontend/backend/nginx/serviço em `/home/ubuntu/backups/`.
-- **Docker (alternativa local):** `docker compose up --build` sobe mongo + backend + frontend (ver `DOCKER.md`).
-- O `CLAUDE.md` na raiz do backend tem o checklist e o histórico de deploys.
+- **Docker (alternativa local):** `docker compose up --build` sobe mongo + backend + frontend.
+- **O procedimento completo (backup, deploy, validação) e o histórico de incidentes ficam no workspace de trabalho, não neste repositório:** `CLAUDE.md` e `HISTORICO.md` na raiz do workspace. Este documento descreve a topologia; ele não é um roteiro de deploy.
 
 ---
 
@@ -556,4 +556,4 @@ sequenceDiagram
 
 ---
 
-_Documento gerado a partir de inspeção do banco em produção e leitura do código-fonte dos dois repositórios. Atualizado em 2026-06-21 (inclui "Léo no Mundo Real", "Desafiar o Léo", missão Cachorros e WebGPU/câmera)._
+_Documento gerado a partir de inspeção do banco em produção e leitura do código-fonte dos dois repositórios. Atualizado em 2026-08-04._

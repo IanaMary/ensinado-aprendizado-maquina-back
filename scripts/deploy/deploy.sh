@@ -49,7 +49,10 @@ echo "  Backups salvos em: $BACKUP_DIR"
 echo ""
 echo "=== [2/6] Atualizando código do repositório ==="
 cd "$PROJECT_DIR"
-git pull origin main || git pull origin master
+# `origin/main` é branch ÓRFÃ só-README neste repositório (1 arquivo, sem `app/`). O `pull main ||
+# pull master` daqui fazia o primeiro comando ter sucesso sem trazer código nenhum, e é por isso que
+# todo deploy real acabava sendo feito à mão em vez de por este script.
+git pull --ff-only origin master
 
 # ---- Configurar .env ----
 echo ""

@@ -1,12 +1,52 @@
 # Changelog — H2IA Tutor
 
-Histórico de deploys em produção (`https://absapt.tk/h2ia/`). Formato inspirado em
+Histórico de deploys em produção (`https://absapt.tk/h2ia/tutor/`). Formato inspirado em
 [Keep a Changelog](https://keepachangelog.com); datas em AAAA-MM-DD. Cada entrada cita os
-commits (frontend/backend) e o bundle publicado. Fonte: `CLAUDE.md` → _Historical Production Reference_.
+commits (frontend/backend) e o bundle publicado. O histórico narrativo completo (incidentes,
+diagnósticos, armadilhas) vive no `HISTORICO.md` do workspace de trabalho.
 
 > Frontend: `IanaMary/ensinado-aprendizado-maquina` · Backend: `IanaMary/ensinado-aprendizado-maquina-back`.
 
 ---
+
+## 2026-08-04 (semente alinhada, código morto fora, documentação consolidada)
+
+### Corrigido
+- **A tela e o script exportado voltam a dar o mesmo número.** O treino só recebia `random_state`
+  quando havia semente global, e em produção não há: cada treino de modelo estocástico (árvore,
+  random forest, MLP, k-means) saía com um número diferente, enquanto o script baixado fixa 42. O
+  aluno comparava os dois e concluía que a plataforma tinha mentido. `random_state_efetivo()`
+  (`app/utils/seed.py`) devolve a semente global **ou 42, nunca `None`**. Medido no código
+  implantado: plataforma e script dão **0.9556** idênticos (Wine + árvore); antes, 4 treinos sem
+  semente variavam 1,22 ponto. Fixar não esconde a variância — trocar a semente de propósito
+  (`?seed=N`) muda os dois lados juntos.
+- `scripts/deploy/deploy.sh` puxava `origin/main`, que é **branch órfã só-README** (1 arquivo, sem
+  `app/`): o primeiro `git pull` tinha sucesso sem trazer código, e era por isso que todo deploy
+  real acabava sendo feito à mão. Agora `git pull --ff-only origin master`.
+
+### Removido
+- `app/models/tutor.py` e `app/models/usuarios.py` — **zero importadores**. Com eles sai
+  `simpleeval` do `requirements.txt`, dependência que só o código morto sustentava (era nele que
+  vivia o `eval()` sobre documento do Mongo corrigido em junho).
+- `test_output.txt` (430 KB de despejo de pytest) sai do índice e entra no `.gitignore`.
+- Os três `.env.backup.*` / `.env.bak-*` dentro do projeto na VM, que guardavam segredos antigos em
+  modo `664`. Nenhuma chave exclusiva (conferido por nome, sem ler valores); as cópias preservadas em
+  `/home/ubuntu/backups/deploy-20260804-023628/backend/` foram para modo `600`.
+- `/home/ubuntu/ensinado-aprendizado-maquina-back.MOVIDO-20260804` (**779 MB**) e a unit
+  `h2ia-backend.service.bak-20260804-023347`, que ainda apontava para o caminho antigo — armadilha se
+  alguém a restaurasse. Removidos só depois de provar, cumulativamente: nenhum processo com `cwd` lá,
+  `.env` de hash idêntico, `HEAD` antigo ancestral do atual, zero commit/stash fora do `origin`, todo
+  arquivo exclusivo preservado em outro lugar, e produção sã. Zero referências ao caminho antigo
+  restam na VM.
+
+### Documentação
+- `docs/email-smtp.md` (novo) absorve o `EMAIL_SETUP.md` do workspace **corrigindo o bloco de
+  reinício**, que mandava `pkill -f uvicorn` + `nohup uvicorn --host 0.0.0.0 --port 8000`: matava o
+  processo gerido pelo systemd, subia na porta errada (o nginx faz proxy da 8002) e reabria a API na
+  internet em HTTP puro — o defeito de segurança corrigido em 04/08.
+- `docs/DOCUMENTACAO.md`: aponta `127.0.0.1:8002`, remove o ponteiro para o inexistente `DOCKER.md`
+  e para um `CLAUDE.md` "na raiz do backend" que nunca existiu, e o rodapé deixa de dizer que foi
+  atualizado em junho.
 
 ## 2026-08-03d (disco: backup de 838M → 65M e caches com limpeza)
 
