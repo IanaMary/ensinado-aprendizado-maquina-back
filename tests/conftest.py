@@ -112,6 +112,7 @@ def mock_db(mock_user):
     mock_mlflow_runs = _make_mock_collection()
     mock_erros = _make_mock_collection()
     mock_graficos = _make_mock_collection()
+    mock_turmas = _make_mock_collection()
 
     # By default, return the test user for auth lookups
     mock_user_col.find_one = AsyncMock(return_value=mock_user)
@@ -161,6 +162,12 @@ def mock_db(mock_user):
         patch("app.metricas.metricas.arquivos", mock_arquivos),
         
         patch("app.routers.pipelines.pipelines", mock_pipeline),
+        # `pipelines.py` também importa `turmas` no topo, e a galeria passou a consultá-la para saber
+        # quais turmas são do usuário. **4ª ocorrência da mesma lacuna** (as outras:
+        # `treinamento_base.opcoes_pre_processamento`, `atividade.turmas`, `turmas.colecao_usuario`):
+        # um `from app.database import X` no topo exige patch com o nome LOCAL, senão o teste fala com
+        # o Mongo real e a suíte pendura no timeout de conexão.
+        patch("app.routers.pipelines.turmas", mock_turmas),
         patch("app.routers.treinamento_base.arquivos", mock_arquivos),
         patch("app.routers.treinamento_base.configuracoes_treinamento", mock_config),
         patch("app.routers.treinamento_base.opcoes_modelos", mock_modelos),
@@ -205,6 +212,7 @@ def mock_db(mock_user):
         "atividade": mock_atividade,
         "mlflow_runs": mock_mlflow_runs,
         "graficos": mock_graficos,
+        "turmas": mock_turmas,
     }
 
     for p in patches:

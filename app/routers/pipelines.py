@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.database import pipelines, turmas, atividades
 from app.pipelines_evolucao import montar_evolucao, normalizar_nome_base
 from app.schemas.pipelines import PipelineCreate, PipelineUpdate
-from app.security import get_usuario_atual
+from app.security import get_usuario_atual, id_usuario_atual
 from app.funcoes_genericas.validacao import validar_object_id
 
 router = APIRouter(prefix="/pipelines", tags=["Pipelines"])
@@ -193,11 +193,87 @@ async def evolucao_do_aluno(
     return {"bases": bases}
 
 
+async def _turmas_do_usuario(user_id: str) -> dict:
+    """`{turma_id: {"nome", "professor_id"}}` das turmas do usuário — onde ele é aluno OU professor.
+
+    **Difere de propósito do `_e_membro` acima**, que trata admin como membro de qualquer turma: lá
+    isso é certo, porque a pergunta é "pode ligar submissão a esta turma?". Aqui a pergunta é "quais
+    turmas são SUAS?", e admin-é-membro-de-tudo transformaria o filtro da galeria em ruído para ele —
+    "minha turma" passaria a significar "todas".
+    """
+    if not user_id:
+        return {}
+    cur = turmas.find(
+        {"$or": [{"alunos": user_id}, {"professor_id": user_id}]},
+        {"nome": 1, "professor_id": 1},
+    )
+    return {str(t["_id"]): {"nome": t.get("nome"), "professor_id": t.get("professor_id")}
+            async for t in cur}
+
+
+def _pode_ver(doc: dict, user_id: str, minhas_turmas: dict) -> bool:
+    """O usuário pode ver este pipeline? É o MESMO critério da galeria e da cópia.
+
+    Existe como função para os dois não divergirem: a galeria passou a mostrar material da turma que
+    não é público, e sem espelhar a regra aqui o botão "Copiar" desses cartões daria 404.
+    """
+    if doc.get("user_id") == user_id or doc.get("is_public", False):
+        return True
+    return _e_material_de_turma(doc, minhas_turmas)
+
+
+def _e_material_de_turma(doc: dict, minhas_turmas: dict) -> bool:
+    """Material que o professor da MINHA turma deixou para a turma, sem estar público.
+
+    Dois recortes, e os dois importam:
+
+    - **`user_id` tem de ser o professor daquela turma.** `turma_id` não marca só material do
+      professor: marca **submissão de aluno a atividade** (é assim que o ranking sabe de quem é cada
+      entrega — ver `_validar_vinculo_atividade`). Sem este recorte, a galeria mostraria o trabalho de
+      cada colega para a turma inteira, com resultados e métricas, numa plataforma de menores de idade
+      e com atividades pontuadas. Medido em 04/08: das 7 pipelines em produção, as 2 com `turma_id`
+      não-públicas eram submissões de aluno.
+    - **`atividade_id` tem de ser vazio.** Um pipeline do professor amarrado a uma atividade é, na
+      prática, a resposta esperada; mostrá-lo antes da entrega vazaria o gabarito.
+    """
+    if doc.get("atividade_id"):
+        return False
+    t = minhas_turmas.get(doc.get("turma_id") or "")
+    return bool(t and t.get("professor_id") and doc.get("user_id") == t["professor_id"])
+
+
 @router.get("/galeria")
 async def listar_galeria():
-    cursor = pipelines.find({"is_public": True}).sort("dataModificacao", -1)
+    """Pipelines públicos + o material que o professor deixou nas turmas do usuário.
+
+    O usuário sai de `id_usuario_atual()` (padrão do projeto para handler sem `Depends`): a rota já
+    exige token, porque o router é registrado com `dependencies=auth_dependency` e
+    `definir_usuario_atual` depende de `get_usuario_atual`.
+    """
+    user_id = id_usuario_atual()
+    minhas = await _turmas_do_usuario(user_id)
+
+    # Um clause por turma, e não `turma_id: {$in: [...]}`: o `user_id` exigido é o professor DAQUELA
+    # turma. Um `$in` solto deixaria passar submissão de colega — ver `_e_material_de_turma`.
+    material_da_turma = [
+        {"turma_id": tid, "user_id": t["professor_id"], "atividade_id": None}
+        for tid, t in minhas.items() if t.get("professor_id")
+    ]
+    filtro = {"$or": [{"is_public": True}, *material_da_turma]} if material_da_turma else {"is_public": True}
+
+    cursor = pipelines.find(filtro).sort("dataModificacao", -1)
     docs = await cursor.to_list(length=100)
-    return [_pipeline_doc(d) for d in docs]
+
+    saida = []
+    for d in docs:
+        item = _pipeline_doc(d)
+        tid = item.get("turma_id")
+        item["da_minha_turma"] = bool(tid and tid in minhas)
+        # O NOME só sai para quem é membro: um pipeline público de outra turma não deve revelar como
+        # ela se chama.
+        item["turma_nome"] = (minhas.get(tid) or {}).get("nome") if item["da_minha_turma"] else None
+        saida.append(item)
+    return saida
 
 
 @router.post("/{pipeline_id}/copiar")
@@ -214,8 +290,12 @@ async def copiar_pipeline(
     original = await pipelines.find_one({"_id": oid})
     if not original:
         raise HTTPException(status_code=404, detail="Pipeline original não encontrado")
-    if original.get("user_id") != user_id and not original.get("is_public", False):
-        raise HTTPException(status_code=404, detail="Pipeline original não encontrado")
+    # O MESMO critério da galeria (`_pode_ver`): o que aparece lá tem de poder ser copiado, senão o
+    # botão "Copiar" do material da turma devolveria 404. As turmas só são consultadas quando o
+    # atalho (meu, ou público) não resolve — para não pagar uma query no caso comum.
+    if not (original.get("user_id") == user_id or original.get("is_public", False)):
+        if not _pode_ver(original, user_id, await _turmas_do_usuario(user_id)):
+            raise HTTPException(status_code=404, detail="Pipeline original não encontrado")
 
     agora = datetime.now(timezone.utc)
     novo_doc = original.copy()
