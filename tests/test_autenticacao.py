@@ -101,7 +101,8 @@ class TestRotaProtegida:
 
 
 class TestRenovacaoDeSessao:
-    """O token dura 60 min e não era renovado: o aluno caía no meio da atividade (Imagem 10)."""
+    """O token não era renovado: o aluno caía no meio da atividade (Imagem 10). A duração vem de
+    `TOKEN_EXPIRE_MINUTES` (240 min desde 04/08); estes testes não dependem do valor."""
 
     @pytest.mark.asyncio
     async def test_renova_com_token_valido(self, client, mock_db, auth_headers):

@@ -20,8 +20,15 @@ if os.getenv("RENDER") is None:
 # =========================
 # CONFIGURAÇÕES JWT
 # =========================
+# 240 min (4 h) cobre uma aula inteira com intervalos. Eram 60, e como a renovação é disparada pela
+# ATIVIDADE (`sessao-renovacao.service.ts`, sem timer de fundo, de propósito), uma hora parado —
+# aluno lendo, pensando ou escrevendo no papel — derrubava a sessão sem aviso.
+#
+# O custo é explícito: este é um bearer JWT sem lista de revogação, então a janela de um token
+# vazado passa de 1 h para 4 h. O que limita a exposição é o token viver em `sessionStorage`
+# (por ABA, apagado ao fechar), não em `localStorage`. Não subir mais que isso sem revogação.
 TOKEN_EXPIRE_MINUTES = int(
-    os.getenv("TOKEN_EXPIRE_MINUTES", 60)
+    os.getenv("TOKEN_EXPIRE_MINUTES", 240)
 )
 
 # =========================
