@@ -1,4 +1,5 @@
 import pytest
+from bson import ObjectId
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
@@ -352,3 +353,85 @@ class TestCadeiaDeFallback:
         chat_tutor._marcar_ruim("http://x", "a")
         # 'a' continua na lista: se 'b' também estiver ruim, ainda vale tentar alguma coisa.
         assert chat_tutor.cadeia_de_modelos(prov) == ["b", "a"]
+
+
+class TestProvedoresDeLLM:
+    """`GET /tutor/provedores` e `PUT /tutor/provedores/{pid}` não tinham teste, e são os dois
+    endpoints que lidam com **chave de API do LLM**.
+
+    Dois riscos: a chave sair para a tela (vazamento de credencial) e o admin **perder** a chave ao
+    corrigir só a URL — é para isso que existe a regra "`api_key` vazio mantém a atual", e ela só se
+    sustenta com teste.
+    """
+
+    @pytest.mark.asyncio
+    async def test_listar_exige_papel_e_nao_devolve_chave_em_claro(
+        self, client, mock_db, auth_headers, mock_admin,
+    ):
+        from app.routers import chat_tutor
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        with patch.object(chat_tutor.prov, "listar_para_tela", AsyncMock(return_value={
+            "ativo": "openrouter",
+            "provedores": {"openrouter": {"nome": "OpenRouter", "chave_final": "cd12",
+                                          "origem_chave": "banco", "modelo": "x/y"}},
+        })):
+            resp = await client.get("/tutor/provedores", headers=auth_headers)
+
+        assert resp.status_code == 200
+        corpo = resp.text
+        # o contrato é devolver só os últimos 4 caracteres
+        assert "chave_final" in corpo
+        assert "api_key" not in corpo and "sk-" not in corpo
+
+    @pytest.mark.asyncio
+    async def test_aluno_nao_lista_provedores(self, client, mock_db, auth_headers):
+        resp = await client.get("/tutor/provedores", headers=auth_headers)
+        assert resp.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_aluno_e_professor_nao_gravam_provedor(self, client, mock_db, auth_headers):
+        """Gravar é só admin (gate no corpo, não dependency): professor também recebe 403."""
+        for papel in ("aluno", "professor"):
+            mock_db["usuarios"].find_one = AsyncMock(return_value={
+                "_id": ObjectId(), "email": "x@test.com", "role": papel, "nome": papel})
+            resp = await client.put("/tutor/provedores/openrouter", headers=auth_headers,
+                                    json={"api_key": "nova-chave"})
+            assert resp.status_code == 403, f"{papel} conseguiu gravar provedor"
+
+    @pytest.mark.asyncio
+    async def test_api_key_vazio_nao_chega_como_chave_nova(
+        self, client, mock_db, auth_headers, mock_admin,
+    ):
+        """O admin corrige a URL sem redigitar o segredo. Se um `api_key: ""` fosse tratado como
+        chave nova, o chat cairia para todos os alunos no próximo pedido."""
+        from app.routers import chat_tutor
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        salvar = AsyncMock()
+        with patch.object(chat_tutor.prov, "salvar_provedor", salvar), \
+             patch.object(chat_tutor.prov, "listar_para_tela", AsyncMock(return_value={})), \
+             patch.object(chat_tutor, "_auditar_llm", AsyncMock()):
+            resp = await client.put("/tutor/provedores/openrouter", headers=auth_headers,
+                                    json={"base_url": "https://novo.exemplo/v1", "api_key": ""})
+
+        assert resp.status_code == 200
+        enviado = salvar.await_args[0][1]
+        assert enviado["base_url"] == "https://novo.exemplo/v1"
+        # `salvar_provedor` só sobrescreve quando a chave vem preenchida — string vazia é "manter"
+        assert enviado.get("api_key", "") == ""
+
+    @pytest.mark.asyncio
+    async def test_a_chave_nunca_entra_na_auditoria(
+        self, client, mock_db, auth_headers, mock_admin,
+    ):
+        """A auditoria (`pipe: 'llm'`) registra QUE mudou, não o segredo."""
+        from app.routers import chat_tutor
+        mock_db["usuarios"].find_one = AsyncMock(return_value=mock_admin)
+        auditar = AsyncMock()
+        with patch.object(chat_tutor.prov, "salvar_provedor", AsyncMock()), \
+             patch.object(chat_tutor.prov, "listar_para_tela", AsyncMock(return_value={})), \
+             patch.object(chat_tutor, "_auditar_llm", auditar):
+            await client.put("/tutor/provedores/openrouter", headers=auth_headers,
+                             json={"api_key": "sk-segredo-que-nao-pode-aparecer"})
+
+        assert auditar.await_count == 1
+        assert "sk-segredo-que-nao-pode-aparecer" not in str(auditar.await_args)

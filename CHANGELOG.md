@@ -219,6 +219,36 @@ reais, os mesmos que já eram gravados em `db.arquivos`. Aditivo: nenhum campo m
 
 ---
 
+## 2026-08-04c (mapa de cobertura fechado: conf-pipeline e provedores de LLM)
+
+> Últimos dois itens do mapa de risco. Suíte **673** passed, 1 skipped (era 651 no início do dia).
+
+### Coberto — pré-processamento no conf-pipeline: um clique atinge todos os alunos
+
+`PATCH /conf_pipeline/pre_processamento/{valor}/habilitado` não tinha teste. O `upsert=True` é o que
+faz a coisa funcionar: os 10 built-ins podem não ter documento em `db.pre_processamento`, e **sem
+upsert desabilitar um deles não gravaria nada** — a tela mostraria o toggle mudando e o item
+continuaria disponível para a turma. Coberto o upsert, a guarda de tamanho do `valor` (que vai para o
+filtro do Mongo) e o gate de papel: aluno recebe 403, senão seria negação de serviço para a turma.
+
+### Coberto — os endpoints que lidam com chave de API do LLM
+
+`GET /tutor/provedores` e `PUT /tutor/provedores/{pid}` não tinham teste. Dois riscos, os dois
+cobertos: a chave **não** sai para a tela (só `chave_final`, os últimos 4 caracteres), e **`api_key`
+vazio não é tratado como chave nova** — é assim que o admin corrige a URL sem redigitar o segredo; se
+quebrasse, o chat cairia para todos os alunos no pedido seguinte. Mais: gravar é só admin (professor
+também recebe 403, porque o gate está no corpo e não na dependency) e a chave **nunca** entra na
+auditoria.
+
+### Fechamento do mapa
+
+A cadeia de fallback do chat já estava bem coberta (404 cai para o próximo, 401 não percorre, cadeia
+esgotada, ordem, modelo que falhou vai para o fim sem sair da fila) — nada a acrescentar ali. O
+desafio de montagem também: 52 testes, incluindo os quatro que garantem que `lane`, `papel` e
+`gabarito` não vazam. O que faltava era o teto de tentativas, coberto em 04/08b.
+
+---
+
 ## 2026-08-04b (turmas: cascata do delete, teto de tentativas, e mais uma lacuna do conftest)
 
 > Continuação do mapa de cobertura. Suíte **665** passed, 1 skipped.
