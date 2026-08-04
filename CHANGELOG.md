@@ -219,6 +219,39 @@ reais, os mesmos que já eram gravados em `db.arquivos`. Aditivo: nenhum campo m
 
 ---
 
+## 2026-08-03j (cobertura das lacunas de maior risco: escopo LGPD e projeto do aluno)
+
+> Levantamento de cobertura por agentes (somente leitura) apontou **~44 de ~142 endpoints sem
+> teste** e **16 lacunas do `conftest`** do mesmo tipo que deixou os dois 500 do treino passarem.
+> Esta entrada cobre os dois grupos de maior risco. Suíte **660** passed, 1 skipped (era 651).
+
+### Coberto — o escopo do professor na telemetria nunca era executado
+
+`_alunos_do_professor` (`app/routers/atividade.py:28`) restringe a telemetria aos alunos das turmas
+do professor — dado de menor de idade, com preview de conversa. **Nenhum teste passava por esse
+ramo**: todos usavam `mock_admin`, que sai antes do `if role == 'professor'`.
+
+Pior, era também uma lacuna do harness: `atividade.py` importa `turmas` no topo, e só o patch com o
+nome **local** isola. Sem ele, um teste do ramo do professor falaria com o Mongo real — exatamente o
+padrão do `treinamento_base.opcoes_pre_processamento`. O patch entrou no `conftest`, com o porquê
+registrado.
+
+Quatro casos: aluno de outra turma → **403**; aluno da própria turma → 200; sem `usuario_id` o
+filtro traz `{"$in": [alunos]}`; professor sem turma gera `{"$in": []}` (nada), não ausência de
+filtro (tudo). **Verificado**: os quatro falham quando o escopo é removido.
+
+Resultado da verificação: **o escopo está correto** — não havia defeito, agora há rede.
+
+### Coberto — `PUT` e `DELETE /pipelines/{id}`, onde o trabalho do aluno se perde
+
+Nenhum dos dois tinha teste. Cobertos: escopo por dono (projeto de outro dá **404**, não 403, para
+não confirmar que o id existe), `dataModificacao` vinda do servidor, id inválido e corpo vazio → 400,
+e o caso que mais importa — **aluno pedindo `is_public: true` não publica na galeria**, porque o
+checkbox do front é só conveniência e o enforcement é do servidor. **Verificado**: os testes de IDOR
+e de `is_public` falham quando as duas travas são removidas.
+
+---
+
 ## 2026-08-03h (abrir o Titanic na tela dava 500 — duas listas de fontes)
 
 > Regressão introduzida pela própria troca de fonte do Titanic, e **invisível para os testes de

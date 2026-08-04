@@ -173,6 +173,12 @@ def mock_db(mock_user):
         patch("app.routers.chat_tutor.historico_chat", _make_mock_collection()),
         patch("app.database.atividade_usuario", mock_atividade),
         patch("app.routers.atividade.atividade_usuario", mock_atividade),
+        # `atividade.py` importa `turmas` no topo, e é ela que `_alunos_do_professor` usa para
+        # escopar a telemetria por turma (LGPD). Sem o patch com o nome LOCAL, todo teste do ramo
+        # do PROFESSOR fala com o Mongo real — mesmo padrão que deixou os dois 500 do treino
+        # passarem quando faltava `treinamento_base.opcoes_pre_processamento`. Um teste que precise
+        # de turmas específicas sobrescreve este mock com o seu próprio `patch`.
+        patch("app.routers.atividade.turmas", _make_mock_collection()),
         patch("app.database.mlflow_runs", mock_mlflow_runs),
         patch("app.routers.artefatos.mlflow_runs", mock_mlflow_runs),
         patch("ucimlrepo.fetch_ucirepo", MagicMock(return_value=MagicMock(

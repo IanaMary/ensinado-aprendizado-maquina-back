@@ -314,3 +314,102 @@ class TestChatRegistraAtividade:
             )
         # registro é fire-and-forget: o chat continua respondendo 200
         assert resp.status_code == 200
+
+
+class TestEscopoDoProfessor:
+    """LGPD: o professor só vê a telemetria dos alunos das SUAS turmas.
+
+    Este ramo (`_alunos_do_professor`, `atividade.py:28`) **nunca era executado**: todos os testes
+    de consulta usavam `mock_admin`, que passa direto pelo `if role == 'professor'`. Pior, o
+    `conftest` não mockava `app.routers.atividade.turmas` — o módulo importa a coleção no topo, e
+    só o patch com o nome LOCAL o isola. Sem isso, um teste deste ramo falaria com o Mongo real.
+    É o mesmo padrão do `treinamento_base.opcoes_pre_processamento`, que deixou dois 500 passarem.
+
+    O dado aqui é preview de conversa de menor de idade; um furo de escopo é incidente de
+    privacidade, não defeito de usabilidade.
+    """
+
+    ALUNO_DELE = "aluno-da-minha-turma"
+    ALUNO_DE_OUTRO = "aluno-de-outro-professor"
+
+    @pytest.fixture
+    def professor(self):
+        from bson import ObjectId
+        return {
+            "_id": ObjectId(),
+            "nome_usuario": "prof",
+            "email": "prof@test.com",
+            "role": "professor",
+            "instituicao_ensino": "Teste",
+        }
+
+    def _turmas_do_professor(self, alunos):
+        """Coleção `turmas` que devolve uma turma com os alunos informados."""
+        col = MagicMock()
+        col.find = MagicMock(return_value=_AsyncCursor([{"alunos": alunos}]))
+        return col
+
+    @pytest.mark.asyncio
+    async def test_professor_recebe_403_para_aluno_de_outra_turma(
+        self, client, mock_db, auth_headers, professor,
+    ):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=professor)
+        with patch("app.routers.atividade.turmas", self._turmas_do_professor([self.ALUNO_DELE])):
+            resp = await client.get(
+                f"/atividades?usuario_id={self.ALUNO_DE_OUTRO}", headers=auth_headers,
+            )
+
+        assert resp.status_code == 403
+        assert "turma" in resp.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_professor_ve_o_aluno_da_propria_turma(
+        self, client, mock_db, auth_headers, professor,
+    ):
+        mock_db["usuarios"].find_one = AsyncMock(return_value=professor)
+        mock_db["atividade"].count_documents = AsyncMock(return_value=1)
+        mock_db["atividade"].find = MagicMock(
+            return_value=_AsyncCursor([{"_id": "e1", "tipo": "chat", "acao": "resposta_tutor"}])
+        )
+        with patch("app.routers.atividade.turmas", self._turmas_do_professor([self.ALUNO_DELE])):
+            resp = await client.get(
+                f"/atividades?usuario_id={self.ALUNO_DELE}", headers=auth_headers,
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 1
+
+    @pytest.mark.asyncio
+    async def test_sem_usuario_id_a_consulta_e_restrita_aos_alunos_dele(
+        self, client, mock_db, auth_headers, professor,
+    ):
+        """Sem `usuario_id` explícito, o filtro tem de trazer o `$in` — senão o professor
+        varreria a telemetria de TODA a plataforma."""
+        mock_db["usuarios"].find_one = AsyncMock(return_value=professor)
+        mock_db["atividade"].count_documents = AsyncMock(return_value=0)
+        mock_db["atividade"].find = MagicMock(return_value=_AsyncCursor([]))
+
+        with patch("app.routers.atividade.turmas", self._turmas_do_professor([self.ALUNO_DELE])):
+            resp = await client.get("/atividades", headers=auth_headers)
+
+        assert resp.status_code == 200
+        filtro = mock_db["atividade"].find.call_args[0][0]
+        assert filtro["usuario_id"] == {"$in": [self.ALUNO_DELE]}
+
+    @pytest.mark.asyncio
+    async def test_professor_sem_turma_nao_ve_ninguem(
+        self, client, mock_db, auth_headers, professor,
+    ):
+        """Conjunto vazio tem de gerar `$in: []` (nada), não ausência de filtro (tudo)."""
+        mock_db["usuarios"].find_one = AsyncMock(return_value=professor)
+        mock_db["atividade"].count_documents = AsyncMock(return_value=0)
+        mock_db["atividade"].find = MagicMock(return_value=_AsyncCursor([]))
+
+        col_vazia = MagicMock()
+        col_vazia.find = MagicMock(return_value=_AsyncCursor([]))
+        with patch("app.routers.atividade.turmas", col_vazia):
+            resp = await client.get("/atividades", headers=auth_headers)
+
+        assert resp.status_code == 200
+        filtro = mock_db["atividade"].find.call_args[0][0]
+        assert filtro["usuario_id"] == {"$in": []}
