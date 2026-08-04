@@ -58,3 +58,24 @@ def get_sklearn_random_state() -> Optional[int]:
     Returns None if no seed is set (sklearn default behavior).
     """
     return _global_seed
+
+
+# Semente usada quando não há semente global configurada. É o MESMO valor que o script exportado
+# emite (`script-generator.service.ts`, `rsArg`), e é isso que faz a tela e o código baixado darem
+# o mesmo número.
+SEMENTE_PADRAO = 42
+
+
+def random_state_efetivo() -> int:
+    """`random_state` a usar no estimador — nunca `None`.
+
+    Antes, o treino só recebia `random_state` se houvesse semente global, e em produção não há: cada
+    treino de modelo estocástico (árvore, random forest, MLP, k-means) saía com um número diferente,
+    e o script exportado — que fixa 42 — dava outro. O aluno comparava os dois e concluía que o
+    código baixado estava errado. Medido antes da correção: 5 execuções do script entre 0.6159 e
+    0.6280, contra 0.6402 na tela.
+
+    Fixar aqui **não** esconde a variância: quem quiser mostrá-la troca a semente de propósito
+    (`GET /toy_datasets/{id}?seed=N` chama `seed_everything`), e aí os dois lados mudam juntos.
+    """
+    return _global_seed if _global_seed is not None else SEMENTE_PADRAO

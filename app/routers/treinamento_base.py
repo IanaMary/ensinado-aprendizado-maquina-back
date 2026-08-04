@@ -15,7 +15,7 @@ from app.routers.artefatos import registrar_run_usuario
 from app.security import usuario_atual_ctx, id_usuario_atual
 from app.schemas.schemas import DatasetRequest
 from app.database import configuracoes_treinamento, arquivos, opcoes_modelos, modelos_treinados, opcoes_pre_processamento
-from app.utils.seed import get_sklearn_random_state
+from app.utils.seed import random_state_efetivo
 from app.funcoes_genericas.funcoes_genericas import converter_numpy
 from app.funcoes_genericas.validacao import validar_object_id, MAX_ARQUIVO_BASE64
 from app.pre_processamento import (
@@ -128,11 +128,14 @@ async def treinar_modelo_generico(
         execucao.get("hiperparametros") or modelo_doc.get("hiperparametros", [])
     )
 
-    # Aplicar seed global se configurado (apenas se o modelo suportar)
+    # Semente do estimador (apenas se o modelo suportar). Usa `random_state_efetivo`, que NUNCA
+    # devolve None: antes, sem semente global — o caso de produção — cada treino de modelo
+    # estocástico saía com um número diferente, e o script exportado (que fixa 42) dava outro. O
+    # aluno comparava a tela com o código baixado e concluía que o código estava errado. Agora os
+    # dois lados usam a mesma semente, e mostrar a variância continua possível de propósito
+    # (`?seed=N` no carregamento do dataset muda os dois juntos).
     if "random_state" in sig.parameters:
-        random_state = get_sklearn_random_state()
-        if random_state is not None:
-            hiperparametros["random_state"] = random_state
+        hiperparametros["random_state"] = random_state_efetivo()
 
     # Aplicar hiperparametros editados pelo usuario na ferramenta. Considera apenas
     # os parametros aceitos pelo construtor do modelo (evita "unexpected keyword")

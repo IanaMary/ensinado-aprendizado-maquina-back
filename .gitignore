@@ -56,3 +56,7 @@ Thumbs.db
 
 # Cache local de datasets UCI (gerado em runtime)
 dataset_cache/
+
+# Saída de pytest despejada em arquivo (430 KB) — era rastreada por acidente e voltava a
+# cada `pytest > test_output.txt`. O resultado da suíte vive no terminal e na CI, não no repo.
+test_output.txt
