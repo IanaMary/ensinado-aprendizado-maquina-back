@@ -9,6 +9,47 @@ diagnósticos, armadilhas) vive no `HISTORICO.md` do workspace de trabalho.
 
 ---
 
+## 2026-08-04b (galeria: filtro por turma, com o recorte que a privacidade exige)
+
+### Adicionado
+- `GET /pipelines/galeria` devolve, por item, **`da_minha_turma`** e **`turma_nome`** — o nome só para
+  quem é membro, porque um pipeline público de outra turma não deve revelar como ela se chama. O
+  usuário sai de `id_usuario_atual()`, padrão do projeto para handler sem `Depends`; a rota já exigia
+  token (`definir_usuario_atual` depende de `get_usuario_atual`).
+- A galeria passa a mostrar **o material que o professor deixou nas turmas do usuário sem ter
+  publicado** — escopo pedido pelo dono, para material de turma chegar ao aluno sem virar público.
+
+### O recorte, que é o ponto sensível
+`turma_id` **não marca só material do professor: marca submissão de aluno a atividade** — é como o
+ranking sabe de quem é cada entrega (`_validar_vinculo_atividade`). **Medido em produção antes de
+implementar:** das 7 pipelines existentes, as 2 com `turma_id` não-públicas eram submissões de aluno.
+Um `{turma_id: {$in: minhas}}` ao pé da letra mostraria o trabalho de cada colega para a turma toda,
+resultados e métricas incluídos, numa plataforma cujo público é menor de idade e cujas atividades são
+pontuadas. Por isso o material da turma só entra quando:
+
+1. **`user_id` é o professor daquela turma** — nunca submissão de aluno; e
+2. **`atividade_id` é vazio** — pipeline do professor amarrado a atividade é a resposta esperada, e
+   mostrá-lo antes da entrega vazaria o gabarito.
+
+Verificado em produção depois do deploy: para cada membro da turma que tem as 2 submissões, a galeria
+devolve 1 pipeline (o público) e **nenhuma submissão do outro**.
+
+### Alterado
+- `copiar_pipeline` passa pelo **mesmo** critério, extraído para `_pode_ver`: sem isso o botão
+  "Copiar" daria 404 no cartão que a galeria acabou de mostrar. A consulta de turmas só roda quando o
+  atalho (meu, ou público) não resolve.
+- `_turmas_do_usuario` considera aluno **e** professor da turma, e de propósito **não** herda a exceção
+  de admin-é-membro-de-tudo do `_e_membro` vizinho: lá ela é correta, aqui transformaria "minha turma"
+  em "todas".
+
+### Testes
+14 novos, verificados falhando contra **três** variantes: o comportamento antigo (5 falham), o `$in`
+solto sem exigir o professor (falha o teste da exposição de submissão) e o recorte sem
+`atividade_id: None` (falha o do gabarito). Suíte: **691** passed, 1 skipped.
+
+**Armadilha, 4ª ocorrência:** `pipelines.py` importa `turmas` no topo, então o `conftest.py` precisou de
+`patch("app.routers.pipelines.turmas", …)` com o nome **local** — senão o teste fala com o Mongo real.
+
 ## 2026-08-04 (semente alinhada, código morto fora, documentação consolidada)
 
 ### Corrigido
