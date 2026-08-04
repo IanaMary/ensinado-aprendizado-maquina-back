@@ -9,6 +9,21 @@ diagnósticos, armadilhas) vive no `HISTORICO.md` do workspace de trabalho.
 
 ---
 
+## 2026-08-04c (a sessão passa a durar 4 h)
+
+### Alterado
+- **`TOKEN_EXPIRE_MINUTES`: 60 → 240** (default do código, `.env.example` e o `.env` de produção).
+  O motivo não é falta de renovação — ela existe e funciona: `sessao-renovacao.service.ts` renova
+  quando falta menos de 15 min, disparado pela **própria atividade**, sem timer de fundo (de
+  propósito, para que uma aba esquecida realmente expire). O problema é que **uma hora de ociosidade
+  absoluta é pouco para uma aula**: aluno lendo, pensando ou escrevendo no papel volta deslogado.
+  Medido depois do deploy: o token que o servidor emite agora vale **240 min**.
+- **O custo está escrito no código:** é um bearer JWT **sem lista de revogação**, então a janela de um
+  token vazado passa de 1 h para 4 h. O que limita a exposição é o token viver em `sessionStorage` —
+  por **aba**, apagado ao fechar —, não em `localStorage`. **Não subir mais que isso sem revogação.**
+- Os comentários que cravavam "60 min" (teste de autenticação, serviço de renovação do front) deixaram
+  de citar o número: a duração é do servidor e o serviço só lê o `exp` do próprio token.
+
 ## 2026-08-04b (galeria: filtro por turma, com o recorte que a privacidade exige)
 
 ### Adicionado
