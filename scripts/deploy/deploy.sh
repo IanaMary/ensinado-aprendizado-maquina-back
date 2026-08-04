@@ -114,7 +114,9 @@ echo "=== [6/6] Reiniciando serviço ==="
 # Se o serviço não existe, criar
 if ! sudo systemctl list-unit-files | grep -q h2ia-backend; then
     echo "  Serviço h2ia-backend não encontrado, criando..."
-    sudo tee /etc/systemd/system/h2ia-backend.service > /dev/null << 'SERVICEEOF'
+    # Heredoc SEM quotes, de propósito: é o que deixa `${PROJECT_DIR}` expandir. Com
+    # `<< 'SERVICEEOF'` o caminho ia literal para a unit e o serviço não subia.
+    sudo tee /etc/systemd/system/h2ia-backend.service > /dev/null << SERVICEEOF
 [Unit]
 Description=H2IA Backend (FastAPI)
 After=network.target mongod.service
@@ -122,9 +124,12 @@ After=network.target mongod.service
 [Service]
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/home/ubuntu/ensinado-aprendizado-maquina-back
-Environment="PATH=/home/ubuntu/ensinado-aprendizado-maquina-back/venv/bin"
-ExecStart=/home/ubuntu/ensinado-aprendizado-maquina-back/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8002 --workers 2
+WorkingDirectory=${PROJECT_DIR}
+Environment="PATH=${PROJECT_DIR}/venv/bin"
+# `--host 127.0.0.1` e NÃO `0.0.0.0`: o nginx faz `proxy_pass http://127.0.0.1:8002/`, então
+# escutar em todas as interfaces só expõe a API na internet em HTTP puro (medido em 03/08:
+# `http://<ip>:8002/docs` respondia 200, contornando o TLS). Vizinhos da VM usam 127.0.0.1.
+ExecStart=${PROJECT_DIR}/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8002 --workers 2
 Restart=always
 RestartSec=5
 

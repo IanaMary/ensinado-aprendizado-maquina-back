@@ -764,3 +764,68 @@ class TestNomesDasPecas:
         assert pecas["robust_scaler"]["nome"] == "RobustScaler"
         assert pecas["mlp_regressor"]["nome"] == "Rede Neural (MLP) Regressora"
         assert pecas["r2_score"]["nome"] == "R² (Coef. de Determinação)"
+
+
+class TestTetoDeTentativas:
+    """O teto de tentativas (`MAX_TENTATIVAS_MONTAGEM`, 10) não tinha teste.
+
+    É o que o aluno encontra no pior momento: travado no meio da aula. Duas coisas precisam valer —
+    a 11ª submissão é recusada com **429** (e não 500 nem 200 gravando de novo), e a mensagem tem de
+    dizer qual é o limite, para o professor entender o que aconteceu sem abrir o log.
+    """
+
+    def _cenario(self, mock_user, tentativas_ja_feitas):
+        turma = {"_id": ObjectId(), "professor_id": str(ObjectId()),
+                 "alunos": [str(mock_user["_id"])]}
+        atividade = {"_id": ObjectId(), "turma_id": str(turma["_id"]), "tipo": "montagem",
+                     "gabarito": GABARITO}
+        subm = MagicMock(
+            count_documents=AsyncMock(return_value=tentativas_ja_feitas),
+            find=MagicMock(return_value=AsyncCursor([{"nota": 7.0}])),
+            insert_one=AsyncMock(return_value=MagicMock(inserted_id=ObjectId())),
+        )
+        return turma, atividade, subm
+
+    async def _submeter(self, client, auth_headers, turma, atividade, subm):
+        cat = _catalogo_mock()
+        with patch("app.routers.turmas.turmas", MagicMock(find_one=AsyncMock(return_value=turma))), \
+             patch("app.routers.turmas.atividades", MagicMock(find_one=AsyncMock(return_value=atividade))), \
+             patch("app.routers.turmas.submissoes_montagem", subm), \
+             patch("app.desafios.catalogo.opcoes_coletas", cat["coleta"]), \
+             patch("app.desafios.catalogo.opcoes_pre_processamento", cat["pre_processamento"]), \
+             patch("app.desafios.catalogo.opcoes_modelos", cat["modelo"]), \
+             patch("app.desafios.catalogo.opcoes_metricas", cat["metrica"]):
+            return await client.post(
+                f"/turmas/{turma['_id']}/atividades/{atividade['_id']}/submeter-montagem",
+                headers=auth_headers,
+                json={"montagem": {"coleta": [], "modelo": [], "metrica": []}})
+
+    @pytest.mark.asyncio
+    async def test_a_decima_primeira_tentativa_e_recusada_com_429(
+        self, client, mock_db, auth_headers, mock_user,
+    ):
+        from app.routers.turmas import MAX_TENTATIVAS_MONTAGEM
+        turma, atividade, subm = self._cenario(mock_user, MAX_TENTATIVAS_MONTAGEM)
+
+        r = await self._submeter(client, auth_headers, turma, atividade, subm)
+
+        assert r.status_code == 429
+        # a mensagem diz o limite: sem isso o professor não sabe o que aconteceu
+        assert str(MAX_TENTATIVAS_MONTAGEM) in r.json()["detail"]
+        # e nada é gravado depois do teto
+        assert subm.insert_one.await_count == 0
+
+    @pytest.mark.asyncio
+    async def test_a_ultima_tentativa_permitida_ainda_passa(
+        self, client, mock_db, auth_headers, mock_user,
+    ):
+        """Fronteira: com 9 feitas, a 10ª tem de ser aceita. Um `>` no lugar do `>=` (ou o
+        contrário) rouba ou dá uma tentativa, e ninguém perceberia sem este par de testes."""
+        from app.routers.turmas import MAX_TENTATIVAS_MONTAGEM
+        turma, atividade, subm = self._cenario(mock_user, MAX_TENTATIVAS_MONTAGEM - 1)
+
+        r = await self._submeter(client, auth_headers, turma, atividade, subm)
+
+        assert r.status_code == 200
+        assert r.json()["tentativa"] == MAX_TENTATIVAS_MONTAGEM
+        assert subm.insert_one.await_count == 1

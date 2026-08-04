@@ -17,7 +17,9 @@ set -euo pipefail
 
 RAIZ_BACKUP="${RAIZ_BACKUP:-$HOME/backups}"
 MANTER_BACKUPS="${MANTER_BACKUPS:-10}"
-BACKEND_DIR="${BACKEND_DIR:-$HOME/ensinado-aprendizado-maquina-back}"
+# Derivado do PRÓPRIO script (este arquivo vive em <projeto>/scripts/deploy/), não do $HOME:
+# o projeto mudou de diretório em 03/08 e um default fixo apontaria para o lugar vazio.
+BACKEND_DIR="${BACKEND_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 FRONTEND_DIR="${FRONTEND_DIR:-/var/www/h2ia/tutor}"
 
 TS="$(date +%Y%m%d-%H%M%S)"
@@ -37,6 +39,15 @@ EXCLUIR=(
   --exclude=node_modules
   --exclude=.pytest_cache
 )
+
+# FALHA EM VOZ ALTA: antes era `if [ -d ]`, e um caminho errado fazia o script PULAR o backend do
+# backend e sair 0 — "deploy com backup" sem backup, sem aviso. Backup que falha em silêncio é pior
+# que backup nenhum, porque dá confiança falsa no momento de fazer rollback.
+if [ ! -d "$BACKEND_DIR" ]; then
+  echo "ERRO: diretório do backend não encontrado: $BACKEND_DIR" >&2
+  echo "      passe BACKEND_DIR=/caminho/do/projeto se ele estiver noutro lugar." >&2
+  exit 1
+fi
 
 if [ -d "$BACKEND_DIR" ]; then
   # `tar | tar` em vez de `cp -a`: é o jeito simples de aplicar --exclude preservando permissões.

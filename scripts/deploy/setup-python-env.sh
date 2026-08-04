@@ -4,7 +4,7 @@ set -e
 
 echo "=== Instalando dependências Python ==="
 
-cd /home/ubuntu/ensinado-aprendizado-maquina-back
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Instalar pacotes de sistema necessários
 sudo apt install -y python3 python3-pip python3-venv python3-dev build-essential

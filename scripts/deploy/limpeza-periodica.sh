@@ -74,7 +74,7 @@ fi
 # ---- 3. Relatório ----
 # O cache de dataset se limpa sozinho no código (`_limpar_geracoes_antigas`), então aqui é só
 # conferência: se passar de uma geração por dataset, algo regrediu.
-CACHE_DS="$HOME/ensinado-aprendizado-maquina-back/dataset_cache"
+CACHE_DS="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/dataset_cache"
 if [ -d "$CACHE_DS" ]; then
   dup=$(ls "$CACHE_DS" 2>/dev/null | sed -n 's/^\(.*\)\.openml.*\.pkl$/\1/p' | sort | uniq -d | wc -l)
   echo "  dataset_cache: $(du -sh "$CACHE_DS" | cut -f1)$([ "$dup" -gt 0 ] && echo "  ATENÇÃO: $dup dataset(s) com mais de uma geração")"
