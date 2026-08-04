@@ -219,6 +219,77 @@ reais, os mesmos que já eram gravados em `db.arquivos`. Aditivo: nenhum campo m
 
 ---
 
+## 2026-08-04 (backend movido para `/home/ubuntu/servers/Iana`)
+
+> O backend era o único projeto fora da convenção da VM (`/home/ubuntu/servers/*`). Migração feita
+> com cópia-antes-de-troca, sem tocar no nginx. Suíte **662** passed, 1 skipped.
+
+### O que mudou na VM
+
+| | antes | depois |
+|---|---|---|
+| diretório | `/home/ubuntu/ensinado-aprendizado-maquina-back` | **`/home/ubuntu/servers/Iana`** |
+| `h2ia-backend.service` | `active` mas **`disabled`** — não subia no boot | `active` e **`enabled`** |
+| uvicorn | `--host 0.0.0.0` (API exposta na internet em HTTP puro) | **`--host 127.0.0.1`** |
+
+**O único artefato de sistema alterado foi a unit systemd.** O nginx faz `proxy_pass` por **porta**
+(`127.0.0.1:8002`), não por caminho de disco — verificado: zero referências ao diretório em
+`/etc/nginx/`. Logrotate não tem entrada do projeto. No cron, só a linha (desativada) da faxina
+mudou de caminho, e as 7 linhas de doodle/hut8 foram preservadas (contadas antes e depois).
+
+### Dois defeitos de produção corrigidos no caminho
+
+- **O serviço não subia no boot.** `UnitFileState=disabled` com o processo vivo: um reboot da VM
+  deixaria o tutor fora do ar. É também a condição que convida ao precedente dos "dois systemd na
+  8002" (404 intermitente), porque leva alguém a "subir de novo".
+- **A API estava exposta na internet sem TLS.** `http://<ip>:8002/docs` respondia **200** — a
+  aplicação inteira acessível por HTTP puro, contornando o nginx: token no header e senha no
+  `POST /login` em claro para quem usasse o endereço direto. Todos os vizinhos da VM já escutavam
+  só em loopback. Fechado e verificado (`000` agora, `200` via nginx).
+
+### Scripts: caminho derivado, e o backup que falhava calado
+
+Cinco scripts tinham o caminho hardcoded, e **dois deles GERAM a unit** — rodar o deploy depois da
+migração reinjetaria o caminho antigo e o serviço não subiria. Todos passaram a derivar a raiz do
+próprio arquivo, então a próxima mudança de diretório não exige editar nada.
+
+O `backup-producao.sh` era o pior: o default vinha de `$HOME` e o `if [ -d ]` fazia o script **pular
+o backend e sair 0**. Um "deploy com backup" sem backup do backend, em silêncio — pior que backup
+nenhum, porque dá confiança falsa na hora do rollback. Agora falha com mensagem acionável.
+O heredoc do `deploy.sh` era `<< 'SERVICEEOF'` (com quotes), que escreveria `${PROJECT_DIR}` literal
+na unit; virou sem quotes.
+
+### Verificação
+
+Ambiente novo provado **antes** de trocar a unit: `import app.main` ok, `.env` lido do CWD novo
+(`MONGO_DB`, `FRONTEND_URL`, `MLFLOW_TRACKING_URI`, `SECRET_KEY`), e um uvicorn temporário na 8004
+servindo `healthcheck` JSON e os 25 datasets do catálogo com `titanic` correto
+(`fonte=openml features=13 dificuldade=intermediario`).
+
+Depois da troca: `cwd` do processo em `/home/ubuntu/servers/Iana`, **um** listener na 8002 em
+`127.0.0.1`, healthcheck `application/json`, front e docs 200, Titanic `(1309, 14)` com `survived`,
+zero 5xx no journal, e **os 6 vizinhos da VM respondendo** (doodle, reviewer, checker, enade,
+hut8/claude, corretor). Deploy completo reexecutado do caminho novo: backup com `backend/app`,
+`requirements.txt`, `COMMIT-backend.txt`, `PIP-FREEZE-backend.txt` e `frontend` presentes.
+
+### Fora do escopo, de propósito
+
+`/home/ubuntu/mlflow` (o `mlflow.db` guarda `artifact_uri` **absoluto** em 84 runs; mover exigiria
+`UPDATE` no SQLite), `/home/ubuntu/backups` (tem backup de outros projetos) e `/var/www/h2ia/tutor`
+(web root; mexer nele significa editar o nginx compartilhado).
+
+O `.env` estava **664** — legível por qualquer usuário da VM, com `SECRET_KEY`, senha SMTP e chave
+da NVIDIA. Ficou **600** no destino.
+
+### O diretório antigo foi PRESERVADO
+
+Renomeado para `ensinado-aprendizado-maquina-back.MOVIDO-20260804` (779M, com a venv antiga e os
+logs anteriores) e com um `LEIA-ME-MOVIDO.txt` dentro apontando para o novo caminho. **Não foi
+apagado**: um diretório com `.git` válido no lugar antigo convida a um `git pull` + restart no lugar
+errado. Remover é decisão do dono.
+
+---
+
 ## 2026-08-03j (cobertura das lacunas de maior risco: escopo LGPD e projeto do aluno)
 
 > Levantamento de cobertura por agentes (somente leitura) apontou **~44 de ~142 endpoints sem

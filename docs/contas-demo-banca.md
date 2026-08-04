@@ -47,7 +47,7 @@ Depois da defesa, rode `--remover`.
 ## Rodar
 
 ```bash
-cd /home/ubuntu/ensinado-aprendizado-maquina-back
+cd /home/ubuntu/servers/Iana
 venv/bin/python -m scripts.deploy.seed_usuarios_demo            # criar/atualizar
 venv/bin/python -m scripts.deploy.seed_usuarios_demo --remover  # apagar tudo
 ```
