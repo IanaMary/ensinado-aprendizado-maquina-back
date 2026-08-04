@@ -219,6 +219,37 @@ reais, os mesmos que já eram gravados em `db.arquivos`. Aditivo: nenhum campo m
 
 ---
 
+## 2026-08-04b (turmas: cascata do delete, teto de tentativas, e mais uma lacuna do conftest)
+
+> Continuação do mapa de cobertura. Suíte **665** passed, 1 skipped.
+
+### Coberto — a cascata do `DELETE /turmas/{id}`
+
+O delete faz `atividades.delete_many({"turma_id": ...})`. **Se esse filtro estiver errado, apagar uma
+turma leva as atividades de todas as outras** — perda de trabalho de professor, irrecuperável. Não
+tinha teste. Agora o filtro é verificado explicitamente, mais o caso de turma de outro professor
+(404, e **nada** apagado: nem atividade, nem turma). Verificado falhando com a cascata sem filtro.
+
+Também coberto o `POST /turmas/{id}/alunos`: e-mail que não existe é ignorado em silêncio (decisão de
+produto, agora fixada), entrada em branco descartada, e o `$addToSet` evitando duplicata.
+
+### Coberto — o teto de tentativas do desafio (429)
+
+`MAX_TENTATIVAS_MONTAGEM` (10) não tinha teste, e é o que o aluno encontra no pior momento: travado
+no meio da aula. A 11ª submissão dá **429** com o limite na mensagem e **nada é gravado**; a 10ª
+ainda passa. O par cobre a fronteira — um `>` no lugar de `>=` rouba ou dá uma tentativa, e ninguém
+perceberia.
+
+### Mais uma lacuna do conftest, achada pela prática
+
+`turmas.py` importa `colecao_usuario` no topo (é ela que resolve e-mail → id ao adicionar aluno), e o
+conftest patchava `login`, `usuarios` e `security` — **não `turmas`**. O teste novo bateu em
+`localhost:27017` e levou **33 s** esperando o timeout; com o patch, 2 s. Terceira instância da mesma
+família (`treinamento_base.opcoes_pre_processamento`, `atividade.turmas`, agora esta): **`from
+app.database import X` no topo do módulo exige patch com o nome LOCAL.**
+
+---
+
 ## 2026-08-04 (backend movido para `/home/ubuntu/servers/Iana`)
 
 > O backend era o único projeto fora da convenção da VM (`/home/ubuntu/servers/*`). Migração feita

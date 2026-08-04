@@ -131,6 +131,11 @@ def mock_db(mock_user):
 
         patch("app.routers.login.colecao_usuario", mock_user_col),
         patch("app.routers.usuarios.colecao_usuario", mock_user_col),
+        # `turmas.py` também importa `colecao_usuario` no topo (é ela que resolve e-mail → id em
+        # `POST /turmas/{id}/alunos`). Faltava aqui, e o teste desse endpoint batia em
+        # `localhost:27017` — mesma família do `treinamento_base.opcoes_pre_processamento` e do
+        # `atividade.turmas`. Um `from app.database import X` no topo exige patch com o nome LOCAL.
+        patch("app.routers.turmas.colecao_usuario", mock_user_col),
         patch("app.routers.usuarios.verificadores_professor", mock_verif),
         patch("app.security.colecao_usuario", mock_user_col),
         patch("app.routers.tutor.tutor", mock_tutor),
