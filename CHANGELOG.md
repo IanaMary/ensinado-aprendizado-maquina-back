@@ -9,6 +9,43 @@ diagnósticos, armadilhas) vive no `HISTORICO.md` do workspace de trabalho.
 
 ---
 
+## 2026-08-19e (várias chaves por provedor, com rotação)
+
+Backend `82a8f3f` · bundle `main-TZX2MRC3.js`. Backup `/home/ubuntu/backups/deploy-20260819-073208`.
+
+### Adicionado
+- **`llm_provedores[pid].api_keys`** — até 5 chaves por provedor. `POST
+  /tutor/provedores/{pid}/chaves` acrescenta; `DELETE …/chaves/{indice}` remove **por índice**,
+  porque a tela nunca conhece o valor. Admin-only, auditado com a CONTAGEM, nunca a chave.
+- **Rotação de chave**, uma dimensão SEPARADA da de modelo: **401/403/429** são da chave (tenta o
+  MESMO modelo com a próxima), **402/404/410/5xx** são do modelo. O motivo é concreto: o limite de
+  taxa é **por chave**, e o nível gratuito do Google AI Studio dá ~500 requisições/dia — uma turma
+  consome numa aula.
+- **Com uma chave só, nada muda**: 401/403/429 continuam parando a cadeia. Há teste para isso.
+
+### Reverte parte do ADR 0003 (a pedido do dono)
+A chave da NVIDIA podia ficar só no `.env`; agora qualquer provedor aceita chaves pela tela.
+`editavel: False` nunca quis dizer "chave imutável" — quer dizer que URL e nome vêm do `.env`.
+Não mudou: leitura só dos últimos 4 caracteres, nada de chave no frontend, auditoria só com a
+contagem, e a chave do `.env` **não é migrada** para o banco (copiá-la moveria um segredo de lugar
+sem ninguém pedir). Quando há chave no banco, ela vence o `.env` inteiro — sem misturar.
+
+### O que só a produção mostrou
+O Gemini devolve **`400`** para chave inválida, não 401. E a primeira correção, casando as frases
+que a **documentação** sugere (`API_KEY_INVALID`, "API key not valid"), **também não pegou**: o corpo
+real é `{"error": {"message": "Please pass a valid API key"}}`. O critério passou a ser o corpo
+**mencionar a chave** — nenhum erro de payload fala de "api key". Foram três verificações em
+produção (chave inválida na frente da boa, gerador SSE real) até o token sair.
+
+### Corrigido de tabela
+- `listar_para_tela` decidia `configurado` lendo só o campo antigo: quem adicionasse chave pela
+  lista nova continuaria como "sem chave", sem poder ativar o provedor. Encontrado por teste.
+- **O limitador de taxa vazava entre testes** (20/min por usuário, todos com o mesmo): passado o
+  20º pedido de chat, o teste seguinte levava 429 do nosso próprio limitador e falhava por motivo
+  alheio — passava isolado e falhava na suíte. `setup_method` limpa `_rate_limits`.
+
+Suíte **732 → 754**.
+
 ## 2026-08-19d (o Gemini ligado de verdade, e o que a chave real revelou)
 
 Backend `039564e` · bundle `main-M7ZQRJNY.js`. Chave do nível gratuito configurada pela tela
