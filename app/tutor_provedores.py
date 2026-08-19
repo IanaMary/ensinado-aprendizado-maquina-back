@@ -7,7 +7,7 @@ exatamente isso que este módulo resolve. O resto do backend continua fazendo um
 Onde o estado vive (`db.configuracoes_tutor`, admin-only para escrever):
 
 ```
-{ chave: "llm_provedor",   valor: "nvidia" | "openrouter" | "custom" }
+{ chave: "llm_provedor",   valor: "nvidia" | "openrouter" | "orcarouter" | "gemini" | "custom" }
 { chave: "llm_provedores", valor: { "<id>": {nome?, base_url?, api_key?, modelo?, fallbacks?} } }
 { chave: "llm_model",      valor: "…" }   # legado: o modelo de quando só havia NVIDIA
 ```
@@ -37,6 +37,8 @@ CHAVE_MODELO_LEGADO = "llm_model"
 
 NVIDIA = "nvidia"
 OPENROUTER = "openrouter"
+ORCAROUTER = "orcarouter"
+GEMINI = "gemini"
 CUSTOM = "custom"
 
 # `todos_gratuitos`: a plataforma de build da NVIDIA é de uso livre com limite de taxa, então
@@ -74,6 +76,35 @@ CATALOGO: Dict[str, Dict[str, Any]] = {
         "editavel": True,
         "exige_chave": True,
     },
+    ORCAROUTER: {
+        "nome": "OrcaRouter",
+        "base_url": "https://api.orcarouter.ai/v1",
+        "env_chave": "ORCAROUTER_API_KEY",
+        "modelo_padrao": "",
+        # Roteador como o OpenRouter: catálogo de vários fornecedores, com preço por modelo.
+        "todos_gratuitos": False,
+        "editavel": True,
+        "exige_chave": True,
+    },
+    GEMINI: {
+        # Google AI Studio pela CAMADA DE COMPATIBILIDADE OpenAI — é o que permite entrar aqui sem
+        # código próprio: mesmo `/models`, mesmo `/chat/completions`, mesmo `Authorization: Bearer`,
+        # e ids sem o prefixo `models/`. A API nativa do Gemini tem outro formato e não serviria.
+        "nome": "Google AI Studio (Gemini)",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "env_chave": "GEMINI_API_KEY",
+        "modelo_padrao": "",
+        # **Sem afirmação, de propósito.** O nível gratuito do AI Studio cobre Flash/Flash-Lite,
+        # não a linha Pro (que passou a paga em 04/2026), e a camada OpenAI não devolve `pricing` —
+        # então não dá para saber pelo catálogo. Marcar tudo como gratuito (como se faz na NVIDIA)
+        # mentiria sobre os Pro. Efeito colateral desejável: sem `todos_gratuitos: True` o teste de
+        # saúde automático não varre a lista inteira, o que **preserva a cota gratuita** (são ~500
+        # requisições por dia; varrer dezenas de modelos a cada abertura da tela a consumiria).
+        # O admin testa item a item pelo botão "testar".
+        "todos_gratuitos": None,
+        "editavel": True,
+        "exige_chave": True,
+    },
     CUSTOM: {
         "nome": "Outro provedor (OpenAI-compatible)",
         "base_url": "",
@@ -88,7 +119,7 @@ CATALOGO: Dict[str, Dict[str, Any]] = {
     },
 }
 
-ORDEM = (NVIDIA, OPENROUTER, CUSTOM)
+ORDEM = (NVIDIA, OPENROUTER, ORCAROUTER, GEMINI, CUSTOM)
 
 
 class ProvedorInvalido(ValueError):

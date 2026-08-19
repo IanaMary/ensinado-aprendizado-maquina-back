@@ -232,7 +232,10 @@ class TestListarParaTela:
     async def test_ordem_estavel_e_ativo_declarado(self, banco, monkeypatch):
         monkeypatch.setenv("NVIDIA_API_KEY", "x")
         vista = await prov.listar_para_tela()
-        assert [p["id"] for p in vista["provedores"]] == ["nvidia", "openrouter", "custom"]
+        # A ordem é a do `ORDEM`, e o `custom` fica por último de propósito: é o único que exige
+        # o admin digitar uma URL, então não deve abrir a lista.
+        assert [p["id"] for p in vista["provedores"]] == list(prov.ORDEM)
+        assert vista["provedores"][-1]["id"] == prov.CUSTOM
         assert vista["ativo"] == "nvidia"
 
 
@@ -425,3 +428,75 @@ class TestFallbacks:
         await prov.salvar_provedor(prov.OPENROUTER, {"api_key": "sk-or-secreta"})
         await prov.definir_fallbacks(prov.OPENROUTER, ["a"])
         assert "sk-or-secreta" not in repr(await prov.listar_para_tela())
+
+
+class TestProvedoresNovos:
+    """OrcaRouter e Google AI Studio (Gemini), acrescentados em 19/08.
+
+    Os dois entram sem código próprio porque falam o dialeto OpenAI. No caso do Gemini isso só
+    vale pela **camada de compatibilidade** (`/v1beta/openai`) — a API nativa tem outro formato.
+    """
+
+    def test_gemini_aponta_para_a_camada_de_compatibilidade(self):
+        url = prov.CATALOGO[prov.GEMINI]["base_url"]
+        assert url.endswith("/v1beta/openai"), \
+            "sem o sufixo openai a URL cai na API nativa do Gemini, que não fala este dialeto"
+        assert not url.endswith("/"), "o código concatena '/chat/completions'; barra dupla quebra"
+
+    def test_todas_as_base_urls_do_catalogo_seguem_a_mesma_regra(self):
+        # O código monta `f"{base_url}/chat/completions"`: barra no fim vira `//` no caminho.
+        for pid, base in prov.CATALOGO.items():
+            assert not (base["base_url"] or "").endswith("/"), pid
+
+    def test_gemini_nao_afirma_gratuidade(self):
+        """Flash é gratuito, Pro não (04/2026), e a camada OpenAI não devolve `pricing`.
+        Marcar tudo como gratuito mentiria — e ainda faria o teste de saúde varrer a lista
+        inteira, queimando a cota diária do nível gratuito."""
+        assert prov.CATALOGO[prov.GEMINI]["todos_gratuitos"] is None
+        assert prov.eh_gratuito({"id": "gemini-3.7-flash"},
+                                {"todos_gratuitos": None}) is None
+
+    def test_orcarouter_tem_preco_por_modelo_como_o_openrouter(self):
+        assert prov.CATALOGO[prov.ORCAROUTER]["todos_gratuitos"] is False
+
+    def test_nenhum_dos_novos_nasce_com_reserva_fixa_no_codigo(self):
+        """Lista de reserva de provedor novo nasce VAZIA: id de modelo tem validade (foi o que
+        custou 11 dias em 08/08), e agora o admin monta a dele na tela, com o chip de saúde."""
+        for pid in (prov.ORCAROUTER, prov.GEMINI):
+            assert prov.CATALOGO[pid].get("fallbacks", []) == []
+
+    def test_so_o_openrouter_manda_cabecalho_de_atribuicao(self):
+        for pid in (prov.ORCAROUTER, prov.GEMINI):
+            h = prov.cabecalhos({"id": pid, "api_key": "k"})
+            assert h["Authorization"] == "Bearer k"
+            assert "X-Title" not in h and "HTTP-Referer" not in h
+
+    @pytest.mark.asyncio
+    async def test_a_chave_dos_novos_vem_do_banco_ou_do_env(self, banco, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "do-env")
+        await prov.definir_ativo(prov.GEMINI)
+        assert (await prov.provedor_vigente())["api_key"] == "do-env"
+
+        await prov.salvar_provedor(prov.GEMINI, {"api_key": "do-banco"})
+        assert (await prov.provedor_vigente())["api_key"] == "do-banco"
+
+    @pytest.mark.asyncio
+    async def test_url_dos_hospedados_nao_e_redirecionavel(self, banco, monkeypatch):
+        """Guarda de exfiltração: só o `custom` aceita URL livre. Sem isto, apontar a base_url
+        para um host arbitrário levaria a chave já gravada junto."""
+        monkeypatch.setenv("GEMINI_API_KEY", "segredo")
+        await prov.salvar_provedor(prov.GEMINI, {"base_url": "http://host-do-atacante"})
+        # `provedor_vigente()` devolve o ATIVO (nvidia aqui); quem guarda a URL do gemini é a
+        # configuração salva — é lá que a guarda tem de aparecer.
+        assert (await prov._configs())[prov.GEMINI]["base_url"] \
+            == prov.CATALOGO[prov.GEMINI]["base_url"]
+
+    @pytest.mark.asyncio
+    async def test_os_novos_aparecem_na_tela_sem_chave_em_claro(self, banco):
+        await prov.salvar_provedor(prov.ORCAROUTER, {"api_key": "sk-orca-secreta"})
+        vista = await prov.listar_para_tela()
+        ids = [p["id"] for p in vista["provedores"]]
+        assert prov.ORCAROUTER in ids and prov.GEMINI in ids
+        assert "sk-orca-secreta" not in repr(vista)
+        orca = next(p for p in vista["provedores"] if p["id"] == prov.ORCAROUTER)
+        assert orca["chave_fonte"] == "banco" and orca["chave_mascarada"].endswith("reta")
