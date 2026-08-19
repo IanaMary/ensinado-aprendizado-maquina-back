@@ -248,17 +248,19 @@ class TestSaudeModelos:
                       {"choices": []}):
             out = await _testar_modelo(self._cliente(200, corpo), _PROVEDOR, "modelo-mudo")
             assert out["responde"] is False
-            assert "sem texto" in out["erro"]
+            assert "sem gerar texto" in out["erro"]
 
     @pytest.mark.asyncio
-    async def test_pede_tokens_suficientes_para_provar_geracao(self):
-        """`max_tokens=1` mentia: o `minimax-m3` respondia esse ping em 628 ms e estourava 120 s
-        numa resposta de 90 tokens — e entrou na lista de reserva por causa disso."""
-        from app.routers.chat_tutor import _testar_modelo
+    async def test_orcamento_do_teste_cabe_um_modelo_que_pensa(self):
+        """Medido em 19/08: com `max_tokens=16` o `gemini-3.5-flash` devolve 200 **sem o campo
+        `content`** e `completion_tokens: 0` — gastou tudo raciocinando. Ele é um dos que melhor
+        explicam para aluno de 9º ano. Teto apertado transforma modelo bom em chip vermelho; com
+        128 ele responde "ok" normalmente."""
+        from app.routers.chat_tutor import _testar_modelo, MAX_TOKENS_SAUDE
         cliente = self._cliente(200, {"choices": [{"message": {"content": "ok"}}]})
         await _testar_modelo(cliente, _PROVEDOR, "qualquer")
         enviado = cliente.post.await_args.kwargs["json"]
-        assert enviado["max_tokens"] > 1
+        assert enviado["max_tokens"] == MAX_TOKENS_SAUDE >= 128
 
     @pytest.mark.asyncio
     async def test_modelo_degradado(self):
@@ -859,3 +861,42 @@ class TestStreamLlm:
             await gerador.__anext__()      # consome só o primeiro token
             await gerador.aclose()
         assert registrado[-1]["status"] == "interrompido"
+
+
+class TestListagemDeModelos:
+    """`_buscar_modelos` normaliza o que cada provedor devolve."""
+
+    @staticmethod
+    def _cliente(corpo: dict):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json = MagicMock(return_value=corpo)
+        client = MagicMock()
+        client.get = AsyncMock(return_value=resp)
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=client)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        return MagicMock(return_value=cm)
+
+    @pytest.mark.asyncio
+    async def test_tira_o_prefixo_models_do_gemini(self):
+        """O Gemini lista `models/gemini-3.5-flash`. As duas formas funcionam no
+        `/chat/completions` (medido), mas a tela agrupa pelo que vem antes da "/" — com o
+        prefixo, os 51 modelos virariam um grupo chamado "models"."""
+        from app.routers.chat_tutor import _buscar_modelos
+        factory = self._cliente({"data": [{"id": "models/gemini-3.5-flash", "owned_by": "google"}]})
+        with patch("app.routers.chat_tutor.httpx.AsyncClient", factory):
+            modelos = await _buscar_modelos({"base_url": "http://x", "nome": "Gemini",
+                                             "id": "gemini", "api_key": "k",
+                                             "todos_gratuitos": None})
+        assert modelos[0]["id"] == "gemini-3.5-flash"
+
+    @pytest.mark.asyncio
+    async def test_nao_mexe_em_id_de_outro_provedor(self):
+        from app.routers.chat_tutor import _buscar_modelos
+        factory = self._cliente({"data": [{"id": "meta/llama-3.1-8b-instruct", "owned_by": "meta"}]})
+        with patch("app.routers.chat_tutor.httpx.AsyncClient", factory):
+            modelos = await _buscar_modelos({"base_url": "http://x", "nome": "NVIDIA",
+                                             "id": "nvidia", "api_key": "k",
+                                             "todos_gratuitos": True})
+        assert modelos[0]["id"] == "meta/llama-3.1-8b-instruct"

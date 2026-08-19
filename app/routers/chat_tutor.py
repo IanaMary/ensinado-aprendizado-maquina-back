@@ -177,8 +177,13 @@ async def _buscar_modelos(provedor: dict) -> list[dict]:
     for m in data.get("data", []):
         if not m.get("id"):
             continue
+        # O Gemini devolve `models/gemini-3.5-flash`; o `/chat/completions` aceita as DUAS formas
+        # (medido: as duas resolvem para o mesmo modelo, inclusive no 404). Guardamos a forma
+        # curta porque a tela agrupa pelo que vem antes da "/" — com o prefixo, os 51 modelos
+        # cairiam num grupo chamado "models", que não quer dizer nada.
+        ident = m["id"][len("models/"):] if m["id"].startswith("models/") else m["id"]
         modelos.append({
-            "id": m["id"],
+            "id": ident,
             "owned_by": m.get("owned_by") or (m.get("name") or ""),
             "gratuito": prov.eh_gratuito(m, provedor),
             "contexto": m.get("context_length"),
@@ -279,6 +284,9 @@ def _vale_tentar_outro(status: int) -> bool:
 # HEALTH-CHECK DOS MODELOS LLM (testa em segundo plano + cache)
 # ============================================================
 _SAUDE_TTL = 1800  # 30 min: evita re-testar a cada abertura da tela
+# Orçamento do teste. Ver a docstring de `_testar_modelo`: com 16 tokens, modelo que "pensa"
+# devolve 200 sem texto nenhum e viraria chip vermelho sem merecer.
+MAX_TOKENS_SAUDE = 128
 _saude_cache: dict = {
     "resultados": {},        # { model_id: {"responde": bool, "latencia_ms"?: int, "erro"?: str} }
     "atualizado_em": 0.0,
@@ -299,14 +307,20 @@ async def _testar_modelo(client: httpx.AsyncClient, provedor: dict, model_id: st
     - **`nvidia/llama-3.1-nemoguard-8b-content-safety`**, um CLASSIFICADOR, também dava 200 —
       "responde" no chip, e o aluno recebia `{"User Safety": "safe"}` como aula.
 
-    O teto de 16 tokens não corrige o segundo caso (nada além de ler a resposta corrigiria), mas
-    corrige o primeiro, que é o que enche a lista de reserva de modelo inútil: exige que o modelo
-    **produza texto** dentro do timeout do cliente de saúde, em vez de só aceitar a conexão.
+    Exigir texto dentro do timeout do cliente de saúde corrige o primeiro caso — o que enche a
+    lista de reserva de modelo inútil. O segundo (o classificador) nada além de ler a resposta
+    corrigiria.
+
+    **`MAX_TOKENS_SAUDE = 128`, e não 16, por medição.** Modelo que "pensa" gasta o orçamento em
+    raciocínio antes de escrever: o `gemini-3.5-flash` devolve, com teto 16, um 200 **sem o campo
+    `content`** e `completion_tokens: 0` (`finish_reason: "length"`) — e é um dos que melhor
+    explicam para aluno de 9º ano quando têm orçamento de verdade. Com 128 ele responde "ok"
+    normalmente. Teto apertado transforma modelo bom em chip vermelho.
     """
     payload = {
         "model": model_id,
         "messages": [{"role": "user", "content": "Responda apenas: ok"}],
-        "max_tokens": 16,
+        "max_tokens": MAX_TOKENS_SAUDE,
         "temperature": 0,
         "stream": False,
     }
@@ -325,7 +339,10 @@ async def _testar_modelo(client: httpx.AsyncClient, provedor: dict, model_id: st
             except (KeyError, IndexError, ValueError):
                 texto = ""
             if not texto:
-                return {"responde": False, "erro": "respondeu 200 sem texto"}
+                # Não é só "vazio": é vazio COM 128 tokens de orçamento. Um modelo que precise de
+                # mais que isso para dizer "ok" não serve para responder aluno em tela.
+                return {"responde": False,
+                        "erro": f"respondeu 200 sem gerar texto em {MAX_TOKENS_SAUDE} tokens"}
             return {"responde": True, "latencia_ms": int((time.time() - inicio) * 1000)}
         detalhe = f"HTTP {resp.status_code}"
         try:
