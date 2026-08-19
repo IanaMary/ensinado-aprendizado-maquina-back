@@ -1,3 +1,5 @@
+import json as json_lib
+
 import pytest
 from bson import ObjectId
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -303,6 +305,9 @@ def _mock_client_por_modelo(respostas: dict, registro: list):
         resp = MagicMock()
         resp.status_code = status
         resp.json = MagicMock(return_value=corpo)
+        # `.text` real: o código lê o corpo do erro para distinguir chave inválida de payload
+        # ruim, e um MagicMock aqui faria `"marca" in corpo` devolver algo verdadeiro sempre.
+        resp.text = json_lib.dumps(corpo)
         return resp
 
     client = MagicMock()
@@ -321,6 +326,10 @@ class TestCadeiaDeFallback:
     def setup_method(self):
         from app.routers import chat_tutor
         chat_tutor._modelos_ruins.clear()   # o cache de 10 min não pode vazar entre testes
+        # E o limitador de taxa TAMBÉM não: são 20 pedidos por minuto POR USUÁRIO, e todos os
+        # testes de chat usam o mesmo. Com a suíte cheia, o 21º recebia 429 do nosso próprio
+        # limitador e o teste falhava por um motivo que não tinha nada a ver com o que ele mede.
+        chat_tutor._rate_limits.clear()
 
     @pytest.mark.asyncio
     async def test_cai_para_o_proximo_quando_o_modelo_nao_esta_liberado(
@@ -482,7 +491,8 @@ class TestListaDeReservaConfigurada:
 
     def setup_method(self):
         from app.routers import chat_tutor
-        chat_tutor._modelos_ruins.clear()
+        chat_tutor._modelos_ruins.clear()   # o cache de 10 min não pode vazar entre testes
+        chat_tutor._rate_limits.clear()
 
     @pytest.mark.asyncio
     async def test_a_cadeia_obedece_a_lista_do_banco_e_nao_a_do_catalogo(
@@ -707,6 +717,8 @@ def _mock_stream_client(respostas: dict, registro: list):
 
         resp = MagicMock()
         resp.status_code = status
+        resp.aread = AsyncMock(return_value=json_lib.dumps(
+            respostas.get((modelo, "corpo"), {})).encode())
 
         async def _aiter_lines():
             for linha in linhas:
@@ -747,7 +759,8 @@ class TestStreamLlm:
 
     def setup_method(self):
         from app.routers import chat_tutor
-        chat_tutor._modelos_ruins.clear()
+        chat_tutor._modelos_ruins.clear()   # o cache de 10 min não pode vazar entre testes
+        chat_tutor._rate_limits.clear()
 
     @pytest.mark.asyncio
     async def test_404_no_escolhido_deixa_o_proximo_responder(self):
@@ -927,7 +940,8 @@ class TestRotacaoDeChave:
 
     def setup_method(self):
         from app.routers import chat_tutor
-        chat_tutor._modelos_ruins.clear()
+        chat_tutor._modelos_ruins.clear()   # o cache de 10 min não pode vazar entre testes
+        chat_tutor._rate_limits.clear()
         chat_tutor._chaves_ruins.clear()
 
     @pytest.mark.asyncio
@@ -1018,6 +1032,52 @@ class TestRotacaoDeChave:
         # Endpoint self-hosted responde sem `Authorization`; o laço precisa rodar mesmo assim.
         from app.routers import chat_tutor
         assert chat_tutor.cadeia_de_chaves({"base_url": "http://x", "api_keys": []}) == [""]
+
+    @pytest.mark.asyncio
+    async def test_400_com_API_KEY_INVALID_rotaciona(self, client, mock_db, auth_headers,
+                                                     monkeypatch):
+        """**Medido em produção (19/08):** o Google AI Studio devolve `400` com
+        `API_KEY_INVALID` no corpo, não 401. Sem ler o corpo, a rotação não dispara e uma chave
+        revogada derruba o chat mesmo havendo reserva."""
+        monkeypatch.setenv("NVIDIA_API_KEY", "ignorada")
+        _provedor_com_chaves(monkeypatch, "revogada", "boa")
+        tentados: list = []
+        factory = _mock_client_por_modelo(
+            {("modelo-unico", "revogada"): (400, {"error": {"status": "INVALID_ARGUMENT",
+                                                            "message": "API key not valid."}}),
+             ("modelo-unico", "boa"): (200, {"choices": [{"message": {"content": "olá"}}]})},
+            tentados,
+        )
+        with patch("app.routers.chat_tutor.httpx.AsyncClient", factory):
+            r = await client.post("/tutor/chat", headers=auth_headers,
+                                  json={"mensagens": [{"role": "user", "content": "oi"}]})
+        assert r.status_code == 200
+        assert tentados == ["modelo-unico", "modelo-unico"]
+
+    @pytest.mark.asyncio
+    async def test_400_de_payload_ruim_NAO_rotaciona(self, client, mock_db, auth_headers,
+                                                     monkeypatch):
+        """400 é ambíguo: pedido malformado não melhora com outra chave, e insistir gastaria o
+        tempo do aluno contra um erro nosso."""
+        monkeypatch.setenv("NVIDIA_API_KEY", "ignorada")
+        _provedor_com_chaves(monkeypatch, "k1", "k2")
+        tentados: list = []
+        factory = _mock_client_por_modelo(
+            {"modelo-unico": (400, {"detail": "messages: campo obrigatório"})}, tentados)
+        with patch("app.routers.chat_tutor.httpx.AsyncClient", factory):
+            r = await client.post("/tutor/chat", headers=auth_headers,
+                                  json={"mensagens": [{"role": "user", "content": "oi"}]})
+        assert r.status_code == 502
+        assert tentados == ["modelo-unico"]          # uma tentativa só
+
+    def test_corpo_que_denuncia_chave(self):
+        from app.routers.chat_tutor import _corpo_indica_chave, _e_erro_de_chave
+        assert _corpo_indica_chave('{"message": "API key not valid. Pass a valid API key."}')
+        assert _corpo_indica_chave('{"status":"API_KEY_INVALID"}')
+        assert not _corpo_indica_chave('{"detail": "messages: campo obrigatório"}')
+        assert not _corpo_indica_chave("")
+        # 401 dispensa a leitura do corpo; 400 depende dela
+        assert _e_erro_de_chave(401) and not _e_erro_de_chave(400)
 
     def test_status_que_pedem_outra_chave(self):
         from app.routers.chat_tutor import _vale_tentar_outra_chave

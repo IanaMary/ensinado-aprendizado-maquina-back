@@ -300,6 +300,24 @@ def cadeia_de_chaves(provedor: dict) -> list:
     return saudaveis + suspeitas
 
 
+# Nem todo provedor usa 401 para chave inválida. **Medido em produção (19/08): o Google AI Studio
+# devolve `400` com `API_KEY_INVALID` no corpo.** Como 400 também é "payload ruim", não dá para
+# tratá-lo como erro de chave em geral — mas dá para ler o corpo e reconhecer a marca.
+_MARCAS_DE_CHAVE_RUIM = ("api_key_invalid", "api key not valid", "invalid api key",
+                         "invalid_api_key", "api key expired")
+
+
+def _corpo_indica_chave(corpo: str) -> bool:
+    """O corpo do erro aponta para a CHAVE? Nunca registramos esse corpo — só o consultamos."""
+    baixo = (corpo or "").lower()
+    return any(marca in baixo for marca in _MARCAS_DE_CHAVE_RUIM)
+
+
+def _e_erro_de_chave(status: int, corpo: str = "") -> bool:
+    """Vale tentar outra chave? 401/403/429 sempre; 400 só quando o corpo diz que é a chave."""
+    return _vale_tentar_outra_chave(status) or (status == 400 and _corpo_indica_chave(corpo))
+
+
 def _vale_tentar_outra_chave(status: int) -> bool:
     """Este erro é DA CHAVE (outra chave pode passar) ou não?
 
@@ -964,7 +982,7 @@ async def chat_tutor(request: ChatTutorRequest, usuario: dict = Depends(get_usua
                 # chave: o log diz o ÍNDICE dela, nunca o valor.
                 logger.warning("Modelo %s (chave #%d) respondeu %s",
                                candidato, i_chave + 1, r.status_code)
-                if _vale_tentar_outra_chave(r.status_code) and i_chave + 1 < len(chaves):
+                if _e_erro_de_chave(r.status_code, r.text) and i_chave + 1 < len(chaves):
                     # É da CHAVE (429 = limite por chave; 401/403 = revogada): mesmo modelo,
                     # próxima chave. Trocar de modelo aqui não resolveria nada.
                     _marcar_chave_ruim(provedor["base_url"], chave)
@@ -1055,7 +1073,11 @@ async def _stream_llm(provedor: dict, payload: dict, *, cadeia: list, usuario=No
                             logger.warning("Stream do modelo %s (chave #%d) respondeu %s",
                                            candidato, i_chave + 1, resp.status_code)
                             status_final, erro_final = "erro", f"http {resp.status_code}"
-                            if (_vale_tentar_outra_chave(resp.status_code)
+                            # A resposta é streaming: para consultar o corpo do ERRO (só para
+                            # distinguir chave inválida de payload ruim) é preciso lê-la aqui.
+                            # Não vai para log nenhum.
+                            corpo_erro = (await resp.aread()).decode("utf-8", "ignore")[:500]
+                            if (_e_erro_de_chave(resp.status_code, corpo_erro)
                                     and i_chave + 1 < len(chaves)):
                                 _marcar_chave_ruim(provedor["base_url"], chave)
                                 i_chave += 1
