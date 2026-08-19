@@ -217,16 +217,48 @@ class TestGatesDosModelos:
 
 
 class TestSaudeModelos:
+    """O chip verde da tela promete "responde". Ele precisa medir GERAÇÃO, não conexão."""
+
+    @staticmethod
+    def _cliente(status: int, corpo: dict):
+        resp = MagicMock()
+        resp.status_code = status
+        resp.json = MagicMock(return_value=corpo)
+        cliente = MagicMock()
+        cliente.post = AsyncMock(return_value=resp)
+        return cliente
+
     @pytest.mark.asyncio
     async def test_modelo_que_responde(self):
         from app.routers.chat_tutor import _testar_modelo
-        resp = MagicMock()
-        resp.status_code = 200
-        cliente = MagicMock()
-        cliente.post = AsyncMock(return_value=resp)
+        # O corpo precisa ser REAL: com um MagicMock cru, qualquer acesso devolve um mock
+        # verdadeiro e o teste passava sem exercitar a leitura da resposta.
+        cliente = self._cliente(200, {"choices": [{"message": {"content": "ok"}}]})
         out = await _testar_modelo(cliente, _PROVEDOR, "meta/llama-3.3-70b-instruct")
         assert out["responde"] is True
         assert "latencia_ms" in out
+
+    @pytest.mark.asyncio
+    async def test_200_sem_texto_nao_conta_como_resposta(self):
+        """Um modelo que não é de chat aceita a chamada e devolve nada. Antes virava chip verde,
+        e daí para a lista de reserva do admin era um passo."""
+        from app.routers.chat_tutor import _testar_modelo
+        for corpo in ({"choices": [{"message": {"content": ""}}]},
+                      {"choices": [{"message": {}}]},
+                      {"choices": []}):
+            out = await _testar_modelo(self._cliente(200, corpo), _PROVEDOR, "modelo-mudo")
+            assert out["responde"] is False
+            assert "sem texto" in out["erro"]
+
+    @pytest.mark.asyncio
+    async def test_pede_tokens_suficientes_para_provar_geracao(self):
+        """`max_tokens=1` mentia: o `minimax-m3` respondia esse ping em 628 ms e estourava 120 s
+        numa resposta de 90 tokens — e entrou na lista de reserva por causa disso."""
+        from app.routers.chat_tutor import _testar_modelo
+        cliente = self._cliente(200, {"choices": [{"message": {"content": "ok"}}]})
+        await _testar_modelo(cliente, _PROVEDOR, "qualquer")
+        enviado = cliente.post.await_args.kwargs["json"]
+        assert enviado["max_tokens"] > 1
 
     @pytest.mark.asyncio
     async def test_modelo_degradado(self):
@@ -236,7 +268,7 @@ class TestSaudeModelos:
         resp.json = MagicMock(return_value={"detail": "DEGRADED function cannot be invoked"})
         cliente = MagicMock()
         cliente.post = AsyncMock(return_value=resp)
-        out = await _testar_modelo(cliente, _PROVEDOR, "minimaxai/minimax-m3")
+        out = await _testar_modelo(cliente, _PROVEDOR, "nvidia/llama-3.3-nemotron-super-49b-v1.5")
         assert out["responde"] is False
         assert "DEGRADED" in out["erro"]
 
@@ -291,7 +323,7 @@ class TestCadeiaDeFallback:
         factory = _mock_client_por_modelo(
             {
                 "moonshotai/kimi-k2.6": (404, {"detail": "Not found for account"}),
-                "minimaxai/minimax-m3": (200, {"choices": [{"message": {"content": "olá"}}]}),
+                "nvidia/llama-3.3-nemotron-super-49b-v1.5": (200, {"choices": [{"message": {"content": "olá"}}]}),
             },
             tentados,
         )
@@ -303,9 +335,9 @@ class TestCadeiaDeFallback:
         assert r.status_code == 200
         assert r.json()["resposta"] == "olá"
         # respondeu, e diz QUEM respondeu — não é o configurado
-        assert r.json()["modelo"] == "minimaxai/minimax-m3"
+        assert r.json()["modelo"] == "nvidia/llama-3.3-nemotron-super-49b-v1.5"
         assert tentados[0] == "moonshotai/kimi-k2.6"          # tenta o escolhido primeiro
-        assert tentados[1] == "minimaxai/minimax-m3"
+        assert tentados[1] == "nvidia/llama-3.3-nemotron-super-49b-v1.5"
 
     @pytest.mark.asyncio
     async def test_chave_invalida_nao_percorre_a_cadeia(
@@ -357,7 +389,7 @@ class TestCadeiaDeFallback:
         factory = _mock_client_por_modelo(
             {
                 "modelo-escolhido": (410, {"detail": "end of life"}),
-                "minimaxai/minimax-m3": (200, {"choices": [{"message": {"content": "olá"}}]}),
+                "nvidia/llama-3.3-nemotron-super-49b-v1.5": (200, {"choices": [{"message": {"content": "olá"}}]}),
             },
             tentados,
         )
@@ -367,8 +399,8 @@ class TestCadeiaDeFallback:
                                   json={"mensagens": [{"role": "user", "content": "oi"}]})
 
         assert r.status_code == 200
-        assert r.json()["modelo"] == "minimaxai/minimax-m3"
-        assert tentados == ["modelo-escolhido", "minimaxai/minimax-m3"]
+        assert r.json()["modelo"] == "nvidia/llama-3.3-nemotron-super-49b-v1.5"
+        assert tentados == ["modelo-escolhido", "nvidia/llama-3.3-nemotron-super-49b-v1.5"]
 
     def test_status_que_valem_outra_tentativa(self):
         from app.routers.chat_tutor import _vale_tentar_outro
@@ -387,7 +419,7 @@ class TestCadeiaDeFallback:
         tentados: list = []
         factory = _mock_client_por_modelo(
             {"modelo-pago": (402, {"detail": "insufficient credits"}),
-             "minimaxai/minimax-m3": (200, {"choices": [{"message": {"content": "olá"}}]})},
+             "nvidia/llama-3.3-nemotron-super-49b-v1.5": (200, {"choices": [{"message": {"content": "olá"}}]})},
             tentados,
         )
 
@@ -396,7 +428,7 @@ class TestCadeiaDeFallback:
                                   json={"mensagens": [{"role": "user", "content": "oi"}]})
 
         assert r.status_code == 200
-        assert tentados == ["modelo-pago", "minimaxai/minimax-m3"]
+        assert tentados == ["modelo-pago", "nvidia/llama-3.3-nemotron-super-49b-v1.5"]
 
     def test_cadeia_poe_o_escolhido_primeiro_e_nao_repete(self):
         from app.routers.chat_tutor import cadeia_de_modelos

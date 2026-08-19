@@ -51,13 +51,15 @@ CATALOGO: Dict[str, Dict[str, Any]] = {
         # Rede de segurança quando o modelo escolhido não atende: o catálogo `/models` da NVIDIA
         # lista modelos que a CONTA pode não ter liberado, e aí a inferência devolve
         # `404 Function ... Not found for account` — foi o que derrubou o tutor em 01/08 com o
-        # `moonshotai/kimi-k2.6`. Estes dois foram medidos respondendo 200 nesta conta (18/08).
-        # O `deepseek-ai/deepseek-v4-flash` saiu daqui: atingiu FIM DE VIDA em 07/08 e responde
-        # `410 Gone` — um fallback morto é pior que nenhum, porque atrasa a resposta e (até o
-        # 410 entrar em `_vale_tentar_outro`) matava a cadeia inteira.
+        # `moonshotai/kimi-k2.6`. O `deepseek-ai/deepseek-v4-flash` saiu daqui em 18/08: atingiu
+        # FIM DE VIDA em 07/08 e responde `410 Gone`.
+        #
+        # **Medidos GERANDO texto** (90 tokens), 19/08 — não por ping: o `minimaxai/minimax-m3`
+        # saiu daqui no mesmo dia porque respondia um ping em 628 ms e **estourava 120 s** numa
+        # resposta de verdade. Ping mede se o endpoint aceita a chamada, não se o modelo serve.
         "fallbacks": [
-            "minimaxai/minimax-m3",
-            "meta/llama-3.1-8b-instruct",
+            "nvidia/llama-3.3-nemotron-super-49b-v1.5",   # 200 em 2,1 s
+            "meta/llama-3.1-8b-instruct",                 # 200 em 0,7 s
         ],
         "todos_gratuitos": True,
         "editavel": False,      # base_url e chave vêm do .env

@@ -290,11 +290,23 @@ _saude_lock = asyncio.Lock()
 
 
 async def _testar_modelo(client: httpx.AsyncClient, provedor: dict, model_id: str) -> dict:
-    """Faz um ping mínimo (max_tokens=1) para saber se o modelo responde a chat."""
+    """O modelo consegue GERAR uma resposta? (não é o mesmo que "o endpoint aceita a chamada")
+
+    Era um ping com `max_tokens=1`, e isso mentia de dois jeitos, os dois medidos em 19/08:
+
+    - **`minimaxai/minimax-m3`** devolvia 200 em 628 ms com `max_tokens=1` e **estourava 120 s**
+      numa resposta de 90 tokens. Ele estava no selo verde da tela e na lista de reserva.
+    - **`nvidia/llama-3.1-nemoguard-8b-content-safety`**, um CLASSIFICADOR, também dava 200 —
+      "responde" no chip, e o aluno recebia `{"User Safety": "safe"}` como aula.
+
+    O teto de 16 tokens não corrige o segundo caso (nada além de ler a resposta corrigiria), mas
+    corrige o primeiro, que é o que enche a lista de reserva de modelo inútil: exige que o modelo
+    **produza texto** dentro do timeout do cliente de saúde, em vez de só aceitar a conexão.
+    """
     payload = {
         "model": model_id,
-        "messages": [{"role": "user", "content": "ping"}],
-        "max_tokens": 1,
+        "messages": [{"role": "user", "content": "Responda apenas: ok"}],
+        "max_tokens": 16,
         "temperature": 0,
         "stream": False,
     }
@@ -306,6 +318,14 @@ async def _testar_modelo(client: httpx.AsyncClient, provedor: dict, model_id: st
             json=payload,
         )
         if resp.status_code == 200:
+            # 200 com conteúdo vazio não é resposta: alguns provedores devolvem `choices` sem
+            # texto quando o modelo não é de chat.
+            try:
+                texto = (resp.json()["choices"][0]["message"].get("content") or "").strip()
+            except (KeyError, IndexError, ValueError):
+                texto = ""
+            if not texto:
+                return {"responde": False, "erro": "respondeu 200 sem texto"}
             return {"responde": True, "latencia_ms": int((time.time() - inicio) * 1000)}
         detalhe = f"HTTP {resp.status_code}"
         try:
