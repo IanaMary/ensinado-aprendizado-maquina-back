@@ -291,7 +291,7 @@ class TestCadeiaDeFallback:
         factory = _mock_client_por_modelo(
             {
                 "moonshotai/kimi-k2.6": (404, {"detail": "Not found for account"}),
-                "deepseek-ai/deepseek-v4-flash": (200, {"choices": [{"message": {"content": "olá"}}]}),
+                "minimaxai/minimax-m3": (200, {"choices": [{"message": {"content": "olá"}}]}),
             },
             tentados,
         )
@@ -303,9 +303,9 @@ class TestCadeiaDeFallback:
         assert r.status_code == 200
         assert r.json()["resposta"] == "olá"
         # respondeu, e diz QUEM respondeu — não é o configurado
-        assert r.json()["modelo"] == "deepseek-ai/deepseek-v4-flash"
+        assert r.json()["modelo"] == "minimaxai/minimax-m3"
         assert tentados[0] == "moonshotai/kimi-k2.6"          # tenta o escolhido primeiro
-        assert tentados[1] == "deepseek-ai/deepseek-v4-flash"
+        assert tentados[1] == "minimaxai/minimax-m3"
 
     @pytest.mark.asyncio
     async def test_chave_invalida_nao_percorre_a_cadeia(
@@ -341,6 +341,41 @@ class TestCadeiaDeFallback:
         assert r.status_code == 502
         assert "Nenhum modelo" in r.json()["detail"]
         assert len(tentados) == 3   # o escolhido + os dois fallbacks da NVIDIA
+
+    @pytest.mark.asyncio
+    async def test_modelo_aposentado_410_nao_mata_a_cadeia(
+            self, client, mock_db, auth_headers, monkeypatch):
+        """410 Gone = o modelo saiu do ar de vez (fim de vida). Isso é do MODELO, não da conta
+        nem da pergunta: tem de cair para o próximo, como o 404.
+
+        Regressão de 18/08: o fallback `deepseek-v4-flash` atingiu fim de vida em 07/08 e passou
+        a responder 410. Sem 410 em `_vale_tentar_outro`, a cadeia parava nele e o aluno via
+        "O tutor retornou um erro" — com o fallback seguinte respondendo 200."""
+        monkeypatch.setenv("NVIDIA_API_KEY", "chave-de-teste")
+        _fixar_modelo_nvidia(monkeypatch, "modelo-escolhido")
+        tentados: list = []
+        factory = _mock_client_por_modelo(
+            {
+                "modelo-escolhido": (410, {"detail": "end of life"}),
+                "minimaxai/minimax-m3": (200, {"choices": [{"message": {"content": "olá"}}]}),
+            },
+            tentados,
+        )
+
+        with patch("app.routers.chat_tutor.httpx.AsyncClient", factory):
+            r = await client.post("/tutor/chat", headers=auth_headers,
+                                  json={"mensagens": [{"role": "user", "content": "oi"}]})
+
+        assert r.status_code == 200
+        assert r.json()["modelo"] == "minimaxai/minimax-m3"
+        assert tentados == ["modelo-escolhido", "minimaxai/minimax-m3"]
+
+    def test_status_que_valem_outra_tentativa(self):
+        from app.routers.chat_tutor import _vale_tentar_outro
+        # do MODELO: trocar de modelo pode resolver
+        assert all(_vale_tentar_outro(s) for s in (404, 410, 500, 503))
+        # da CHAVE ou da conta: trocar de modelo só esconderia o problema
+        assert not any(_vale_tentar_outro(s) for s in (400, 401, 403, 429))
 
     def test_cadeia_poe_o_escolhido_primeiro_e_nao_repete(self):
         from app.routers.chat_tutor import cadeia_de_modelos

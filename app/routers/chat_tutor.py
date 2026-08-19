@@ -253,9 +253,15 @@ def cadeia_de_modelos(provedor: dict) -> list:
 
 
 def _vale_tentar_outro(status: int) -> bool:
-    """404 = modelo não existe/não liberado; 5xx = provedor instável. Ambos mudam com o modelo.
-    401/403 (chave) e 429 (limite de taxa) não mudam — trocar de modelo não resolveria."""
-    return status == 404 or status >= 500
+    """404 = modelo não existe/não liberado; 410 = modelo APOSENTADO (fim de vida no provedor);
+    5xx = provedor instável. Os três mudam com o modelo.
+    401/403 (chave) e 429 (limite de taxa) não mudam — trocar de modelo não resolveria.
+
+    O 410 entrou em 18/08: o `deepseek-ai/deepseek-v4-flash` atingiu fim de vida na NVIDIA em
+    07/08 e passou a responder `410 Gone`. Como 410 não estava aqui, a cadeia PARAVA nele e
+    nunca chegava ao fallback seguinte, que respondia 200 — o aluno via "O tutor retornou um
+    erro" com um modelo saudável a um passo de distância."""
+    return status in (404, 410) or status >= 500
 
 
 # ============================================================
