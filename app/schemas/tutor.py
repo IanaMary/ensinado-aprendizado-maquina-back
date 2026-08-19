@@ -145,3 +145,12 @@ class DefinirProvedorAtivoRequest(BaseModel):
     # `PUT /tutor/provedor-ativo`. A validação de qual provedor existe fica em
     # `app/tutor_provedores.py`, que é quem conhece o catálogo.
     provedor: str
+
+
+class DefinirFallbacksRequest(BaseModel):
+    # `PUT /tutor/provedores/{id}/fallbacks`. **Obrigatório e sem `Optional`, de propósito:** aqui
+    # `[]` significa "não quero reserva nenhuma", e com `Optional` isso ficaria indistinguível de
+    # "campo não enviado" sem recorrer a `model_fields_set`. Quem quer voltar ao padrão do sistema
+    # usa o `DELETE` da mesma rota — a distinção fica em HTTP, não numa sentinela.
+    # A limpeza (espaço, repetido, tetos) fica em `tutor_provedores.normalizar_fallbacks`.
+    modelos: List[str]

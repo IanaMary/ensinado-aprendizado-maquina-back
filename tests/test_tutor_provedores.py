@@ -6,6 +6,8 @@ Duas garantias negativas guiam o arquivo:
 2. **trocar de provedor não herda o modelo do outro** — um id do OpenRouter não existe na NVIDIA, e
    um "modelo global" apontaria para o nada.
 """
+import copy
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -32,10 +34,33 @@ def _colecao(docs: dict):
         pedidas = ((filtro or {}).get("chave") or {}).get("$in") or list(docs)
         return Cursor([d for c, d in docs.items() if c in pedidas])
 
+    def _gravar(doc, caminho, valor):
+        """`$set` com caminho pontilhado, como o Mongo faz — `valor.nvidia.fallbacks` escreve só
+        aquele campo em vez de trocar o documento inteiro."""
+        partes = caminho.split(".")
+        for parte in partes[:-1]:
+            proximo = doc.get(parte)
+            if not isinstance(proximo, dict):
+                proximo = {}
+                doc[parte] = proximo
+            doc = proximo
+        doc[partes[-1]] = valor
+
+    def _remover(doc, caminho):
+        partes = caminho.split(".")
+        for parte in partes[:-1]:
+            doc = doc.get(parte)
+            if not isinstance(doc, dict):
+                return
+        doc.pop(partes[-1], None)
+
     async def update_one(filtro, update, **k):
         chave = filtro.get("chave")
-        doc = dict(docs.get(chave) or {})
-        doc.update((update.get("$set") or {}))
+        doc = copy.deepcopy(docs.get(chave) or {})   # fundo, senão a escrita aninhada vaza
+        for caminho, valor in (update.get("$set") or {}).items():
+            _gravar(doc, caminho, valor)
+        for caminho in (update.get("$unset") or {}):
+            _remover(doc, caminho)
         docs[chave] = doc
         return MagicMock(upserted_id=None, modified_count=1)
 
@@ -289,3 +314,114 @@ class TestCabecalhos:
         monkeypatch.setenv("FRONTEND_URL", "https://exemplo.test/app")
         assert prov.cabecalhos({"id": "openrouter", "api_key": "k"})["HTTP-Referer"] \
             == "https://exemplo.test/app"
+
+
+class TestFallbacks:
+    """A lista de reserva deixou de ser fixa no código (19/08).
+
+    O que motivou: o fallback `deepseek-v4-flash` atingiu fim de vida em 07/08 e a lista, presa no
+    `CATALOGO`, só podia ser corrigida por deploy. Modelo de LLM tem validade.
+    """
+
+    @pytest.mark.asyncio
+    async def test_sem_nada_gravado_vale_o_padrao_do_catalogo(self, banco, monkeypatch):
+        monkeypatch.setenv("NVIDIA_API_KEY", "chave")
+        p = await prov.provedor_vigente()
+        assert p["fallbacks"] == prov.CATALOGO[prov.NVIDIA]["fallbacks"]
+
+        tela = await prov.listar_para_tela()
+        nvidia = next(x for x in tela["provedores"] if x["id"] == prov.NVIDIA)
+        assert nvidia["fallbacks_origem"] == "catalogo"
+
+    @pytest.mark.asyncio
+    async def test_a_lista_do_admin_vence_o_catalogo_na_ordem_gravada(self, banco, monkeypatch):
+        monkeypatch.setenv("NVIDIA_API_KEY", "chave")
+        await prov.definir_fallbacks(prov.NVIDIA, ["reserva-b", "reserva-a"])
+
+        p = await prov.provedor_vigente()
+        assert p["fallbacks"] == ["reserva-b", "reserva-a"]   # ordem É a configuração
+
+        tela = await prov.listar_para_tela()
+        nvidia = next(x for x in tela["provedores"] if x["id"] == prov.NVIDIA)
+        assert nvidia["fallbacks"] == ["reserva-b", "reserva-a"]
+        assert nvidia["fallbacks_origem"] == "admin"
+
+    @pytest.mark.asyncio
+    async def test_lista_vazia_gravada_significa_SEM_reserva(self, banco, monkeypatch):
+        """A armadilha do falsy: com `(salvo.get(x) or padrão)`, `[]` viraria "não configurado" e
+        o admin que pediu para não ter reserva receberia a lista do código de volta."""
+        monkeypatch.setenv("NVIDIA_API_KEY", "chave")
+        await prov.definir_fallbacks(prov.NVIDIA, [])
+
+        p = await prov.provedor_vigente()
+        assert p["fallbacks"] == []
+        assert p["fallbacks"] != prov.CATALOGO[prov.NVIDIA]["fallbacks"]
+
+    @pytest.mark.asyncio
+    async def test_limpar_volta_ao_padrao_do_sistema(self, banco, monkeypatch):
+        monkeypatch.setenv("NVIDIA_API_KEY", "chave")
+        await prov.definir_fallbacks(prov.NVIDIA, [])
+        assert (await prov.provedor_vigente())["fallbacks"] == []
+
+        await prov.limpar_fallbacks(prov.NVIDIA)
+        p = await prov.provedor_vigente()
+        assert p["fallbacks"] == prov.CATALOGO[prov.NVIDIA]["fallbacks"]
+        tela = await prov.listar_para_tela()
+        assert next(x for x in tela["provedores"]
+                    if x["id"] == prov.NVIDIA)["fallbacks_origem"] == "catalogo"
+
+    def test_normalizacao(self):
+        assert prov.normalizar_fallbacks([" a ", "a", "", "  ", None, 7, "b"]) == ["a", "b"]
+        assert prov.normalizar_fallbacks(["a", "b", "c", "d", "e", "f"]) == list("abcde")
+        assert len(prov.normalizar_fallbacks(["x" * 500])[0]) == 200
+        assert prov.normalizar_fallbacks("nem é lista") == []
+
+    @pytest.mark.asyncio
+    async def test_nvidia_aceita_reserva_mas_segue_nao_editavel(self, banco):
+        """`editavel: False` diz que URL e chave vêm do `.env`, não que a escolha de modelos seja
+        imutável. A guarda de `salvar_provedor` NÃO pode ter sido relaxada de lado nenhum."""
+        await prov.definir_fallbacks(prov.NVIDIA, ["reserva"])
+        assert (await prov._configs())[prov.NVIDIA]["fallbacks"] == ["reserva"]
+
+        with pytest.raises(prov.ProvedorInvalido):
+            await prov.salvar_provedor(prov.NVIDIA, {"base_url": "http://malicioso"})
+
+    @pytest.mark.asyncio
+    async def test_gravar_reserva_nao_apaga_modelo_nem_chave(self, banco):
+        await prov.salvar_provedor(prov.OPENROUTER, {"api_key": "sk-or-secreta"})
+        await prov.definir_modelo(prov.OPENROUTER, "google/gemma-4-26b-a4b-it:free")
+        await prov.definir_fallbacks(prov.OPENROUTER, ["outro:free"])
+
+        salvo = (await prov._configs())[prov.OPENROUTER]
+        assert salvo["api_key"] == "sk-or-secreta"
+        assert salvo["modelo"] == "google/gemma-4-26b-a4b-it:free"
+        assert salvo["fallbacks"] == ["outro:free"]
+
+    @pytest.mark.asyncio
+    async def test_reserva_de_um_provedor_nao_vaza_para_o_outro(self, banco, monkeypatch):
+        # Um id do OpenRouter não existe na NVIDIA: lista global apontaria para o nada.
+        monkeypatch.setenv("NVIDIA_API_KEY", "chave")
+        await prov.definir_fallbacks(prov.OPENROUTER, ["moonshotai/kimi-k2"])
+        assert (await prov.provedor_vigente())["fallbacks"] == \
+            prov.CATALOGO[prov.NVIDIA]["fallbacks"]
+
+    @pytest.mark.asyncio
+    async def test_openrouter_e_custom_passam_a_poder_ter_reserva(self, banco):
+        # Antes, `fallbacks` só existia no CATALOGO da NVIDIA: os outros rodavam sem rede nenhuma.
+        await prov.definir_fallbacks(prov.CUSTOM, ["local-1", "local-2"])
+        tela = await prov.listar_para_tela()
+        custom = next(x for x in tela["provedores"] if x["id"] == prov.CUSTOM)
+        assert custom["fallbacks"] == ["local-1", "local-2"]
+
+    @pytest.mark.asyncio
+    async def test_pid_desconhecido_e_recusado(self, banco):
+        with pytest.raises(prov.ProvedorInvalido):
+            await prov.definir_fallbacks("inexistente", ["x"])
+        with pytest.raises(prov.ProvedorInvalido):
+            await prov.limpar_fallbacks("inexistente")
+
+    @pytest.mark.asyncio
+    async def test_a_tela_continua_sem_chave_em_claro(self, banco):
+        await prov.salvar_provedor(prov.OPENROUTER, {"api_key": "sk-or-secreta"})
+        await prov.definir_fallbacks(prov.OPENROUTER, ["a"])
+        assert "sk-or-secreta" not in repr(await prov.listar_para_tela())

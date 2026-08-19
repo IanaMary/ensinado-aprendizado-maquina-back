@@ -8,14 +8,15 @@ Onde o estado vive (`db.configuracoes_tutor`, admin-only para escrever):
 
 ```
 { chave: "llm_provedor",   valor: "nvidia" | "openrouter" | "custom" }
-{ chave: "llm_provedores", valor: { "<id>": {nome?, base_url?, api_key?, modelo?} } }
+{ chave: "llm_provedores", valor: { "<id>": {nome?, base_url?, api_key?, modelo?, fallbacks?} } }
 { chave: "llm_model",      valor: "…" }   # legado: o modelo de quando só havia NVIDIA
 ```
 
 Três decisões que valem explicar:
 
-- **O modelo é por provedor.** Um id de modelo do OpenRouter não existe na NVIDIA; guardar um
-  "modelo ativo" global faria a troca de provedor apontar para um modelo inexistente.
+- **O modelo é por provedor** — e a lista de reserva (`fallbacks`) também, pela mesma razão. Um id
+  de modelo do OpenRouter não existe na NVIDIA; guardar um "modelo ativo" global faria a troca de
+  provedor apontar para um modelo inexistente.
 - **A chave da NVIDIA continua só no `.env`** (`NVIDIA_API_KEY`) — o invariante de que ela nunca
   toca o banco nem o frontend não muda. Os provedores configuráveis pela tela guardam a chave no
   banco porque é o que permite ao admin ligá-los sem deploy; a leitura devolve só os últimos 4
@@ -116,6 +117,46 @@ def normalizar_base_url(base_url: str, porta: Optional[int] = None) -> str:
     return urlunparse(p).rstrip("/")
 
 
+# ---------------------------------------------------------------- lista de reserva (fallbacks)
+# Teto de itens na cadeia. NÃO é estética: cada tentativa morta é um round-trip antes de o aluno
+# ver qualquer coisa, e o cliente do caminho não-stream espera até 60 s por tentativa. 404/410
+# voltam rápido (~200 ms); timeout é o que dói. 5 reservas = 6 tentativas, pior caso contido.
+MAX_FALLBACKS = 5
+
+
+def normalizar_fallbacks(modelos: Any) -> List[str]:
+    """Limpa a lista que veio da tela: descarta o que não é texto útil, tira repetido preservando
+    a ordem (a ordem É a configuração) e aplica os tetos."""
+    if not isinstance(modelos, list):
+        return []
+    vistos, saida = set(), []
+    for m in modelos:
+        if not isinstance(m, str):
+            continue
+        m = m.strip()[:200]     # mesmo teto por id que `modelo`
+        if not m or m in vistos:
+            continue
+        vistos.add(m)
+        saida.append(m)
+        if len(saida) >= MAX_FALLBACKS:
+            break
+    return saida
+
+
+def fallbacks_efetivos(pid: str, salvo: Dict[str, Any]) -> tuple[List[str], str]:
+    """`(lista, origem)` — `origem` é `'admin'` ou `'catalogo'`.
+
+    **`isinstance`, não `or`, e isso importa.** O resto do módulo usa o idioma
+    `(salvo.get(x) or padrão)`, que com uma LISTA colapsa `[]` em "não configurado" e devolveria o
+    padrão do código justamente a quem pediu para não ter reserva nenhuma. Ausente (ou lixo de
+    outro formato) = padrão do catálogo; lista presente, mesmo vazia = decisão do admin.
+    """
+    bruto = salvo.get("fallbacks")
+    if not isinstance(bruto, list):
+        return list((CATALOGO.get(pid) or {}).get("fallbacks") or []), "catalogo"
+    return normalizar_fallbacks(bruto), "admin"
+
+
 def mascarar(chave: str) -> str:
     """Últimos 4 caracteres, para o admin reconhecer qual chave está lá sem poder lê-la."""
     limpa = (chave or "").strip()
@@ -197,8 +238,10 @@ async def provedor_vigente() -> Dict[str, Any]:
         "base_url": (salvo.get("base_url") or base["base_url"] or "").rstrip("/"),
         "api_key": api_key,
         "modelo": modelo,
-        # Modelos a tentar se o escolhido não atender (ver `fallbacks` no CATALOGO).
-        "fallbacks": list(base.get("fallbacks") or []),
+        # Modelos a tentar se o escolhido não atender. Vem do banco quando o admin configurou
+        # (conf-tutor → LLM); senão, do CATALOGO. Modelo de LLM tem validade: uma lista fixa no
+        # código envelhece sozinha e só um deploy a conserta — foi o que custou 11 dias em 08/08.
+        "fallbacks": fallbacks_efetivos(pid, salvo)[0],
         "todos_gratuitos": base["todos_gratuitos"],
         "exige_chave": base["exige_chave"],
     }
@@ -219,11 +262,16 @@ async def listar_para_tela() -> Dict[str, Any]:
         modelo = (salvo.get("modelo") or "").strip()
         if not modelo and pid == NVIDIA:
             modelo = (legado or base["modelo_padrao"] or "").strip()
+        reservas, reservas_origem = fallbacks_efetivos(pid, salvo)
         provedores.append({
             "id": pid,
             "nome": salvo.get("nome") or base["nome"],
             "base_url": (salvo.get("base_url") or base["base_url"] or "").rstrip("/"),
             "modelo": modelo,
+            # A ordem de tentativa quando o modelo escolhido não atende, e se ela é do admin ou
+            # o padrão do código (a tela mostra "Voltar ao padrão do sistema" só no primeiro caso).
+            "fallbacks": reservas,
+            "fallbacks_origem": reservas_origem,
             "editavel": base["editavel"],
             "todos_gratuitos": base["todos_gratuitos"],
             # De onde sai a chave que será usada: 'banco' (o admin gravou), 'env' (.env do
@@ -327,6 +375,45 @@ async def definir_modelo(pid: str, modelo: str, usuario_id: str = "") -> None:
                       "atualizado_por": usuario_id}},
             upsert=True,
         )
+
+
+async def definir_fallbacks(pid: str, modelos: List[str], usuario_id: str = "") -> List[str]:
+    """Lista de reserva DO provedor, na ordem de tentativa. Devolve o que ficou gravado.
+
+    Como `definir_modelo`, grava mesmo em provedor não editável: `editavel` diz que URL e chave
+    vêm do `.env` (é o caso da NVIDIA), não que a escolha de modelos seja imutável — e a NVIDIA é
+    justamente quem mais precisa de reserva.
+
+    Escreve no CAMINHO pontual (`valor.<pid>.fallbacks`) em vez de reler e regravar o documento
+    inteiro: assim duas edições simultâneas de provedores diferentes não se sobrescrevem. `pid`
+    vem da allowlist do `CATALOGO`, então não há como injetar caminho.
+    """
+    if pid not in CATALOGO:
+        raise ProvedorInvalido("Provedor desconhecido.")
+    lista = normalizar_fallbacks(modelos)
+    await _colecao().update_one(
+        {"chave": CHAVE_PROVEDORES},
+        {"$set": {"chave": CHAVE_PROVEDORES, f"valor.{pid}.fallbacks": lista,
+                  "atualizado_por": usuario_id}},
+        upsert=True,
+    )
+    return lista
+
+
+async def limpar_fallbacks(pid: str, usuario_id: str = "") -> List[str]:
+    """Descarta a lista do admin e volta ao padrão do catálogo. Devolve o padrão que passa a valer.
+
+    É `$unset`, não `$set` de `[]`: gravar lista vazia significa "não quero reserva nenhuma", que é
+    uma escolha diferente de "use o que o sistema recomenda".
+    """
+    if pid not in CATALOGO:
+        raise ProvedorInvalido("Provedor desconhecido.")
+    await _colecao().update_one(
+        {"chave": CHAVE_PROVEDORES},
+        {"$unset": {f"valor.{pid}.fallbacks": ""},
+         "$set": {"atualizado_por": usuario_id}},
+    )
+    return list(CATALOGO[pid].get("fallbacks") or [])
 
 
 def eh_gratuito(modelo: Dict[str, Any], provedor: Dict[str, Any]) -> Optional[bool]:

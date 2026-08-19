@@ -40,6 +40,7 @@ from app.schemas.chat import (
     ChatTutorRequest,
 )
 from app.schemas.tutor import (
+    DefinirFallbacksRequest,
     DefinirProvedorAtivoRequest,
     DefinirSystemPromptRequest,
     SalvarProvedorRequest,
@@ -253,15 +254,25 @@ def cadeia_de_modelos(provedor: dict) -> list:
 
 
 def _vale_tentar_outro(status: int) -> bool:
-    """404 = modelo não existe/não liberado; 410 = modelo APOSENTADO (fim de vida no provedor);
-    5xx = provedor instável. Os três mudam com o modelo.
-    401/403 (chave) e 429 (limite de taxa) não mudam — trocar de modelo não resolveria.
+    """Este erro é DO MODELO (trocar de modelo pode resolver) ou da conta/pergunta (não resolve)?
+
+    - **404** = modelo não existe ou não liberado para a conta.
+    - **410** = modelo APOSENTADO (fim de vida no provedor).
+    - **402** = sem crédito para ESTE modelo (OpenRouter) — cair para um `:free` resolve.
+    - **5xx** = provedor instável naquele modelo.
+
+    Ficam de fora: **401/403** (é a chave, a mesma para todos), **400** (ambíguo com payload ruim)
+    e **429**. O 429 merece a explicação, porque é tentador: ele também é limite da CONTA, e aí
+    percorrer a cadeia dispara N requisições no exato momento em que o provedor pediu para parar —
+    é assim que um limite de 10 s vira bloqueio. Além disso é transitório e se cura sozinho; a
+    resposta certa seria honrar `Retry-After`, não trocar de modelo, e `_marcar_ruim` tiraria de
+    circulação por 10 min um modelo perfeitamente saudável por causa de uma rajada.
 
     O 410 entrou em 18/08: o `deepseek-ai/deepseek-v4-flash` atingiu fim de vida na NVIDIA em
     07/08 e passou a responder `410 Gone`. Como 410 não estava aqui, a cadeia PARAVA nele e
     nunca chegava ao fallback seguinte, que respondia 200 — o aluno via "O tutor retornou um
     erro" com um modelo saudável a um passo de distância."""
-    return status in (404, 410) or status >= 500
+    return status in (402, 404, 410) or status >= 500
 
 
 # ============================================================
@@ -611,6 +622,44 @@ async def definir_provedor_ativo(body: DefinirProvedorAtivoRequest,
     _saude_cache["total"] = 0
     _saude_cache["concluidos"] = 0
     await _auditar_llm(usuario, "trocou_provedor", str(pid))
+    return await prov.listar_para_tela()
+
+
+@router.put("/provedores/{pid}/fallbacks")
+async def definir_fallbacks(pid: str, body: DefinirFallbacksRequest,
+                            usuario=Depends(get_usuario_atual)):
+    """Ordem de tentativa quando o modelo escolhido não atende — a lista de reserva DO provedor.
+
+    `pid` explícito no caminho (e não o provedor ativo, como faz `PUT /tutor/modelo`): a lista é
+    por provedor, a auditoria precisa dizer de qual, e se o ativo mudou entre a tela carregar e o
+    admin salvar, a gravação vai no provedor certo em vez de no que estiver ativo agora.
+    """
+    if usuario.get("role") != "admin":
+        raise HTTPException(status_code=403,
+                            detail="Apenas admins podem alterar a lista de reserva do tutor.")
+    try:
+        lista = await prov.definir_fallbacks(pid, body.modelos, str(usuario.get("_id", "")))
+    except prov.ProvedorInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    await _auditar_llm(usuario, "definiu_fallbacks", f"{pid}: {', '.join(lista) or '(nenhuma)'}")
+    return await prov.listar_para_tela()
+
+
+@router.delete("/provedores/{pid}/fallbacks")
+async def restaurar_fallbacks(pid: str, usuario=Depends(get_usuario_atual)):
+    """Descarta a lista do admin e volta ao padrão do código.
+
+    `DELETE` em vez de um `PUT` com sentinela: "voltar ao padrão" e "não quero reserva nenhuma"
+    são escolhas diferentes, e a segunda é um `PUT` com lista vazia.
+    """
+    if usuario.get("role") != "admin":
+        raise HTTPException(status_code=403,
+                            detail="Apenas admins podem alterar a lista de reserva do tutor.")
+    try:
+        padrao = await prov.limpar_fallbacks(pid, str(usuario.get("_id", "")))
+    except prov.ProvedorInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    await _auditar_llm(usuario, "restaurou_fallbacks", f"{pid}: {', '.join(padrao) or '(nenhuma)'}")
     return await prov.listar_para_tela()
 
 
