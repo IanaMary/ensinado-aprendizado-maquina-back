@@ -9,6 +9,31 @@ diagnósticos, armadilhas) vive no `HISTORICO.md` do workspace de trabalho.
 
 ---
 
+## 2026-08-19b (o teste de saúde media conexão, não geração)
+
+Backend `6a18e56`.
+
+### Corrigido
+- **`_testar_modelo` passa a exigir GERAÇÃO**: 16 tokens em vez de 1, e 200 com conteúdo vazio vira
+  `"respondeu 200 sem texto"`. O ping antigo mentia, e mentiu duas vezes no mesmo dia:
+  `minimaxai/minimax-m3` respondia em 628 ms com `max_tokens=1` e **estourava 120 s** numa resposta
+  de 90 tokens; e `nvidia/llama-3.1-nemoguard-8b-content-safety`, um classificador, também dava 200
+  — chip verde na tela, `{"User Safety": "safe"}` para o aluno.
+- **Fallbacks da NVIDIA remedidos gerando texto**: saiu `minimaxai/minimax-m3`, entrou
+  `nvidia/llama-3.3-nemotron-super-49b-v1.5` (200 em 2,1 s); fica `meta/llama-3.1-8b-instruct`
+  (200 em 0,7 s). `meta/llama-3.3-70b-instruct` e `openai/gpt-oss-120b` estouram 120 s.
+- `test_modelo_que_responde` passava por acidente: com um `MagicMock` cru, qualquer acesso ao corpo
+  devolvia um mock verdadeiro. Agora usa corpo real, e há caso para 200 sem texto.
+
+### Nota operacional
+O modelo ativo em produção foi corrigido duas vezes neste dia — primeiro tirando o classificador de
+segurança que um clique acidental deixou no ar, depois trocando o `minimax-m3` que eu havia posto no
+lugar e que passa no ping mas não gera. Ambas as trocas estão na auditoria da tela como
+`correção operacional`. **A cadeia de reserva não protege contra modelo que responde 200 e diz
+bobagem** — ela só reage a erro.
+
+Suíte **719 → 721**.
+
 ## 2026-08-19 (a lista de reserva de modelos vira configuração)
 
 Backend `1a015ef`. Continuação do incidente de 18/08: lá o defeito foi o 410 fora da regra de
