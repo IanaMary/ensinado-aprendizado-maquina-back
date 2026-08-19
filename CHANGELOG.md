@@ -9,6 +9,44 @@ diagnósticos, armadilhas) vive no `HISTORICO.md` do workspace de trabalho.
 
 ---
 
+## 2026-08-19c (Google AI Studio e OrcaRouter como provedores)
+
+Backend `808089f` · bundle `main-N7XDS6L3.js`.
+
+### Adicionado
+- **Google AI Studio (Gemini)** pela **camada de compatibilidade OpenAI**
+  (`https://generativelanguage.googleapis.com/v1beta/openai`) — é ela que permite entrar sem código
+  próprio: mesmo `/models`, mesmo `/chat/completions`, `Authorization: Bearer` e ids sem o prefixo
+  `models/`. A API nativa do Gemini tem outro formato e não serviria. Chave em
+  `GEMINI_API_KEY` ou pela tela.
+- **OrcaRouter** (`https://api.orcarouter.ai/v1`, `ORCAROUTER_API_KEY`): roteador com preço por
+  modelo, como o OpenRouter.
+
+### `todos_gratuitos: None` no Gemini, e por quê
+O nível gratuito do AI Studio cobre **Flash/Flash-Lite**, não a linha **Pro** (paga desde 04/2026),
+e a camada OpenAI **não devolve `pricing`** — então o catálogo não sabe. Marcar tudo como gratuito
+(convenção que vale para a NVIDIA) mentiria sobre os Pro. Efeito colateral desejável: sem essa marca
+o teste de saúde automático não varre a lista inteira, o que **preserva a cota diária** do nível
+gratuito (~500 requisições/dia); o admin testa item a item.
+
+### Nenhum dos dois nasce com reserva fixa no código
+Id de modelo tem validade — foi o que custou 11 dias em 08/08. Agora o admin monta a lista na tela,
+com o chip de saúde ao lado de cada candidato. Há teste travando isso.
+
+### Corrigido de tabela
+**URL base e porta passam a aparecer só no provedor customizado.** Nos hospedados o servidor força a
+URL do catálogo (guarda que impede redirecionar a chave já gravada para outro host), então o campo
+prometia uma edição que o servidor descartava — com dois provedores novos, a promessa falsa
+apareceria em três cartões. Cada hospedado ganhou link para obter a chave.
+
+### Privacidade — decidir antes de ligar o Gemini em aula
+O nível gratuito do AI Studio permite que o Google **use o conteúdo para melhorar os produtos**
+(o nível pago, não). O público desta plataforma é **menor de idade**, e a política do projeto manda
+minimizar dado pessoal. Não é impeditivo técnico e não bloqueia nada — é decisão do dono, e fica
+registrada aqui para não ser tomada por omissão.
+
+Suíte **721 → 730**.
+
 ## 2026-08-19b (o teste de saúde media conexão, não geração)
 
 Backend `6a18e56`.
