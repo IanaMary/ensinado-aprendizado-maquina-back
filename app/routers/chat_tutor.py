@@ -301,10 +301,14 @@ def cadeia_de_chaves(provedor: dict) -> list:
 
 
 # Nem todo provedor usa 401 para chave inválida. **Medido em produção (19/08): o Google AI Studio
-# devolve `400` com `API_KEY_INVALID` no corpo.** Como 400 também é "payload ruim", não dá para
-# tratá-lo como erro de chave em geral — mas dá para ler o corpo e reconhecer a marca.
-_MARCAS_DE_CHAVE_RUIM = ("api_key_invalid", "api key not valid", "invalid api key",
-                         "invalid_api_key", "api key expired")
+# devolve `400`**, e o corpo é `{"error": {"message": "Please pass a valid API key", "status":
+# "INVALID_ARGUMENT"}}` — nem "401", nem `API_KEY_INVALID`, nem "API key not valid" (que é o que a
+# documentação sugere). A primeira tentativa de casar frases exatas falhou por isso.
+#
+# Como 400 também é "payload ruim", não dá para tratá-lo como erro de chave em geral. O critério é
+# o corpo **mencionar a chave**: cada provedor escreve a frase de um jeito, mas nenhum erro de
+# payload fala de "api key".
+_MARCAS_DE_CHAVE_RUIM = ("api key", "api_key", "apikey")
 
 
 def _corpo_indica_chave(corpo: str) -> bool:

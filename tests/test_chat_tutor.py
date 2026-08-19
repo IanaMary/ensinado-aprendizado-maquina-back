@@ -1072,7 +1072,12 @@ class TestRotacaoDeChave:
 
     def test_corpo_que_denuncia_chave(self):
         from app.routers.chat_tutor import _corpo_indica_chave, _e_erro_de_chave
-        assert _corpo_indica_chave('{"message": "API key not valid. Pass a valid API key."}')
+        # O texto EXATO que o Google AI Studio devolve, copiado da medição em produção — nem
+        # "401", nem `API_KEY_INVALID`, nem "API key not valid" (o que a documentação sugere).
+        assert _corpo_indica_chave(
+            '[{"error": {"code": 400, "message": "Please pass a valid API key",'
+            ' "status": "INVALID_ARGUMENT"}}]')
+        assert _corpo_indica_chave('{"message": "API key not valid."}')
         assert _corpo_indica_chave('{"status":"API_KEY_INVALID"}')
         assert not _corpo_indica_chave('{"detail": "messages: campo obrigatório"}')
         assert not _corpo_indica_chave("")
