@@ -147,6 +147,12 @@ class DefinirProvedorAtivoRequest(BaseModel):
     provedor: str
 
 
+class AdicionarChaveRequest(BaseModel):
+    # `POST /tutor/provedores/{id}/chaves`. Só o valor da chave — a remoção é por ÍNDICE, porque a
+    # tela nunca conhece o valor (recebe apenas os últimos 4 caracteres).
+    api_key: str
+
+
 class DefinirFallbacksRequest(BaseModel):
     # `PUT /tutor/provedores/{id}/fallbacks`. **Obrigatório e sem `Optional`, de propósito:** aqui
     # `[]` significa "não quero reserva nenhuma", e com `Optional` isso ficaria indistinguível de

@@ -293,7 +293,13 @@ def _mock_client_por_modelo(respostas: dict, registro: list):
     async def _post(url, headers=None, json=None, **kw):
         modelo = (json or {}).get("model")
         registro.append(modelo)
-        status, corpo = respostas.get(modelo, (404, {"detail": "Not found for account"}))
+        # `respostas` pode ser indexada por modelo OU por `(modelo, chave)` — é assim que os
+        # testes de rotação de CHAVE dizem "esta chave falha, aquela passa" no mesmo modelo.
+        chave = (headers or {}).get("Authorization", "").replace("Bearer ", "")
+        if (modelo, chave) in respostas:
+            status, corpo = respostas[(modelo, chave)]
+        else:
+            status, corpo = respostas.get(modelo, (404, {"detail": "Not found for account"}))
         resp = MagicMock()
         resp.status_code = status
         resp.json = MagicMock(return_value=corpo)
@@ -900,3 +906,121 @@ class TestListagemDeModelos:
                                              "id": "nvidia", "api_key": "k",
                                              "todos_gratuitos": True})
         assert modelos[0]["id"] == "meta/llama-3.1-8b-instruct"
+
+
+def _provedor_com_chaves(monkeypatch, *chaves, modelo="modelo-unico"):
+    """Fixa um provedor NVIDIA com as chaves informadas e sem fallback de modelo, para isolar a
+    rotação de CHAVE da rotação de MODELO."""
+    from app import tutor_provedores as prov
+    base = dict(prov.CATALOGO[prov.NVIDIA])
+    base.update({"modelo_padrao": modelo, "fallbacks": []})
+    monkeypatch.setitem(prov.CATALOGO, prov.NVIDIA, base)
+    monkeypatch.setattr(prov, "chaves_do_provedor", lambda pid, salvo: list(chaves))
+
+
+class TestRotacaoDeChave:
+    """O limite de taxa é POR CHAVE. Com várias, 429 deixa de derrubar o tutor (19/08).
+
+    Invariante que estes testes protegem: **com uma chave só, nada muda** — 401/403/429 continuam
+    parando a cadeia, como sempre pararam.
+    """
+
+    def setup_method(self):
+        from app.routers import chat_tutor
+        chat_tutor._modelos_ruins.clear()
+        chat_tutor._chaves_ruins.clear()
+
+    @pytest.mark.asyncio
+    async def test_429_na_primeira_chave_tenta_a_segunda_no_MESMO_modelo(
+            self, client, mock_db, auth_headers, monkeypatch):
+        monkeypatch.setenv("NVIDIA_API_KEY", "ignorada")
+        _provedor_com_chaves(monkeypatch, "k1", "k2")
+        tentados: list = []
+        factory = _mock_client_por_modelo(
+            {("modelo-unico", "k1"): (429, {"detail": "rate limit"}),
+             ("modelo-unico", "k2"): (200, {"choices": [{"message": {"content": "olá"}}]})},
+            tentados,
+        )
+
+        with patch("app.routers.chat_tutor.httpx.AsyncClient", factory):
+            r = await client.post("/tutor/chat", headers=auth_headers,
+                                  json={"mensagens": [{"role": "user", "content": "oi"}]})
+
+        assert r.status_code == 200
+        # duas tentativas, o MESMO modelo nas duas: quem mudou foi a chave
+        assert tentados == ["modelo-unico", "modelo-unico"]
+
+    @pytest.mark.asyncio
+    async def test_401_tambem_rotaciona_a_chave(self, client, mock_db, auth_headers, monkeypatch):
+        monkeypatch.setenv("NVIDIA_API_KEY", "ignorada")
+        _provedor_com_chaves(monkeypatch, "revogada", "boa")
+        tentados: list = []
+        factory = _mock_client_por_modelo(
+            {("modelo-unico", "revogada"): (401, {"detail": "unauthorized"}),
+             ("modelo-unico", "boa"): (200, {"choices": [{"message": {"content": "olá"}}]})},
+            tentados,
+        )
+        with patch("app.routers.chat_tutor.httpx.AsyncClient", factory):
+            r = await client.post("/tutor/chat", headers=auth_headers,
+                                  json={"mensagens": [{"role": "user", "content": "oi"}]})
+        assert r.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_com_UMA_chave_o_429_continua_parando_a_cadeia(
+            self, client, mock_db, auth_headers, monkeypatch):
+        """A garantia de não-regressão: quem não configurou várias chaves vê o comportamento de
+        sempre, inclusive o erro alto em vez de N tentativas contra um provedor que pediu pausa."""
+        monkeypatch.setenv("NVIDIA_API_KEY", "ignorada")
+        _provedor_com_chaves(monkeypatch, "unica")
+        tentados: list = []
+        factory = _mock_client_por_modelo({"modelo-unico": (429, {"detail": "rate limit"})},
+                                          tentados)
+        with patch("app.routers.chat_tutor.httpx.AsyncClient", factory):
+            r = await client.post("/tutor/chat", headers=auth_headers,
+                                  json={"mensagens": [{"role": "user", "content": "oi"}]})
+        assert r.status_code == 502
+        assert tentados == ["modelo-unico"]      # uma tentativa só
+
+    @pytest.mark.asyncio
+    async def test_404_troca_de_MODELO_e_nao_gasta_as_outras_chaves(
+            self, client, mock_db, auth_headers, monkeypatch):
+        """404 é do modelo: repetir com outra chave seria desperdício de tempo do aluno."""
+        monkeypatch.setenv("NVIDIA_API_KEY", "ignorada")
+        from app import tutor_provedores as prov
+        base = dict(prov.CATALOGO[prov.NVIDIA])
+        base.update({"modelo_padrao": "morto", "fallbacks": ["vivo"]})
+        monkeypatch.setitem(prov.CATALOGO, prov.NVIDIA, base)
+        monkeypatch.setattr(prov, "chaves_do_provedor", lambda pid, salvo: ["k1", "k2"])
+        tentados: list = []
+        factory = _mock_client_por_modelo(
+            {"vivo": (200, {"choices": [{"message": {"content": "olá"}}]})}, tentados)
+
+        with patch("app.routers.chat_tutor.httpx.AsyncClient", factory):
+            r = await client.post("/tutor/chat", headers=auth_headers,
+                                  json={"mensagens": [{"role": "user", "content": "oi"}]})
+
+        assert r.status_code == 200
+        assert tentados == ["morto", "vivo"]     # NÃO tentou 'morto' duas vezes
+
+    def test_chave_que_falhou_vai_para_o_fim_mas_nao_some(self):
+        from app.routers import chat_tutor
+        p = {"base_url": "http://x", "api_keys": ["a", "b"], "api_key": "a"}
+        chat_tutor._marcar_chave_ruim("http://x", "a")
+        assert chat_tutor.cadeia_de_chaves(p) == ["b", "a"]
+
+    def test_a_chave_nunca_vira_indice_do_cache_em_claro(self):
+        """O cache mora em memória, mas um `repr` num log de exceção bastaria para vazar."""
+        from app.routers import chat_tutor
+        chat_tutor._marcar_chave_ruim("http://x", "sk-secreta")
+        assert "sk-secreta" not in repr(chat_tutor._chaves_ruins)
+
+    def test_sem_chave_nenhuma_a_cadeia_ainda_tem_uma_volta(self):
+        # Endpoint self-hosted responde sem `Authorization`; o laço precisa rodar mesmo assim.
+        from app.routers import chat_tutor
+        assert chat_tutor.cadeia_de_chaves({"base_url": "http://x", "api_keys": []}) == [""]
+
+    def test_status_que_pedem_outra_chave(self):
+        from app.routers.chat_tutor import _vale_tentar_outra_chave
+        assert all(_vale_tentar_outra_chave(s) for s in (401, 403, 429))
+        # do MODELO, não da chave: repetir com outra chave só gastaria tempo
+        assert not any(_vale_tentar_outra_chave(s) for s in (400, 402, 404, 410, 500))

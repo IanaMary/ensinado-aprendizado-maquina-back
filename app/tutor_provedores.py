@@ -190,6 +190,52 @@ def fallbacks_efetivos(pid: str, salvo: Dict[str, Any]) -> tuple[List[str], str]
     return normalizar_fallbacks(bruto), "admin"
 
 
+# ---------------------------------------------------------------- chaves de API (uma ou várias)
+# Por que várias: o limite de taxa é POR CHAVE. O nível gratuito do Google AI Studio dá ~500
+# requisições/dia; numa turma inteira usando o tutor, uma chave só acaba antes da aula.
+MAX_CHAVES = 5
+
+
+def normalizar_chaves(chaves: Any) -> List[str]:
+    """Limpa a lista: descarta o que não é texto, tira repetido preservando a ordem, aplica o teto."""
+    if not isinstance(chaves, list):
+        return []
+    vistas, saida = set(), []
+    for c in chaves:
+        if not isinstance(c, str):
+            continue
+        c = c.strip()
+        if not c or c in vistas:
+            continue
+        vistas.add(c)
+        saida.append(c)
+        if len(saida) >= MAX_CHAVES:
+            break
+    return saida
+
+
+def chaves_do_provedor(pid: str, salvo: Dict[str, Any]) -> List[str]:
+    """Todas as chaves utilizáveis, na ordem de tentativa.
+
+    Precedência: lista do banco > chave única do banco (formato antigo) > `.env`. **Aqui `or` é o
+    idioma certo**, ao contrário de `fallbacks_efetivos`: lista de chaves vazia não é uma
+    configuração que alguém queira — provedor sem chave simplesmente não funciona —, então cair
+    para o formato anterior e depois para o ambiente é o comportamento desejado, não uma armadilha.
+
+    O `.env` NÃO é misturado com o banco de propósito: se o admin gravou chave pela tela, é a dela
+    que ele está falando. Misturar traria de volta, em silêncio, uma chave que ele pode ter tirado.
+    """
+    lista = normalizar_chaves(salvo.get("api_keys"))
+    if lista:
+        return lista
+    unica = (salvo.get("api_key") or "").strip()
+    if unica:
+        return [unica]
+    base = CATALOGO.get(pid) or {}
+    do_env = os.getenv(base.get("env_chave") or "", "").strip() if base.get("env_chave") else ""
+    return [do_env] if do_env else []
+
+
 def mascarar(chave: str) -> str:
     """Últimos 4 caracteres, para o admin reconhecer qual chave está lá sem poder lê-la."""
     limpa = (chave or "").strip()
@@ -208,9 +254,7 @@ def _colecao():
 
 def tem_chave(pid: str, salvo: Dict[str, Any]) -> bool:
     """Há chave utilizável para este provedor (gravada pelo admin ou vinda do ambiente)?"""
-    base = CATALOGO.get(pid) or {}
-    do_env = os.getenv(base.get("env_chave") or "", "") if base.get("env_chave") else ""
-    return bool((salvo.get("api_key") or "").strip() or do_env)
+    return bool(chaves_do_provedor(pid, salvo))
 
 
 async def _ler(chave: str) -> Any:
@@ -254,11 +298,11 @@ async def provedor_vigente() -> Dict[str, Any]:
     configs = lidas.get(CHAVE_PROVEDORES)
     salvo = (configs.get(pid) if isinstance(configs, dict) else None) or {}
 
-    api_key = ""
-    if base["env_chave"]:
-        api_key = os.getenv(base["env_chave"], "")
-    # A chave gravada pelo admin prevalece sobre a do ambiente (é a que ele acabou de testar).
-    api_key = (salvo.get("api_key") or api_key or "").strip()
+    # A(s) chave(s) gravada(s) pelo admin prevalecem sobre a do ambiente.
+    chaves = chaves_do_provedor(pid, salvo)
+    # `api_key` continua sendo a PRIMEIRA: é o que `cabecalhos()` usa por padrão e o que todo o
+    # resto do código já esperava. A rotação, quando existe, escolhe outra explicitamente.
+    api_key = chaves[0] if chaves else ""
 
     modelo = (salvo.get("modelo") or "").strip()
     if not modelo and pid == NVIDIA:
@@ -270,6 +314,9 @@ async def provedor_vigente() -> Dict[str, Any]:
         "nome": salvo.get("nome") or base["nome"],
         "base_url": (salvo.get("base_url") or base["base_url"] or "").rstrip("/"),
         "api_key": api_key,
+        # Todas as chaves, na ordem de tentativa. Rotacionar entre elas é o que salva o dia quando
+        # o provedor devolve 429 (limite POR CHAVE) ou 401/403 (chave revogada).
+        "api_keys": chaves,
         "modelo": modelo,
         # Modelos a tentar se o escolhido não atender. Vem do banco quando o admin configurou
         # (conf-tutor → LLM); senão, do CATALOGO. Modelo de LLM tem validade: uma lista fixa no
@@ -291,7 +338,13 @@ async def listar_para_tela() -> Dict[str, Any]:
         base = CATALOGO[pid]
         salvo = salvos.get(pid) or {}
         chave_env = os.getenv(base["env_chave"], "") if base["env_chave"] else ""
-        chave_banco = (salvo.get("api_key") or "").strip()
+        # Chaves do BANCO: a lista nova, com o formato antigo (`api_key` única) como fallback.
+        # Ler só o campo antigo era o defeito: quem adicionasse chave pela lista continuava
+        # aparecendo como "sem chave" e o provedor não podia ser ativado.
+        do_banco = normalizar_chaves(salvo.get("api_keys"))
+        if not do_banco and (salvo.get("api_key") or "").strip():
+            do_banco = [salvo["api_key"].strip()]
+        chave_banco = do_banco[0] if do_banco else ""
         modelo = (salvo.get("modelo") or "").strip()
         if not modelo and pid == NVIDIA:
             modelo = (legado or base["modelo_padrao"] or "").strip()
@@ -311,10 +364,15 @@ async def listar_para_tela() -> Dict[str, Any]:
             # servidor) ou 'ausente' (o provedor não vai funcionar até alguém informar).
             "chave_fonte": "banco" if chave_banco else ("env" if chave_env else "ausente"),
             "chave_mascarada": mascarar(chave_banco or chave_env),
+            # Todas as chaves, **mascaradas** e com o índice que o DELETE usa. A tela precisa
+            # distinguir uma da outra sem nunca conhecer o valor.
+            "chaves": [{"indice": i, "mascarada": mascarar(c)}
+                       for i, c in enumerate(chaves_do_provedor(pid, salvo))],
+            "chaves_no_banco": len(do_banco),
             "env_chave": base["env_chave"] or None,
             # Pronto para ser ativado: URL base sempre; chave só quando o provedor a exige.
             "configurado": bool((salvo.get("base_url") or base["base_url"])
-                                and (not base["exige_chave"] or chave_banco or chave_env)),
+                                and (not base["exige_chave"] or tem_chave(pid, salvo))),
             "exige_chave": base["exige_chave"],
         })
     return {"ativo": ativo, "provedores": provedores}
@@ -433,6 +491,68 @@ async def definir_fallbacks(pid: str, modelos: List[str], usuario_id: str = "") 
     return lista
 
 
+async def adicionar_chave(pid: str, chave: str, usuario_id: str = "") -> int:
+    """Acrescenta uma chave ao provedor. Devolve quantas ficaram. Nunca devolve a chave.
+
+    Migra o formato antigo na primeira escrita: a `api_key` única vira o primeiro item de
+    `api_keys` e o campo antigo é removido, para não existirem duas fontes divergentes. A chave do
+    `.env` **não** é migrada — copiá-la para o banco seria mover um segredo de lugar sem ninguém
+    pedir (é exatamente o que o ADR 0003 protegia na NVIDIA).
+    """
+    if pid not in CATALOGO:
+        raise ProvedorInvalido("Provedor desconhecido.")
+    chave = (chave or "").strip()
+    if not chave:
+        raise ProvedorInvalido("Informe a chave de API.")
+
+    salvos = await _configs()
+    atual = dict(salvos.get(pid) or {})
+    lista = normalizar_chaves(atual.get("api_keys"))
+    if not lista and (atual.get("api_key") or "").strip():
+        lista = [atual["api_key"].strip()]
+    if chave in lista:
+        raise ProvedorInvalido("Esta chave já está cadastrada.")
+    if len(lista) >= MAX_CHAVES:
+        raise ProvedorInvalido(f"Máximo de {MAX_CHAVES} chaves por provedor.")
+    lista.append(chave)
+
+    await _colecao().update_one(
+        {"chave": CHAVE_PROVEDORES},
+        {"$set": {"chave": CHAVE_PROVEDORES, f"valor.{pid}.api_keys": lista,
+                  "atualizado_por": usuario_id},
+         "$unset": {f"valor.{pid}.api_key": ""}},
+        upsert=True,
+    )
+    return len(lista)
+
+
+async def remover_chave(pid: str, indice: int, usuario_id: str = "") -> int:
+    """Remove a chave da posição informada. Devolve quantas sobraram.
+
+    Índice, e não a chave: a tela nunca conhece o valor (só os últimos 4 caracteres), então não
+    teria como identificá-la de outro jeito.
+    """
+    if pid not in CATALOGO:
+        raise ProvedorInvalido("Provedor desconhecido.")
+    salvos = await _configs()
+    atual = dict(salvos.get(pid) or {})
+    lista = normalizar_chaves(atual.get("api_keys"))
+    if not lista and (atual.get("api_key") or "").strip():
+        lista = [atual["api_key"].strip()]
+    if not 0 <= indice < len(lista):
+        raise ProvedorInvalido("Chave não encontrada.")
+    lista.pop(indice)
+
+    await _colecao().update_one(
+        {"chave": CHAVE_PROVEDORES},
+        {"$set": {"chave": CHAVE_PROVEDORES, f"valor.{pid}.api_keys": lista,
+                  "atualizado_por": usuario_id},
+         "$unset": {f"valor.{pid}.api_key": ""}},
+        upsert=True,
+    )
+    return len(lista)
+
+
 async def limpar_fallbacks(pid: str, usuario_id: str = "") -> List[str]:
     """Descarta a lista do admin e volta ao padrão do catálogo. Devolve o padrão que passa a valer.
 
@@ -468,13 +588,18 @@ def eh_gratuito(modelo: Dict[str, Any], provedor: Dict[str, Any]) -> Optional[bo
     return None
 
 
-def cabecalhos(provedor: Dict[str, Any]) -> Dict[str, str]:
-    """Cabeçalhos da chamada. O OpenRouter usa `X-Title`/`HTTP-Referer` para atribuir o uso."""
+def cabecalhos(provedor: Dict[str, Any], chave: Optional[str] = None) -> Dict[str, str]:
+    """Cabeçalhos da chamada. O OpenRouter usa `X-Title`/`HTTP-Referer` para atribuir o uso.
+
+    `chave` explícita é o que permite a rotação: quando um 429 (limite POR CHAVE) ou 401 aparece,
+    o chat repete a MESMA chamada com a próxima chave. Sem ela, vale a primeira do provedor.
+    """
     h = {"Accept": "application/json"}
+    usar = chave if chave is not None else provedor.get("api_key")
     # Sem chave (endpoint local), não manda `Authorization` vazio: alguns servidores recusam o
     # cabeçalho malformado em vez de ignorá-lo.
-    if provedor.get("api_key"):
-        h["Authorization"] = f"Bearer {provedor['api_key']}"
+    if usar:
+        h["Authorization"] = f"Bearer {usar}"
     if provedor["id"] == OPENROUTER:
         h["X-Title"] = "H2IA Tutor"
         h["HTTP-Referer"] = os.getenv("FRONTEND_URL", "https://absapt.tk/h2ia/tutor")

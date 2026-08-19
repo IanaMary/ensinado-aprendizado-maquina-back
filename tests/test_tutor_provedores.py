@@ -500,3 +500,104 @@ class TestProvedoresNovos:
         assert "sk-orca-secreta" not in repr(vista)
         orca = next(p for p in vista["provedores"] if p["id"] == prov.ORCAROUTER)
         assert orca["chave_fonte"] == "banco" and orca["chave_mascarada"].endswith("reta")
+
+
+class TestVariasChaves:
+    """Uma chave por provedor não bastava: o limite de taxa é POR CHAVE (19/08).
+
+    O gatilho concreto é o nível gratuito do Google AI Studio — ~500 requisições/dia, que uma
+    turma inteira consome numa aula.
+    """
+
+    @pytest.mark.asyncio
+    async def test_sem_nada_no_banco_vale_a_chave_do_env(self, banco, monkeypatch):
+        monkeypatch.setenv("NVIDIA_API_KEY", "do-env")
+        p = await prov.provedor_vigente()
+        assert p["api_keys"] == ["do-env"]
+        assert p["api_key"] == "do-env"          # a primeira, para quem só sabe ler uma
+
+    @pytest.mark.asyncio
+    async def test_a_chave_unica_antiga_continua_valendo(self, banco, monkeypatch):
+        """Formato anterior (`api_key`): quem já tinha configurado não pode quebrar no deploy."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        await prov.salvar_provedor(prov.OPENROUTER, {"api_key": "sk-antiga"})
+        await prov.definir_ativo(prov.OPENROUTER)
+        assert (await prov.provedor_vigente())["api_keys"] == ["sk-antiga"]
+
+    @pytest.mark.asyncio
+    async def test_adicionar_migra_o_formato_antigo_e_acumula(self, banco, monkeypatch):
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        await prov.salvar_provedor(prov.OPENROUTER, {"api_key": "sk-antiga"})
+        assert await prov.adicionar_chave(prov.OPENROUTER, "sk-nova") == 2
+
+        salvo = (await prov._configs())[prov.OPENROUTER]
+        assert salvo["api_keys"] == ["sk-antiga", "sk-nova"]
+        # o campo antigo SOME: duas fontes divergiriam na primeira edição
+        assert "api_key" not in salvo
+
+    @pytest.mark.asyncio
+    async def test_nvidia_aceita_chave_pela_tela_mesmo_nao_sendo_editavel(self, banco):
+        """`editavel: False` diz que URL e nome vêm do `.env`, não que a chave seja imutável.
+        Isto reverte, por decisão do dono, o invariante original do ADR 0003."""
+        assert await prov.adicionar_chave(prov.NVIDIA, "nvapi-1") == 1
+        assert await prov.adicionar_chave(prov.NVIDIA, "nvapi-2") == 2
+        p = await prov.provedor_vigente()
+        assert p["api_keys"] == ["nvapi-1", "nvapi-2"]
+
+    @pytest.mark.asyncio
+    async def test_o_banco_vence_o_env_inteiro_e_nao_mistura(self, banco, monkeypatch):
+        """Se o admin gravou chave pela tela, é dela que ele está falando. Misturar traria de
+        volta, em silêncio, uma chave que ele pode ter acabado de tirar."""
+        monkeypatch.setenv("NVIDIA_API_KEY", "do-env")
+        await prov.adicionar_chave(prov.NVIDIA, "da-tela")
+        assert (await prov.provedor_vigente())["api_keys"] == ["da-tela"]
+
+    @pytest.mark.asyncio
+    async def test_recusa_repetida_e_respeita_o_teto(self, banco):
+        await prov.adicionar_chave(prov.GEMINI, "k1")
+        with pytest.raises(prov.ProvedorInvalido):
+            await prov.adicionar_chave(prov.GEMINI, "k1")
+        for i in range(2, prov.MAX_CHAVES + 1):
+            await prov.adicionar_chave(prov.GEMINI, f"k{i}")
+        with pytest.raises(prov.ProvedorInvalido):
+            await prov.adicionar_chave(prov.GEMINI, "excedente")
+
+    @pytest.mark.asyncio
+    async def test_recusa_chave_vazia(self, banco):
+        with pytest.raises(prov.ProvedorInvalido):
+            await prov.adicionar_chave(prov.GEMINI, "   ")
+
+    @pytest.mark.asyncio
+    async def test_remover_por_indice(self, banco):
+        for k in ("k1", "k2", "k3"):
+            await prov.adicionar_chave(prov.GEMINI, k)
+        assert await prov.remover_chave(prov.GEMINI, 1) == 2
+        assert (await prov._configs())[prov.GEMINI]["api_keys"] == ["k1", "k3"]
+        with pytest.raises(prov.ProvedorInvalido):
+            await prov.remover_chave(prov.GEMINI, 9)
+
+    @pytest.mark.asyncio
+    async def test_a_tela_recebe_as_chaves_mascaradas_e_indexadas(self, banco):
+        await prov.adicionar_chave(prov.GEMINI, "AIzaSyPRIMEIRA")
+        await prov.adicionar_chave(prov.GEMINI, "AIzaSySEGUNDA")
+        vista = await prov.listar_para_tela()
+        g = next(p for p in vista["provedores"] if p["id"] == prov.GEMINI)
+        assert [c["indice"] for c in g["chaves"]] == [0, 1]
+        assert all(c["mascarada"].startswith("••••") for c in g["chaves"])
+        assert "AIzaSyPRIMEIRA" not in repr(vista) and "AIzaSySEGUNDA" not in repr(vista)
+
+    @pytest.mark.asyncio
+    async def test_provedor_com_chave_conta_como_configurado(self, banco, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        vista = await prov.listar_para_tela()
+        assert not next(p for p in vista["provedores"] if p["id"] == prov.GEMINI)["configurado"]
+        await prov.adicionar_chave(prov.GEMINI, "k")
+        vista = await prov.listar_para_tela()
+        assert next(p for p in vista["provedores"] if p["id"] == prov.GEMINI)["configurado"]
+
+    def test_cabecalhos_usam_a_chave_pedida(self):
+        p = {"id": "gemini", "api_key": "primeira"}
+        assert prov.cabecalhos(p)["Authorization"] == "Bearer primeira"
+        assert prov.cabecalhos(p, "segunda")["Authorization"] == "Bearer segunda"
+        # endpoint self-hosted sem chave: nada de `Authorization` vazio
+        assert "Authorization" not in prov.cabecalhos({"id": "custom", "api_key": ""}, "")

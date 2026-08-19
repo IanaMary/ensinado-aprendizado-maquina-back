@@ -7,6 +7,7 @@ NVIDIA vive só no `.env`; as dos provedores configuráveis ficam no banco e a l
 recebe o contexto do pipeline carregado (dataset, modelo, hiperparametros, metricas,
 graficos, codigo Python gerado) e responde de forma pedagogica, em PT-BR, para alunos.
 """
+import hashlib
 import json
 import logging
 import asyncio
@@ -40,6 +41,7 @@ from app.schemas.chat import (
     ChatTutorRequest,
 )
 from app.schemas.tutor import (
+    AdicionarChaveRequest,
     DefinirFallbacksRequest,
     DefinirProvedorAtivoRequest,
     DefinirSystemPromptRequest,
@@ -256,6 +258,60 @@ def cadeia_de_modelos(provedor: dict) -> list:
     saudaveis = [m for m in ordenados if not _esta_ruim(base_url, m)]
     suspeitos = [m for m in ordenados if _esta_ruim(base_url, m)]
     return saudaveis + suspeitos
+
+
+# Chave que acabou de falhar, para não repetir o erro na próxima pergunta. Guardamos um DIGESTO,
+# nunca a chave: este dicionário vive em memória, mas basta um `repr` num log de exceção para o
+# segredo vazar.
+_chaves_ruins: dict = {}
+
+
+def _marca_da_chave(base_url: str, chave: str) -> tuple:
+    return (base_url, hashlib.sha256((chave or "").encode()).hexdigest()[:16])
+
+
+def _marcar_chave_ruim(base_url: str, chave: str) -> None:
+    _chaves_ruins[_marca_da_chave(base_url, chave)] = time.time()
+
+
+def _chave_esta_ruim(base_url: str, chave: str) -> bool:
+    marca = _marca_da_chave(base_url, chave)
+    quando = _chaves_ruins.get(marca)
+    if quando is None:
+        return False
+    if time.time() - quando > _FALLBACK_TTL:
+        _chaves_ruins.pop(marca, None)
+        return False
+    return True
+
+
+def cadeia_de_chaves(provedor: dict) -> list:
+    """Ordem de tentativa das chaves: a que falhou há pouco vai para o FIM, sem sair da lista.
+
+    Devolve `[""]` quando não há chave nenhuma — é o caso do endpoint self-hosted, que responde
+    sem `Authorization`; assim o laço de tentativa tem sempre ao menos uma volta.
+    """
+    chaves = [c for c in (provedor.get("api_keys") or []) if c]
+    if not chaves:
+        return [provedor.get("api_key") or ""]
+    base_url = provedor.get("base_url") or ""
+    saudaveis = [c for c in chaves if not _chave_esta_ruim(base_url, c)]
+    suspeitas = [c for c in chaves if _chave_esta_ruim(base_url, c)]
+    return saudaveis + suspeitas
+
+
+def _vale_tentar_outra_chave(status: int) -> bool:
+    """Este erro é DA CHAVE (outra chave pode passar) ou não?
+
+    **429** é o motivo de existir a rotação: o limite de taxa é por chave, e o nível gratuito de
+    um provedor acaba no meio de uma aula. **401/403** = chave inválida ou revogada.
+
+    Isto NÃO contradiz o comentário antigo de `_vale_tentar_outro` ("401/403/429 não mudam,
+    trocar de modelo não resolveria") — continua verdade: eles não mudam com o MODELO. Mudam com
+    a CHAVE, e é por isso que são duas perguntas diferentes. Com uma chave só, o comportamento é
+    exatamente o de antes: a cadeia para.
+    """
+    return status in (401, 403, 429)
 
 
 def _vale_tentar_outro(status: int) -> bool:
@@ -662,6 +718,44 @@ async def definir_provedor_ativo(body: DefinirProvedorAtivoRequest,
     return await prov.listar_para_tela()
 
 
+@router.post("/provedores/{pid}/chaves")
+async def adicionar_chave(pid: str, body: AdicionarChaveRequest,
+                          usuario=Depends(get_usuario_atual)):
+    """Acrescenta uma chave de API ao provedor.
+
+    Vários provedores limitam a taxa **por chave**: o nível gratuito do Google AI Studio dá ~500
+    requisições/dia, o que uma turma inteira consome numa aula. Com mais de uma, o chat rotaciona
+    ao receber 429 (ou 401/403, chave revogada) em vez de simplesmente falhar.
+
+    Funciona inclusive em provedor com `editavel: False` (a NVIDIA): `editavel` diz que **URL e
+    nome** vêm do `.env`, não que a chave seja imutável.
+    """
+    if usuario.get("role") != "admin":
+        raise HTTPException(status_code=403,
+                            detail="Apenas admins podem configurar chaves de API.")
+    try:
+        total = await prov.adicionar_chave(pid, body.api_key, str(usuario.get("_id", "")))
+    except prov.ProvedorInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    # A auditoria registra QUE mudou e quantas há — nunca a chave, nem parte dela.
+    await _auditar_llm(usuario, "adicionou_chave", f"{pid}: {total} chave(s)")
+    return await prov.listar_para_tela()
+
+
+@router.delete("/provedores/{pid}/chaves/{indice}")
+async def remover_chave(pid: str, indice: int, usuario=Depends(get_usuario_atual)):
+    """Remove a chave da posição informada (a tela não conhece o valor para identificá-la)."""
+    if usuario.get("role") != "admin":
+        raise HTTPException(status_code=403,
+                            detail="Apenas admins podem configurar chaves de API.")
+    try:
+        total = await prov.remover_chave(pid, indice, str(usuario.get("_id", "")))
+    except prov.ProvedorInvalido as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    await _auditar_llm(usuario, "removeu_chave", f"{pid}: {total} chave(s)")
+    return await prov.listar_para_tela()
+
+
 @router.put("/provedores/{pid}/fallbacks")
 async def definir_fallbacks(pid: str, body: DefinirFallbacksRequest,
                             usuario=Depends(get_usuario_atual)):
@@ -834,37 +928,57 @@ async def chat_tutor(request: ChatTutorRequest, usuario: dict = Depends(get_usua
         )
 
     cadeia = cadeia_de_modelos(provedor)
+    chaves = cadeia_de_chaves(provedor)
     resp = None
     ultimo_erro = "sem modelos configurados"
+    i_chave = 0     # não volta para trás: chave que falhou não melhora no modelo seguinte
     async with httpx.AsyncClient(timeout=60.0) as client:
         for candidato in cadeia:
-            try:
-                r = await client.post(
-                    f"{provedor['base_url']}/chat/completions",
-                    headers=prov.cabecalhos(provedor),
-                    json={**payload_base, "model": candidato},
-                )
-            except httpx.TimeoutException:
-                _marcar_ruim(provedor["base_url"], candidato)
-                ultimo_erro = "timeout"
-                continue
-            except httpx.HTTPError as e:
-                logger.warning("Falha de rede ao chamar o provedor de LLM: %s", type(e).__name__)
-                _marcar_ruim(provedor["base_url"], candidato)
-                ultimo_erro = f"rede: {type(e).__name__}"
-                continue
+            trocar_de_modelo = False
+            while True:
+                chave = chaves[i_chave]
+                try:
+                    r = await client.post(
+                        f"{provedor['base_url']}/chat/completions",
+                        headers=prov.cabecalhos(provedor, chave),
+                        json={**payload_base, "model": candidato},
+                    )
+                except httpx.TimeoutException:
+                    _marcar_ruim(provedor["base_url"], candidato)
+                    ultimo_erro = "timeout"
+                    trocar_de_modelo = True
+                    break
+                except httpx.HTTPError as e:
+                    logger.warning("Falha de rede ao chamar o provedor de LLM: %s", type(e).__name__)
+                    _marcar_ruim(provedor["base_url"], candidato)
+                    ultimo_erro = f"rede: {type(e).__name__}"
+                    trocar_de_modelo = True
+                    break
 
-            if r.status_code == 200:
-                resp, modelo = r, candidato
+                if r.status_code == 200:
+                    resp, modelo = r, candidato
+                    break
+
+                ultimo_erro = f"http {r.status_code}"
+                # Nao propagar corpo bruto do provedor (pode conter detalhes sensiveis) — nem a
+                # chave: o log diz o ÍNDICE dela, nunca o valor.
+                logger.warning("Modelo %s (chave #%d) respondeu %s",
+                               candidato, i_chave + 1, r.status_code)
+                if _vale_tentar_outra_chave(r.status_code) and i_chave + 1 < len(chaves):
+                    # É da CHAVE (429 = limite por chave; 401/403 = revogada): mesmo modelo,
+                    # próxima chave. Trocar de modelo aqui não resolveria nada.
+                    _marcar_chave_ruim(provedor["base_url"], chave)
+                    i_chave += 1
+                    continue
+                if _vale_tentar_outro(r.status_code):
+                    _marcar_ruim(provedor["base_url"], candidato)
+                    trocar_de_modelo = True
+                else:
+                    resp = r     # nem chave nem modelo resolvem: para e devolve o erro
                 break
 
-            ultimo_erro = f"http {r.status_code}"
-            # Nao propagar corpo bruto do provedor (pode conter detalhes sensiveis).
-            logger.warning("Modelo %s respondeu %s", candidato, r.status_code)
-            if not _vale_tentar_outro(r.status_code):
-                resp = r
+            if resp is not None or not trocar_de_modelo:
                 break
-            _marcar_ruim(provedor["base_url"], candidato)
 
     if resp is None:
         await _logar("erro", erro=f"cadeia esgotada ({ultimo_erro})")
@@ -899,7 +1013,7 @@ async def chat_tutor(request: ChatTutorRequest, usuario: dict = Depends(get_usua
 
 
 async def _stream_llm(provedor: dict, payload: dict, *, cadeia: list, usuario=None,
-                      modelo="", request=None):
+                      modelo="", request=None, chaves: Optional[list] = None):
     """Gera tokens SSE a partir do streaming do provedor ativo.
 
     `payload` NÃO traz "model": ele é escolhido aqui, percorrendo `cadeia`.
@@ -917,23 +1031,39 @@ async def _stream_llm(provedor: dict, payload: dict, *, cadeia: list, usuario=No
         # recomeçar com outro modelo daria uma resposta remendada. Por sorte a falha que nos interessa
         # (404 do modelo não liberado) vem no status, antes de qualquer chunk.
         emitiu = False
+        # Chaves: a rotação é uma dimensão SEPARADA da dos modelos. 429 (limite por chave) e
+        # 401/403 (revogada) pedem outra CHAVE no mesmo modelo; 402/404/410/5xx pedem outro
+        # MODELO. Com uma chave só, tudo se comporta como antes.
+        chaves = [c for c in (chaves or []) if c] or [provedor.get("api_key") or ""]
+        i_chave = 0
         async with httpx.AsyncClient(timeout=120.0) as client:
             for candidato in cadeia:
                 if emitiu:
                     break
-                try:
+                trocar_de_modelo = False
+                while True:
+                  chave = chaves[i_chave]
+                  try:
                     async with client.stream(
                         "POST",
                         f"{provedor['base_url']}/chat/completions",
-                        headers=prov.cabecalhos(provedor),
+                        headers=prov.cabecalhos(provedor, chave),
                         json={**payload, "model": candidato},
                     ) as resp:
                         if resp.status_code != 200:
-                            logger.warning("Stream do modelo %s respondeu %s", candidato, resp.status_code)
+                            # Nunca logar a chave: só o índice dela.
+                            logger.warning("Stream do modelo %s (chave #%d) respondeu %s",
+                                           candidato, i_chave + 1, resp.status_code)
                             status_final, erro_final = "erro", f"http {resp.status_code}"
+                            if (_vale_tentar_outra_chave(resp.status_code)
+                                    and i_chave + 1 < len(chaves)):
+                                _marcar_chave_ruim(provedor["base_url"], chave)
+                                i_chave += 1
+                                continue  # MESMO modelo, próxima chave
                             if _vale_tentar_outro(resp.status_code):
                                 _marcar_ruim(provedor["base_url"], candidato)
-                                continue  # tenta o próximo da cadeia
+                                trocar_de_modelo = True
+                                break     # próximo modelo
                             yield f"data: {json.dumps({'error': 'O tutor retornou um erro.'})}\n\n"
                             return
 
@@ -966,20 +1096,24 @@ async def _stream_llm(provedor: dict, payload: dict, *, cadeia: list, usuario=No
                                 continue
                         completou = True  # o stream terminou sem [DONE] explícito
                         return
-                except httpx.TimeoutException:
+                  except httpx.TimeoutException:
                     status_final, erro_final = "erro", "timeout"
                     if emitiu:
                         yield f"data: {json.dumps({'error': 'O tutor demorou demais para responder.'})}\n\n"
                         return
                     _marcar_ruim(provedor["base_url"], candidato)
-                    continue
-                except httpx.HTTPError as e:
+                    trocar_de_modelo = True
+                    break
+                  except httpx.HTTPError as e:
                     status_final, erro_final = "erro", f"rede: {type(e).__name__}"
                     if emitiu:
                         yield f"data: {json.dumps({'error': 'Não consegui falar com o tutor agora.'})}\n\n"
                         return
                     _marcar_ruim(provedor["base_url"], candidato)
-                    continue
+                    trocar_de_modelo = True
+                    break
+                if not trocar_de_modelo:
+                    break   # erro que nem chave nem modelo resolvem: a cadeia para aqui
 
         # Nenhum modelo da cadeia respondeu.
         if not emitiu:
@@ -1044,6 +1178,7 @@ async def chat_tutor_stream(request: ChatTutorRequest, usuario: dict = Depends(g
 
     return StreamingResponse(
         _stream_llm(provedor, payload, cadeia=cadeia_de_modelos(provedor),
+                    chaves=cadeia_de_chaves(provedor),
                     usuario=usuario, modelo=modelo, request=request),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
