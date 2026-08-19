@@ -9,6 +9,45 @@ diagnósticos, armadilhas) vive no `HISTORICO.md` do workspace de trabalho.
 
 ---
 
+## 2026-08-19d (o Gemini ligado de verdade, e o que a chave real revelou)
+
+Backend `039564e` · bundle `main-M7ZQRJNY.js`. Chave do nível gratuito configurada pela tela
+(guardada no banco, leitura só dos últimos 4 caracteres).
+
+### O teto do teste de saúde reprovava modelo bom — defeito meu, do mesmo dia
+Com `max_tokens=16` (o teto que eu havia posto de manhã), o `gemini-3.5-flash` devolve **200 sem o
+campo `content`**, `completion_tokens: 0`, `finish_reason: "length"`: gastou o orçamento inteiro
+**raciocinando** antes de escrever. Ele é um dos que melhor explicam para aluno de 9º ano. Ou seja,
+a correção da manhã trocou um falso positivo (ping de 1 token achava que tudo respondia) por um
+falso negativo. **`MAX_TOKENS_SAUDE = 128`** resolve os dois — o `minimax-m3`, que não gera dentro
+do tempo, continua reprovando por timeout.
+
+### O Gemini lista ids com prefixo `models/`
+Ao contrário do que a documentação da camada de compatibilidade diz. As duas formas funcionam no
+`/chat/completions` (medido, inclusive no 404), mas a tela agrupa pelo que vem antes da "/" — com o
+prefixo, os 51 modelos cairiam num grupo chamado "models". `_buscar_modelos` guarda a forma curta,
+e a tela passa a agrupar pelo `owned_by` quando o id não tem "/".
+
+### Medido com a chave real (teto de 1536 tokens, o do tutor)
+
+| modelo | tempo | resultado |
+|---|---|---|
+| `gemini-3.5-flash` | 4,8 s | resposta pedagógica completa (82 tokens) — **escolhido** |
+| `gemini-3.5-flash-lite` | 1,2 s | resposta completa, a mais rápida — 1ª reserva |
+| `gemini-flash-latest` | 2,2 s | apelido móvel do flash da vez — 2ª reserva |
+| `gemini-3.7-flash` | 26 s | 26 segundos só para dizer "ok"; a 1536 tokens passou de 42 s |
+| `gemini-2.5-flash` | 404 | **listado no catálogo e indisponível para a conta** |
+
+O último repete a armadilha de 01/08 com o `kimi-k2.6`: `/models` lista o que a conta não pode
+invocar. É exatamente para isso que existe a cadeia de reserva.
+
+### Estado
+Gemini **configurado e pronto**, com modelo e reservas escolhidos por medição — mas **não ativado**:
+o provedor ativo continua a NVIDIA. Ativar muda para onde vão as perguntas dos alunos, e o nível
+gratuito do AI Studio permite que o Google use o conteúdo para melhorar produtos. É decisão do dono.
+
+Suíte **730 → 732**.
+
 ## 2026-08-19c (Google AI Studio e OrcaRouter como provedores)
 
 Backend `808089f` · bundle `main-N7XDS6L3.js`.
