@@ -9,6 +9,48 @@ diagnósticos, armadilhas) vive no `HISTORICO.md` do workspace de trabalho.
 
 ---
 
+## 2026-08-18 (o tutor volta a responder: 410 não pode matar a cadeia)
+
+Backend `7e07bc4`. **Diagnosticado pelos logs de produção**, não por hipótese:
+
+```
+Stream do modelo moonshotai/kimi-k2.6 respondeu 404
+Stream do modelo deepseek-ai/deepseek-v4-flash respondeu 410
+```
+
+### Corrigido
+- **`_vale_tentar_outro` passa a reconhecer o 410.** O modelo escolhido no conf-tutor
+  (`moonshotai/kimi-k2.6`) devolve 404 — não está liberado para esta conta —, então a cadeia caía
+  para o primeiro fallback. Só que o `deepseek-ai/deepseek-v4-flash` **atingiu fim de vida na NVIDIA
+  em 2026-08-07** e passou a responder `410 Gone`. Como a função só reconhecia 404 e 5xx, o 410 era
+  lido como "erro que trocar de modelo não resolve": a cadeia **parava ali** e o aluno via *"O tutor
+  retornou um erro"* — com o fallback seguinte a um passo, respondendo 200. Fim de vida é do MODELO,
+  como o 404.
+- **Fallback morto sai da lista.** `deepseek-ai/deepseek-v4-flash` → `minimaxai/minimax-m3`, medido
+  respondendo 200 nesta conta em 18/08 (junto com `meta/llama-3.1-8b-instruct`, que fica).
+
+### Medido, não suposto
+Ping direto na API da NVIDIA com a chave de produção, em 18/08:
+
+| modelo | resposta |
+|---|---|
+| `moonshotai/kimi-k2.6` | **404** — não liberado para a conta |
+| `deepseek-ai/deepseek-v4-flash` | **410** — *"end of life on 2026-08-07"* |
+| `minimaxai/minimax-m3` | 200 (628 ms) |
+| `meta/llama-3.1-8b-instruct` | 200 (535 ms) |
+| `nvidia/llama-3.3-nemotron-super-49b-v1.5` | 200 (499 ms) |
+| `meta/llama-3.3-70b-instruct` | timeout em 45 s |
+
+Depois do deploy, o caminho real do chat (mesmo provedor, mesma cadeia, mesmo gerador SSE) foi
+exercitado **em produção**: `kimi-k2.6` 404 → stream por `minimaxai/minimax-m3` → token recebido,
+sem evento de erro.
+
+### Fica pendente (é do admin, não do código)
+O modelo ativo em `db.configuracoes_tutor` continua sendo o `moonshotai/kimi-k2.6`, que **não
+responde**. A cadeia cobre, mas cada conversa começa com um 404 desperdiçado e o cabeçalho do chat
+anuncia um modelo que não é o que responde. Trocar em **conf-tutor → LLM** (a tela audita a troca;
+uma escrita direta no banco não).
+
 ## 2026-08-04c (a sessão passa a durar 4 h)
 
 ### Alterado
