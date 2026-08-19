@@ -9,6 +9,50 @@ diagnósticos, armadilhas) vive no `HISTORICO.md` do workspace de trabalho.
 
 ---
 
+## 2026-08-19 (a lista de reserva de modelos vira configuração)
+
+Backend `1a015ef`. Continuação do incidente de 18/08: lá o defeito foi o 410 fora da regra de
+rotação; aqui é o que ficou de pé depois — **a lista de reserva era código**, e o modelo morto só
+saía dela por deploy.
+
+### Adicionado
+- **`llm_provedores[pid].fallbacks`**, a ordem de tentativa **por provedor** (um id do OpenRouter
+  não existe na NVIDIA). `PUT /tutor/provedores/{pid}/fallbacks` define; **`DELETE` volta ao padrão
+  do `CATALOGO`**. Admin-only, auditado em `db.tutor_audit` (`pipe: 'llm'`), sem chave. O `pid` vai
+  no caminho (e não `id_ativo()`, como faz `PUT /tutor/modelo`): a auditoria precisa dizer de qual
+  provedor, e se o ativo mudou entre a tela carregar e o admin salvar, grava no certo.
+- `listar_para_tela()` devolve `fallbacks` e `fallbacks_origem` (`'admin'|'catalogo'`) por provedor.
+  **`GET /tutor/modelos` não** — essa rota dá 502/503 quando o provedor está fora do ar, que é
+  exatamente quando a lista de reserva importa.
+- **Cobertura do caminho SSE** (`_stream_llm`), que não tinha nenhuma: 404/410 rotacionam, 401 não
+  percorre a cadeia, cadeia esgotada emite um erro e **nenhum `[DONE]`**, falha depois do primeiro
+  byte não troca de modelo, e a telemetria distingue `interrompido` de `sucesso`. Escritos antes do
+  resto e verificados falhando com o 410 fora da regra.
+
+### Alterado
+- `_vale_tentar_outro` passa a incluir o **402** — no OpenRouter é "sem crédito para ESTE modelo", e
+  cair para um `:free` resolve. O **429 continua fora**, e a docstring diz por quê: também é limite
+  da conta, e percorrer a cadeia dispararia N requisições no momento em que o provedor pediu para
+  parar.
+- `definir_fallbacks` grava no caminho pontual (`valor.<pid>.fallbacks`) em vez de reler e regravar
+  o documento inteiro, como fazem `definir_modelo`/`salvar_provedor` — duas edições de provedores
+  diferentes deixam de se sobrescrever.
+
+### A decisão que mais rende: ausente ≠ vazia
+Chave ausente = "use o padrão do sistema"; lista presente e vazia = "não quero reserva nenhuma".
+Bastava repetir o idioma `(salvo.get(x) or padrão)` que o resto do módulo usa para `[]` virar "não
+configurado" e o padrão do código voltar pela porta dos fundos, em silêncio. Por isso é
+`isinstance(x, list)`, com o comentário explicando; `PUT`/`DELETE` na API em vez de sentinela; e
+teste que grava `[]` e exige `[]` de volta — verificado quebrando ao reintroduzir o `or`.
+
+### Fora de escopo, de propósito
+Promoção automática do reserva a modelo ativo (indisponibilidade passageira não deve reescrever a
+escolha do admin nem sujar a auditoria) e fallback entre *provedores* (mudaria chave, URL base e
+custo no meio da conversa). Teto de 5 reservas: cada tentativa morta é um round-trip antes de o
+aluno ver algo, e o caminho não-stream espera até 60 s por tentativa.
+
+Suíte **693 → 719**.
+
 ## 2026-08-18 (o tutor volta a responder: 410 não pode matar a cadeia)
 
 Backend `7e07bc4`. **Diagnosticado pelos logs de produção**, não por hipótese:
