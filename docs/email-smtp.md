@@ -21,8 +21,8 @@ credenciais vivem **só** no `.env` do servidor, em modo `600`.
 4. Edite o `.env` no servidor e reinicie o serviço:
 
 ```bash
-ssh -i /Users/ulissescorrea/ssh-key-2025-11-05.key -o StrictHostKeyChecking=no ubuntu@167.234.255.76
-nano /home/ubuntu/servers/Iana/.env      # SMTP_USER, SMTP_PASSWORD, EMAIL_FROM
+ssh -i <sua-chave-privada> <usuario>@<servidor>     # o endereço e a chave estão no CLAUDE.md do workspace
+nano <caminho-do-backend>/.env           # SMTP_USER, SMTP_PASSWORD, EMAIL_FROM
 sudo systemctl restart h2ia-backend.service
 sudo systemctl is-active h2ia-backend.service
 ```
