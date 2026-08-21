@@ -2,7 +2,7 @@
 
 Este é o repositório backend da plataforma educacional H2IA Tutor, construído com **FastAPI** e **MongoDB**.
 
-Produção: <https://absapt.tk/h2ia/tutor/api/docs> · Frontend: [`ensinado-aprendizado-maquina`](https://github.com/IanaMary/ensinado-aprendizado-maquina)
+Produção: <https://codingmusketeers.com/h2ia/tutor/api/docs> · Frontend: [`ensinado-aprendizado-maquina`](https://github.com/IanaMary/ensinado-aprendizado-maquina)
 
 ## O que a API faz
 
