@@ -602,5 +602,5 @@ def cabecalhos(provedor: Dict[str, Any], chave: Optional[str] = None) -> Dict[st
         h["Authorization"] = f"Bearer {usar}"
     if provedor["id"] == OPENROUTER:
         h["X-Title"] = "H2IA Tutor"
-        h["HTTP-Referer"] = os.getenv("FRONTEND_URL", "https://absapt.tk/h2ia/tutor")
+        h["HTTP-Referer"] = os.getenv("FRONTEND_URL", "https://codingmusketeers.com/h2ia/tutor")
     return h
