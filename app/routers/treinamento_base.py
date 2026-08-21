@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from app.deps import pd
 from app.sandbox import SandboxError, executar_treinamento
 import joblib
-from app.mlflow_client import log_run, log_bytes_artifact, log_sklearn_model
+from app.mlflow_client import log_run, log_bytes_artifact, log_sklearn_model, mlflow_enabled
 from app.routers.artefatos import registrar_run_usuario
 from app.security import usuario_atual_ctx, id_usuario_atual
 from app.schemas.schemas import DatasetRequest
@@ -278,18 +278,27 @@ async def treinar_modelo_generico(
             classes = train_result.classes
 
             # Modelo no MLflow como flavor sklearn (gera MLmodel + requirements +
-            # exemplo de uso). No-op se MLflow desativado; best-effort. Desserializa
-            # os bytes do sandbox de volta para um objeto para poder logar o flavor.
-            try:
-                modelo_obj = joblib.load(BytesIO(modelo_bytes))
-                log_sklearn_model(
-                    modelo_obj,
-                    run_id=mlflow_run_id,
-                    artifact_path="model",
-                    input_example=X_train.head(3),
-                )
-            except Exception as e:
-                logger.warning(f"log do modelo sklearn no MLflow falhou: {e}")
+            # exemplo de uso). Best-effort. Desserializa os bytes do sandbox de volta
+            # para um objeto para poder logar o flavor.
+            #
+            # SÓ desserializa quando o MLflow está ativo E há um run para logar
+            # (finding 31bd271a): `joblib.load` é um unpickle da saída do processo
+            # filho DENTRO do processo pai confiável. Com o MLflow desligado (a
+            # configuração de produção), `log_sklearn_model` já era no-op, então o
+            # load não tinha efeito nenhum — só expunha o pai a desserializar bytes do
+            # sandbox à toa. O guard elimina esse unpickle em produção sem mudar o
+            # comportamento com MLflow ligado (o flavor continua sendo logado igual).
+            if mlflow_enabled() and mlflow_run_id:
+                try:
+                    modelo_obj = joblib.load(BytesIO(modelo_bytes))
+                    log_sklearn_model(
+                        modelo_obj,
+                        run_id=mlflow_run_id,
+                        artifact_path="model",
+                        input_example=X_train.head(3),
+                    )
+                except Exception as e:
+                    logger.warning(f"log do modelo sklearn no MLflow falhou: {e}")
 
             result = await modelos_treinados.insert_one({
                 "arquivo_id": request.arquivo_id,
